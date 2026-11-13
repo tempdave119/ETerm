@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUp, FileText, Folder, RefreshCw, X } from 'lucide-react';
+import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload, X } from 'lucide-react';
 import type { FileEntry, FilePreview } from '../../shared/ipc.ts';
 
 interface FilePanelProps {
@@ -56,6 +56,21 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
     [load, sessionId],
   );
 
+  const upload = useCallback(async (): Promise<void> => {
+    setError(null);
+    const result = await window.eterm.pickUpload(sessionId, path);
+    if (!result.ok) setError(result.error.message);
+  }, [path, sessionId]);
+
+  const download = useCallback(
+    async (remotePath: string): Promise<void> => {
+      setError(null);
+      const result = await window.eterm.pickDownload(sessionId, remotePath);
+      if (!result.ok) setError(result.error.message);
+    },
+    [sessionId],
+  );
+
   return (
     <aside className="file-panel" data-testid="file-panel">
       <header className="file-panel__header">
@@ -69,6 +84,16 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
           onClick={() => void load(parentOf(path))}
         >
           <ArrowUp size={16} strokeWidth={1.5} />
+        </button>
+        <button
+          className="icon-button"
+          type="button"
+          title="上传文件"
+          aria-label="上传文件"
+          data-testid="file-upload"
+          onClick={() => void upload()}
+        >
+          <Upload size={15} strokeWidth={1.5} />
         </button>
         <button
           className="icon-button"
@@ -97,22 +122,34 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
           <div className="file-panel__hint">此目录为空</div>
         ) : (
           entries.map((entry) => (
-            <button
-              key={entry.path}
-              className="file-row"
-              type="button"
-              title={entry.path}
-              data-testid={`file-row-${entry.name}`}
-              onClick={() => void openEntry(entry)}
-            >
-              {entry.type === 'directory' ? (
-                <Folder size={16} strokeWidth={1.5} className="file-row__icon" />
-              ) : (
-                <FileText size={16} strokeWidth={1.5} className="file-row__icon" />
-              )}
-              <span className="file-row__name">{entry.name}</span>
-              <span className="file-row__meta">{entry.type === 'directory' ? '' : formatSize(entry.size)}</span>
-            </button>
+            <div className="file-row" key={entry.path} title={entry.path}>
+              <button
+                className="file-row__main"
+                type="button"
+                data-testid={`file-row-${entry.name}`}
+                onClick={() => void openEntry(entry)}
+              >
+                {entry.type === 'directory' ? (
+                  <Folder size={16} strokeWidth={1.5} className="file-row__icon" />
+                ) : (
+                  <FileText size={16} strokeWidth={1.5} className="file-row__icon" />
+                )}
+                <span className="file-row__name">{entry.name}</span>
+                <span className="file-row__meta">{entry.type === 'directory' ? '' : formatSize(entry.size)}</span>
+              </button>
+              {entry.type !== 'directory' ? (
+                <button
+                  className="icon-button file-row__action"
+                  type="button"
+                  title={`下载 ${entry.name}`}
+                  aria-label={`下载 ${entry.name}`}
+                  data-testid={`file-download-${entry.name}`}
+                  onClick={() => void download(entry.path)}
+                >
+                  <Download size={14} strokeWidth={1.5} />
+                </button>
+              ) : null}
+            </div>
           ))
         )}
       </div>

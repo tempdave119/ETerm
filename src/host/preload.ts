@@ -6,6 +6,8 @@ import {
   FILES_IPC,
   IPC,
   KNOWN_HOSTS_IPC,
+  LAYOUTS_IPC,
+  TRANSFERS_IPC,
   type ConnectionInput,
   type ConnectionRecord,
   type ConnectionsSnapshot,
@@ -15,9 +17,11 @@ import {
   type GroupInput,
   type GroupRecord,
   type IpcResult,
+  type LayoutTemplate,
   type OpenConnectionRequest,
   type OpenedSession,
   type SecretKind,
+  type TransferView,
 } from '../shared/ipc.ts';
 import type { ExitInfo } from '../core/ports.ts';
 
@@ -72,6 +76,30 @@ const api: EtermApi = {
     ipcRenderer.invoke(FILES_IPC.list, { sessionId, path }) as Promise<IpcResult<FileEntry[]>>,
   readFilePreview: (sessionId: string, path: string) =>
     ipcRenderer.invoke(FILES_IPC.read, { sessionId, path }) as Promise<IpcResult<FilePreview>>,
+
+  listTransfers: () => ipcRenderer.invoke(TRANSFERS_IPC.list) as Promise<IpcResult<TransferView[]>>,
+  cancelTransfer: (id: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.cancel, id) as Promise<IpcResult<null>>,
+  retryTransfer: (id: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.retry, id) as Promise<IpcResult<null>>,
+  pickUpload: (sessionId: string, remoteDir: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.pickUpload, { sessionId, remoteDir }) as Promise<
+      IpcResult<TransferView | null>
+    >,
+  pickDownload: (sessionId: string, remotePath: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.pickDownload, { sessionId, remotePath }) as Promise<
+      IpcResult<TransferView | null>
+    >,
+  onTransferUpdate: (handler: (task: TransferView) => void) => {
+    const listener = (_event: IpcRendererEvent, task: TransferView): void => handler(task);
+    ipcRenderer.on(TRANSFERS_IPC.update, listener);
+    return () => ipcRenderer.removeListener(TRANSFERS_IPC.update, listener);
+  },
+
+  getLayout: (key: string) =>
+    ipcRenderer.invoke(LAYOUTS_IPC.get, key) as Promise<IpcResult<LayoutTemplate | null>>,
+  saveLayout: (key: string, template: LayoutTemplate) =>
+    ipcRenderer.invoke(LAYOUTS_IPC.save, { key, template }) as Promise<IpcResult<null>>,
 };
 
 contextBridge.exposeInMainWorld('eterm', api);

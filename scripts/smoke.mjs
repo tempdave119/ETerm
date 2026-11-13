@@ -64,7 +64,7 @@ await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: 'inherit',
-  env: { ...process.env, ETERM_SMOKE: '1' },
+  env: { ...process.env, ETERM_SMOKE: '1', ETERM_USER_DATA: 'tmp/smoke-data' },
 });
 
 let client;

@@ -1,6 +1,8 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, SessionOpenOptions } from '../core/ports.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
+import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
+import type { LayoutTemplate } from './layout-template.ts';
 import type {
   ConnectionInput,
   ConnectionRecord,
@@ -14,6 +16,8 @@ export type { Capability };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
 export type { FileEntry };
+export type { TransferDirection, TransferView };
+export type { LayoutTemplate };
 
 export const IPC = {
   open: 'session:open',
@@ -36,6 +40,20 @@ export const CONNECTIONS_IPC = {
 export const FILES_IPC = {
   list: 'files:list',
   read: 'files:read',
+} as const;
+
+export const TRANSFERS_IPC = {
+  list: 'transfers:list',
+  cancel: 'transfers:cancel',
+  retry: 'transfers:retry',
+  pickUpload: 'transfers:pick-upload',
+  pickDownload: 'transfers:pick-download',
+  update: 'transfers:update',
+} as const;
+
+export const LAYOUTS_IPC = {
+  get: 'layouts:get',
+  save: 'layouts:save',
 } as const;
 
 export interface FilePreview {
@@ -94,4 +112,14 @@ export interface EtermApi {
   reorderConnections(orderedIds: string[]): Promise<IpcResult<null>>;
   listFiles(sessionId: string, path: string): Promise<IpcResult<FileEntry[]>>;
   readFilePreview(sessionId: string, path: string): Promise<IpcResult<FilePreview>>;
+
+  listTransfers(): Promise<IpcResult<TransferView[]>>;
+  cancelTransfer(id: string): Promise<IpcResult<null>>;
+  retryTransfer(id: string): Promise<IpcResult<null>>;
+  pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView | null>>;
+  pickDownload(sessionId: string, remotePath: string): Promise<IpcResult<TransferView | null>>;
+  onTransferUpdate(handler: (task: TransferView) => void): () => void;
+
+  getLayout(key: string): Promise<IpcResult<LayoutTemplate | null>>;
+  saveLayout(key: string, template: LayoutTemplate): Promise<IpcResult<null>>;
 }

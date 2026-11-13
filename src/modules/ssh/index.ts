@@ -4,6 +4,7 @@ import { connectSsh } from './connection.ts';
 import { createExecPort } from './exec.ts';
 import { openSessionPort } from './session.ts';
 import { createFilePort, type SftpLike } from './sftp.ts';
+import { createTransferPort, type SftpTransferLike } from './transfer.ts';
 import { parseSshTarget } from './target.ts';
 
 function openSftp(client: Client): Promise<SFTPWrapper> {
@@ -20,7 +21,7 @@ export const sshModule: CapabilityModule = {
   kind: 'capability',
   builtin: true,
   apiVersion: '^1.0.0',
-  provides: ['session', 'exec', 'file'],
+  provides: ['session', 'exec', 'file', 'transfer'],
   activation: { onProtocol: 'ssh' },
   setup(ctx) {
     return {
@@ -53,6 +54,7 @@ export const sshModule: CapabilityModule = {
           if (sftp) {
             // ssh2 的重载签名比最小接口宽，边界处收敛一次。
             handle.file = createFilePort(sftp as unknown as SftpLike);
+            handle.transfer = createTransferPort(sftp as unknown as SftpTransferLike);
           }
 
           ctx.log.info(`SSH 会话已建立 ${target.username}@${target.host}:${target.port}`);

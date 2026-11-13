@@ -1,4 +1,4 @@
-import { FolderOpen } from 'lucide-react';
+import { Columns2, FolderOpen, Rows2 } from 'lucide-react';
 
 interface TabInfo {
   id: string;
@@ -10,10 +10,12 @@ interface TabBarProps {
   activeId: string | null;
   filesAvailable: boolean;
   filesOpen: boolean;
+  canSplit: boolean;
   onSelect(id: string): void;
   onClose(id: string): void;
   onNew(): void;
   onToggleFiles(): void;
+  onSplit(direction: 'row' | 'column'): void;
 }
 
 export function TabBar({
@@ -21,10 +23,12 @@ export function TabBar({
   activeId,
   filesAvailable,
   filesOpen,
+  canSplit,
   onSelect,
   onClose,
   onNew,
   onToggleFiles,
+  onSplit,
 }: TabBarProps) {
   return (
     <header className="tabbar">
@@ -47,6 +51,28 @@ export function TabBar({
         ))}
       </div>
       <span className="tabbar__spacer" />
+      <button
+        className="tabbar__action"
+        type="button"
+        title="左右分屏（⌘D）"
+        aria-label="左右分屏"
+        data-testid="split-row"
+        disabled={!canSplit}
+        onClick={() => onSplit('row')}
+      >
+        <Columns2 size={16} strokeWidth={1.5} />
+      </button>
+      <button
+        className="tabbar__action"
+        type="button"
+        title="上下分屏（⌘⇧D）"
+        aria-label="上下分屏"
+        data-testid="split-column"
+        disabled={!canSplit}
+        onClick={() => onSplit('column')}
+      >
+        <Rows2 size={16} strokeWidth={1.5} />
+      </button>
       {filesAvailable ? (
         <button
           className="tabbar__action"

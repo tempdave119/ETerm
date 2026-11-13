@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve, sep } from 'node:path';
 import electronPath from 'electron';
@@ -10,6 +10,7 @@ import ssh2 from 'ssh2';
 
 const { Server, utils } = ssh2;
 const OPEN_READ = 0x00000001;
+const OPEN_WRITE = 0x00000002;
 const STATUS = { OK: 0, EOF: 1, NO_SUCH_FILE: 2, PERMISSION_DENIED: 3, FAILURE: 4 };
 const DEBUG_PORT = 9334;
 const MARKER = 'ssh-smoke-ok';
@@ -95,6 +96,9 @@ mkdirSync(dataDir, { recursive: true });
 const keyPair = utils.generateKeyPairSync('ed25519');
 const keyPath = join(dataDir, 'id_ed25519');
 writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
+const uploadFixture = join(dataDir, 'upload.txt');
+writeFileSync(uploadFixture, 'upload-from-smoke\n');
+const downloadTarget = join(dataDir, 'downloaded.txt');
 
 // SFTP 沙盒：文件面板从这里列目录、打开文件。
 const remoteRoot = join(dataDir, 'remote');
@@ -217,13 +221,28 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
 
         sftp.on('OPEN', async (reqid, filename, flags) => {
           try {
-            if (!(flags & OPEN_READ)) return sftp.status(reqid, STATUS.PERMISSION_DENIED);
-            const data = await readFile(resolveRemote(filename));
-            return sftp.handle(reqid, createHandle({ type: 'file', data }));
+            const full = resolveRemote(filename);
+            if (flags & OPEN_READ) {
+              const data = await readFile(full);
+              return sftp.handle(reqid, createHandle({ type: 'file', data }));
+            }
+            if (flags & OPEN_WRITE) {
+              return sftp.handle(reqid, createHandle({ type: 'file-write', path: full, chunks: [] }));
+            }
+            return sftp.status(reqid, STATUS.PERMISSION_DENIED);
           } catch {
             return sftp.status(reqid, STATUS.NO_SUCH_FILE);
           }
         });
+
+        sftp.on('WRITE', (reqid, handle, offset, data) => {
+          const state = stateOf(handle);
+          if (!state || state.type !== 'file-write') return sftp.status(reqid, STATUS.FAILURE);
+          state.chunks.push({ offset, data: Buffer.from(data) });
+          return sftp.status(reqid, STATUS.OK);
+        });
+
+        sftp.on('FSETSTAT', (reqid) => sftp.status(reqid, STATUS.OK));
 
         sftp.on('READ', (reqid, handle, offset, length) => {
           const state = stateOf(handle);
@@ -232,9 +251,13 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
           return sftp.data(reqid, state.data.subarray(offset, Math.min(offset + length, state.data.length)));
         });
 
-        sftp.on('CLOSE', (reqid, handle) => {
+        sftp.on('CLOSE', async (reqid, handle) => {
           const state = stateOf(handle);
           if (state) handles.delete(handle.readUInt32BE(0));
+          if (state?.type === 'file-write') {
+            state.chunks.sort((left, right) => left.offset - right.offset);
+            await writeFile(state.path, Buffer.concat(state.chunks.map((chunk) => chunk.data)));
+          }
           sftp.status(reqid, STATUS.OK);
         });
       });
@@ -274,7 +297,13 @@ const port = server.address().port;
 
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: 'inherit',
-  env: { ...process.env, ETERM_SMOKE: '1', ETERM_USER_DATA: dataDir },
+  env: {
+    ...process.env,
+    ETERM_SMOKE: '1',
+    ETERM_USER_DATA: dataDir,
+    ETERM_SMOKE_UPLOAD: uploadFixture,
+    ETERM_SMOKE_DOWNLOAD: downloadTarget,
+  },
 });
 
 let client;
@@ -414,6 +443,97 @@ try {
   );
   const dialogAfterReconnect = await evaluate(`document.querySelector('.fingerprint') !== null`);
   if (dialogAfterReconnect) throw new Error('重连不应再弹指纹确认');
+
+  // 分屏：同一连接再开一个独立会话，形成两个 pane。
+  await evaluate(`document.querySelector('[data-testid="split-row"]').click()`);
+  const splitSessions = await waitFor(
+    async () => {
+      const ids = await evaluate(`[...document.querySelectorAll('.terminal-host')].map((element) => element.dataset.sessionId)`);
+      return ids.length >= 2 ? ids : null;
+    },
+    15_000,
+    '分屏终端',
+  );
+  const splitSession = splitSessions[splitSessions.length - 1];
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(splitSession)})`)).trim().length > 0,
+    10_000,
+    '分屏 prompt',
+  );
+  const splitTyped = await evaluate(`window.__etermDebug.type(${JSON.stringify(splitSession)}, "echo split-ok\\r")`);
+  if (!splitTyped) throw new Error('分屏会话已关闭，无法输入');
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(splitSession)})`));
+      return (text.match(/split-ok/g) ?? []).length === 2;
+    },
+    10_000,
+    '分屏命令回显',
+  );
+
+  const splitShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/ssh-smoke-split.png', Buffer.from(splitShot.data, 'base64'));
+
+  // 布局落盘后关标签，再点连接：应恢复双 pane。
+  await waitFor(
+    async () => {
+      try {
+        const raw = await readFile(join(dataDir, 'layout.json'), 'utf8');
+        return raw.includes('"type": "split"') ? raw : null;
+      } catch {
+        return null;
+      }
+    },
+    5_000,
+    '布局落盘',
+  );
+  await evaluate(`document.querySelector('.tab__close').click()`);
+  await waitFor(() => evaluate(`document.querySelectorAll('.terminal-host').length === 0`), 5_000, '关闭标签');
+  await evaluate(
+    `document.querySelector('[data-testid="connection-row-mock-host"] .tree-connection__main').click()`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.pane-node').length === 2`),
+    15_000,
+    '恢复分屏',
+  );
+
+  await evaluate(`[...document.querySelectorAll('.pane-node__header button')].at(-1).click()`);
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-host').length === 1`),
+    5_000,
+    '关闭分屏',
+  );
+
+  // 上传：文件面板按钮 → 队列 → 远端落盘。
+  await evaluate(`document.querySelector('[data-testid="file-upload"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.transfer-row[data-status="done"]') !== null`),
+    20_000,
+    '上传完成',
+  );
+  const uploaded = await readFile(join(remoteRoot, 'upload.txt'), 'utf8');
+  if (!uploaded.includes('upload-from-smoke')) throw new Error('上传内容不正确');
+
+  await evaluate(`document.querySelector('button[title="刷新"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-upload.txt"]') !== null`),
+    5_000,
+    '上传文件出现在列表',
+  );
+
+  // 下载：文件行下载按钮 → 队列 → 本地落盘。
+  await evaluate(`document.querySelector('[data-testid="file-download-readme.txt"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.transfer-row[data-status="done"]').length >= 2`),
+    20_000,
+    '下载完成',
+  );
+  const downloaded = await readFile(downloadTarget, 'utf8');
+  if (!downloaded.includes('hello-from-sftp')) throw new Error('下载内容不正确');
+
+  const transferShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/ssh-smoke-transfer.png', Buffer.from(transferShot.data, 'base64'));
 
   // 第二个连接只保存不连接，用来验证排序；避开 Keychain 授权。
   await evaluate(`document.querySelector('.session-tree__header button[title="新建连接"]').click()`);

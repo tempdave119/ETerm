@@ -1,20 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import type { Capability, ConnectionInput, ConnectionRecord, GroupRecord, ProductErrorInfo } from '../shared/ipc.ts';
+import type {
+  ConnectionInput,
+  ConnectionRecord,
+  GroupRecord,
+  ProductErrorInfo,
+  TransferView,
+} from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
+import { countTemplateLeaves } from '../shared/layout-template.ts';
+import {
+  collectLeaves,
+  countLeaves,
+  findLeaf,
+  firstLeaf,
+  instantiateLayout,
+  removeAt,
+  splitAt,
+  toTemplate,
+  type LayoutNode,
+  type PaneLeaf,
+  type SplitDirection,
+} from './layout.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
+import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { TabBar } from './components/TabBar.tsx';
-import { TerminalView } from './components/TerminalView.tsx';
+import { TransferPanel } from './components/TransferPanel.tsx';
 
 interface Tab {
   id: string;
   title: string;
-  capabilities: Capability[];
   connectionId?: string;
+  layout: LayoutNode;
+  activePaneId: string;
 }
 
 interface FormState {
@@ -24,6 +46,9 @@ interface FormState {
 }
 
 let localSequence = 0;
+let tabSequence = 0;
+let paneSequence = 0;
+let splitSequence = 0;
 
 export function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -38,6 +63,7 @@ export function App() {
   const [hostKey, setHostKey] = useState<HostKeyPrompt | null>(null);
   const [busy, setBusy] = useState(false);
   const [filesOpen, setFilesOpen] = useState(true);
+  const [transfers, setTransfers] = useState<TransferView[]>([]);
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.eterm.listConnections();
@@ -53,20 +79,81 @@ export function App() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    void window.eterm.listTransfers().then((result) => {
+      if (result.ok) setTransfers(result.value);
+    });
+    return window.eterm.onTransferUpdate((task) => {
+      setTransfers((current) => {
+        const index = current.findIndex((item) => item.id === task.id);
+        if (index < 0) return [...current, task];
+        const next = [...current];
+        next[index] = task;
+        return next;
+      });
+    });
+  }, []);
+
+  const cancelTransfer = useCallback(async (id: string): Promise<void> => {
+    const result = await window.eterm.cancelTransfer(id);
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const retryTransfer = useCallback(async (id: string): Promise<void> => {
+    const result = await window.eterm.retryTransfer(id);
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  const activePane = activeTab ? (findLeaf(activeTab.layout, activeTab.activePaneId) ?? firstLeaf(activeTab.layout)) : null;
+  const activeConnectionId = activePane?.connectionId ?? null;
+  const filesAvailable = activePane?.capabilities.includes('file') === true;
+
   const addTab = useCallback((tab: Tab): void => {
     setTabs((current) => [...current, tab]);
     setActiveId(tab.id);
   }, []);
 
+  const loadLayout = useCallback(async (key: string) => {
+    const result = await window.eterm.getLayout(key);
+    return result.ok ? result.value : null;
+  }, []);
+
+  const persistLayout = useCallback(async (key: string, layout: LayoutNode): Promise<void> => {
+    const result = await window.eterm.saveLayout(key, toTemplate(layout));
+    if (!result.ok) setError(result.error);
+  }, []);
+
   const openLocalTerminal = useCallback(async (): Promise<void> => {
     setError(null);
     try {
-      const result = await window.eterm.openSession({ protocol: 'local', cols: 80, rows: 24 });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      const template = await loadLayout('local');
+      const count = template ? countTemplateLeaves(template) : 1;
+      const leaves: PaneLeaf[] = [];
+
+      for (let index = 0; index < count; index += 1) {
+        const result = await window.eterm.openSession({ protocol: 'local', cols: 80, rows: 24 });
+        if (!result.ok) {
+          for (const leaf of leaves) void window.eterm.closeSession(leaf.sessionId);
+          setError(result.error);
+          return;
+        }
+        leaves.push({
+          type: 'leaf',
+          paneId: `pane-${++paneSequence}`,
+          sessionId: result.value.sessionId,
+          title: `本地终端 ${++localSequence}`,
+          capabilities: result.value.capabilities,
+        });
       }
-      addTab({ id: result.value.sessionId, title: `本地终端 ${++localSequence}`, capabilities: result.value.capabilities });
+
+      const first = leaves[0];
+      if (!first) return;
+      const layout = template
+        ? instantiateLayout(template, leaves, () => `split-${++splitSequence}`)
+        : first;
+      addTab({ id: `tab-${++tabSequence}`, title: first.title, layout, activePaneId: firstLeaf(layout).paneId });
     } catch (cause) {
       setError({
         code: 'INTERNAL',
@@ -75,39 +162,61 @@ export function App() {
         detail: cause instanceof Error ? cause.message : String(cause),
       });
     }
-  }, [addTab]);
+  }, [addTab, loadLayout]);
 
   const openConnection = useCallback(
     async (connection: ConnectionRecord): Promise<void> => {
       setBusy(true);
       setError(null);
       try {
-        const result = await window.eterm.openConnection({
-          connectionId: connection.id,
-          cols: 80,
-          rows: 24,
-        });
-        if (!result.ok) {
-          const fingerprint = extractFingerprint(result.error.detail ?? '');
-          if (result.error.code === 'HOST_KEY_CHANGED' && fingerprint && connection.host) {
-            setHostKey({ connection, fingerprint, first: result.error.message.includes('首次') });
+        const template = await loadLayout(connection.id);
+        const count = template ? countTemplateLeaves(template) : 1;
+        const leaves: PaneLeaf[] = [];
+
+        for (let index = 0; index < count; index += 1) {
+          const result = await window.eterm.openConnection({
+            connectionId: connection.id,
+            cols: 80,
+            rows: 24,
+          });
+          if (!result.ok) {
+            for (const leaf of leaves) void window.eterm.closeSession(leaf.sessionId);
+            const fingerprint = extractFingerprint(result.error.detail ?? '');
+            if (leaves.length === 0 && result.error.code === 'HOST_KEY_CHANGED' && fingerprint && connection.host) {
+              setHostKey({ connection, fingerprint, first: result.error.message.includes('首次') });
+              return;
+            }
+            setError(result.error);
             return;
           }
-          setError(result.error);
-          return;
+          leaves.push({
+            type: 'leaf',
+            paneId: `pane-${++paneSequence}`,
+            sessionId: result.value.sessionId,
+            title: connection.name,
+            capabilities: result.value.capabilities,
+            connectionId: connection.id,
+          });
         }
+
+        const first = leaves[0];
+        if (!first) return;
+        const layout = template
+          ? instantiateLayout(template, leaves, () => `split-${++splitSequence}`)
+          : first;
         addTab({
-          id: result.value.sessionId,
+          id: `tab-${++tabSequence}`,
           title: connection.name,
-          capabilities: result.value.capabilities,
           connectionId: connection.id,
+          layout,
+          activePaneId: firstLeaf(layout).paneId,
         });
         setFilesOpen(true);
       } finally {
         setBusy(false);
       }
     },
-    [addTab],
+    [addTab, loadLayout],
   );
 
   const confirmHostKey = useCallback(async (): Promise<void> => {
@@ -221,6 +330,85 @@ export function App() {
     [refresh],
   );
 
+  const splitActivePane = useCallback(
+    async (direction: SplitDirection): Promise<void> => {
+      const tab = activeTab;
+      if (!tab || countLeaves(tab.layout) >= 4) return;
+
+      setError(null);
+      const result = tab.connectionId
+        ? await window.eterm.openConnection({ connectionId: tab.connectionId, cols: 80, rows: 24 })
+        : await window.eterm.openSession({ protocol: 'local', cols: 80, rows: 24 });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      const title = tab.connectionId ? tab.title : `本地终端 ${++localSequence}`;
+      const leaf: PaneLeaf = {
+        type: 'leaf',
+        paneId: `pane-${++paneSequence}`,
+        sessionId: result.value.sessionId,
+        title,
+        capabilities: result.value.capabilities,
+        connectionId: tab.connectionId,
+      };
+
+      const layout = splitAt(tab.layout, tab.activePaneId, leaf, direction, `split-${++splitSequence}`);
+      setTabs((current) =>
+        current.map((item) =>
+          item.id === tab.id ? { ...item, layout, activePaneId: leaf.paneId } : item,
+        ),
+      );
+      void persistLayout(tab.connectionId ?? 'local', layout);
+      setFilesOpen(true);
+    },
+    [activeTab, persistLayout],
+  );
+
+  const setPaneActive = useCallback((tabId: string, paneId: string): void => {
+    setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, activePaneId: paneId } : tab)));
+  }, []);
+
+  const closePane = useCallback(
+    (tabId: string, paneId: string): void => {
+      const tab = tabs.find((item) => item.id === tabId);
+      if (!tab) return;
+      const leaf = findLeaf(tab.layout, paneId);
+      if (!leaf) return;
+
+      void window.eterm.closeSession(leaf.sessionId);
+      const leaves = collectLeaves(tab.layout);
+      if (leaves.length <= 1) {
+        setTabs((current) => current.filter((item) => item.id !== tabId));
+        return;
+      }
+
+      const layout = removeAt(tab.layout, paneId);
+      if (!layout) {
+        setTabs((current) => current.filter((item) => item.id !== tabId));
+        return;
+      }
+      const nextActive = tab.activePaneId === paneId ? firstLeaf(layout).paneId : tab.activePaneId;
+      setTabs((current) =>
+        current.map((item) => (item.id === tabId ? { ...item, layout, activePaneId: nextActive } : item)),
+      );
+      void persistLayout(tab.connectionId ?? 'local', layout);
+    },
+    [persistLayout, tabs],
+  );
+
+  const closeTab = useCallback(
+    (id: string): void => {
+      const tab = tabs.find((item) => item.id === id);
+      if (tab) {
+        for (const leaf of collectLeaves(tab.layout)) void window.eterm.closeSession(leaf.sessionId);
+      }
+      setTabs((current) => current.filter((item) => item.id !== id));
+    },
+    [tabs],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -233,20 +421,16 @@ export function App() {
         event.preventDefault();
         openNewForm();
       }
+      if (key === 'd') {
+        event.preventDefault();
+        void splitActivePane(event.shiftKey ? 'column' : 'row');
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openLocalTerminal, openNewForm]);
+  }, [openLocalTerminal, openNewForm, splitActivePane]);
 
-  const closeTab = useCallback((id: string): void => {
-    void window.eterm.closeSession(id);
-    setTabs((current) => current.filter((tab) => tab.id !== id));
-  }, []);
-
-  const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
-  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
-  const activeConnectionId = activeTab?.connectionId ?? null;
-  const filesAvailable = activeTab?.capabilities.includes('file') === true;
+  const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
 
   return (
     <div className="app">
@@ -255,10 +439,12 @@ export function App() {
         activeId={activeTabId}
         filesAvailable={filesAvailable}
         filesOpen={filesOpen}
+        canSplit={canSplit}
         onSelect={setActiveId}
         onClose={closeTab}
         onNew={() => void openLocalTerminal()}
         onToggleFiles={() => setFilesOpen((value) => !value)}
+        onSplit={(direction) => void splitActivePane(direction)}
       />
       <div className="app__body">
         <SessionTree
@@ -298,14 +484,28 @@ export function App() {
             ) : (
               tabs.map((tab) => (
                 <section className="pane" key={tab.id} data-active={tab.id === activeTabId}>
-                  <TerminalView sessionId={tab.id} active={tab.id === activeTabId} />
+                  <PaneLayout
+                    node={tab.layout}
+                    activePaneId={tab.activePaneId}
+                    tabActive={tab.id === activeTabId}
+                    showHeaders={countLeaves(tab.layout) > 1}
+                    onActivate={(paneId) => setPaneActive(tab.id, paneId)}
+                    onClose={(paneId) => closePane(tab.id, paneId)}
+                  />
                 </section>
               ))
             )}
           </div>
+          {transfers.length > 0 ? (
+            <TransferPanel
+              tasks={transfers}
+              onCancel={(id) => void cancelTransfer(id)}
+              onRetry={(id) => void retryTransfer(id)}
+            />
+          ) : null}
         </main>
-        {filesAvailable && filesOpen && activeTab ? (
-          <FilePanel sessionId={activeTab.id} onClose={() => setFilesOpen(false)} />
+        {filesAvailable && filesOpen && activePane ? (
+          <FilePanel sessionId={activePane.sessionId} onClose={() => setFilesOpen(false)} />
         ) : null}
       </div>
 
