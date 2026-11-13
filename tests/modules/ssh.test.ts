@@ -199,8 +199,8 @@ test('ssh_service_routes_session_and_reports_capabilities', async () => {
 
   const opened = await service.open({ protocol: 'ssh', cols: 80, rows: 24, target: makeTarget() });
 
-  // 模拟服务器拒绝 SFTP，能力集合必须如实降级。
-  assert.deepEqual(opened.capabilities, ['session', 'exec']);
+  // 模拟服务器拒绝 SFTP，能力集合必须如实降级；端口转发不依赖 SFTP。
+  assert.deepEqual(opened.capabilities, ['session', 'exec', 'forward']);
   service.close(opened.sessionId);
 });
 

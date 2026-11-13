@@ -16,6 +16,7 @@ import { registerConfigIpc } from './config-ipc.ts';
 import { registerConnectionsIpc } from './connections-ipc.ts';
 import { registerCredentialsIpc } from './credentials-ipc.ts';
 import { registerFilesIpc } from './files-ipc.ts';
+import { registerForwardsIpc } from './forwards-ipc.ts';
 import { registerSessionIpc } from './ipc.ts';
 import { registerKnownHostsIpc } from './known-hosts-ipc.ts';
 import { registerLayoutsIpc } from './layouts-ipc.ts';
@@ -43,6 +44,7 @@ let disposeConnectionsIpc: (() => void) | null = null;
 let disposeConfigIpc: (() => void) | null = null;
 let disposeConnectionOpenIpc: (() => void) | null = null;
 let disposeFilesIpc: (() => void) | null = null;
+let disposeForwardsIpc: (() => void) | null = null;
 let disposeTransfersIpc: (() => void) | null = null;
 let transferQueue: TransferQueue | null = null;
 let disposeKnownHostsIpc: (() => void) | null = null;
@@ -85,6 +87,7 @@ function createWindow(): void {
     disposeConnectionOpenIpc = registerConnectionOpenIpc(service, appServices);
   }
   disposeFilesIpc = registerFilesIpc(service);
+  disposeForwardsIpc = registerForwardsIpc(service);
   disposeSystemIpc = registerSystemIpc();
   transferQueue = new TransferQueue({
     getPort: (sessionId) => service.transferPort(sessionId),
@@ -109,6 +112,8 @@ function createWindow(): void {
     disposeConnectionOpenIpc = null;
     disposeFilesIpc?.();
     disposeFilesIpc = null;
+    disposeForwardsIpc?.();
+    disposeForwardsIpc = null;
     disposeSystemIpc?.();
     disposeSystemIpc = null;
     disposeTransfersIpc?.();
@@ -172,6 +177,8 @@ app.on('will-quit', () => {
   disposeKnownHostsIpc = null;
   disposeLayoutsIpc?.();
   disposeLayoutsIpc = null;
+  disposeForwardsIpc?.();
+  disposeForwardsIpc = null;
   disposeSystemIpc?.();
   disposeSystemIpc = null;
   disposeCredentialsIpc?.();

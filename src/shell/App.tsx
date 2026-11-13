@@ -33,6 +33,7 @@ import { CommandPalette } from './components/CommandPalette.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
 import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
+import { ForwardDialog } from './components/ForwardDialog.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
 import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
@@ -78,6 +79,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   );
@@ -180,6 +182,7 @@ export function App() {
   const activePane = activeTab ? (findLeaf(activeTab.layout, activeTab.activePaneId) ?? firstLeaf(activeTab.layout)) : null;
   const activeConnectionId = activePane?.connectionId ?? null;
   const filesAvailable = activePane?.capabilities.includes('file') === true;
+  const forwardAvailable = activePane?.capabilities.includes('forward') === true;
   const filesOpen = panels.files;
 
   const addTab = useCallback((tab: Tab): void => {
@@ -547,6 +550,9 @@ export function App() {
         case 'panel.monitor':
           togglePanel('monitor');
           break;
+        case 'forward.open':
+          if (forwardAvailable) setForwardOpen(true);
+          break;
         case 'settings.open':
           openSettings();
           break;
@@ -563,6 +569,7 @@ export function App() {
       closeTab,
       cycleTab,
       filesAvailable,
+      forwardAvailable,
       openLocalTerminal,
       openNewForm,
       openSettings,
@@ -605,12 +612,14 @@ export function App() {
         filesAvailable={filesAvailable}
         filesOpen={filesOpen}
         monitorOpen={panels.monitor}
+        forwardAvailable={forwardAvailable}
         canSplit={canSplit}
         onSelect={setActiveId}
         onClose={closeTab}
         onNew={() => void openLocalTerminal()}
         onToggleFiles={() => togglePanel('files')}
         onToggleMonitor={() => togglePanel('monitor')}
+        onOpenForward={() => setForwardOpen(true)}
         onSplit={(direction) => void splitActivePane(direction)}
         onOpenSettings={openSettings}
       />
@@ -728,6 +737,10 @@ export function App() {
           }}
           onClose={() => setPaletteOpen(false)}
         />
+      ) : null}
+
+      {forwardOpen && activePane && forwardAvailable ? (
+        <ForwardDialog sessionId={activePane.sessionId} onClose={() => setForwardOpen(false)} />
       ) : null}
     </div>
   );

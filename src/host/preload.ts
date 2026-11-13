@@ -5,6 +5,7 @@ import {
   CONNECTION_IPC,
   CREDENTIALS_IPC,
   FILES_IPC,
+  FORWARDS_IPC,
   IPC,
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
@@ -17,6 +18,8 @@ import {
   type EtermApi,
   type FileEntry,
   type FilePreview,
+  type ForwardRequest,
+  type ForwardView,
   type GroupInput,
   type GroupRecord,
   type IpcResult,
@@ -100,6 +103,13 @@ const api: EtermApi = {
     ipcRenderer.on(TRANSFERS_IPC.update, listener);
     return () => ipcRenderer.removeListener(TRANSFERS_IPC.update, listener);
   },
+
+  listForwards: (sessionId: string) =>
+    ipcRenderer.invoke(FORWARDS_IPC.list, sessionId) as Promise<IpcResult<ForwardView[]>>,
+  openForward: (sessionId: string, request: ForwardRequest) =>
+    ipcRenderer.invoke(FORWARDS_IPC.open, { sessionId, request }) as Promise<IpcResult<ForwardView>>,
+  closeForward: (sessionId: string, id: string) =>
+    ipcRenderer.invoke(FORWARDS_IPC.close, { sessionId, id }) as Promise<IpcResult<null>>,
 
   getLayout: (key: string) =>
     ipcRenderer.invoke(LAYOUTS_IPC.get, key) as Promise<IpcResult<LayoutTemplate | null>>,

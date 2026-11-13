@@ -1,5 +1,5 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
-import type { Capability, ExitInfo, FileEntry, SessionOpenOptions } from '../core/ports.ts';
+import type { Capability, ExitInfo, FileEntry, ForwardDirection, ForwardRequest, ForwardView, SessionOpenOptions } from '../core/ports.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
 import type { AppConfig, ThemePreference, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
@@ -15,6 +15,7 @@ import type {
 
 export type { ProductErrorInfo };
 export type { Capability };
+export type { ForwardDirection, ForwardRequest, ForwardView };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
 export type { AppConfig, ThemePreference, UiDensity };
@@ -53,6 +54,12 @@ export const TRANSFERS_IPC = {
   pickUpload: 'transfers:pick-upload',
   pickDownload: 'transfers:pick-download',
   update: 'transfers:update',
+} as const;
+
+export const FORWARDS_IPC = {
+  list: 'forwards:list',
+  open: 'forwards:open',
+  close: 'forwards:close',
 } as const;
 
 export const LAYOUTS_IPC = {
@@ -145,6 +152,10 @@ export interface EtermApi {
   pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView | null>>;
   pickDownload(sessionId: string, remotePath: string): Promise<IpcResult<TransferView | null>>;
   onTransferUpdate(handler: (task: TransferView) => void): () => void;
+
+  listForwards(sessionId: string): Promise<IpcResult<ForwardView[]>>;
+  openForward(sessionId: string, request: ForwardRequest): Promise<IpcResult<ForwardView>>;
+  closeForward(sessionId: string, id: string): Promise<IpcResult<null>>;
 
   getLayout(key: string): Promise<IpcResult<LayoutTemplate | null>>;
   saveLayout(key: string, template: LayoutTemplate): Promise<IpcResult<null>>;

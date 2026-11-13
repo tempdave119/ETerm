@@ -6,7 +6,7 @@ import { ProductError } from '../core/errors.ts';
  */
 export function requireSessionPort<T>(
   port: T | null,
-  context: { sessionId: string; sessionAlive: boolean; capability: 'file' | 'transfer' },
+  context: { sessionId: string; sessionAlive: boolean; capability: 'file' | 'transfer' | 'forward' },
 ): T {
   if (port) return port;
 
@@ -22,7 +22,9 @@ export function requireSessionPort<T>(
     message:
       context.capability === 'file'
         ? '这台主机没有开启 SFTP，文件面板不可用'
-        : '这台主机没有开启 SFTP，无法传文件',
+        : context.capability === 'transfer'
+          ? '这台主机没有开启 SFTP，无法传文件'
+          : '这台主机不支持端口转发',
     next: '终端仍可正常使用；需要文件操作请换一台主机',
   });
 }

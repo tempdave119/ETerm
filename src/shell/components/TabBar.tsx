@@ -1,4 +1,4 @@
-import { Activity, Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
+import { Activity, ArrowLeftRight, Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
 
 interface TabInfo {
   id: string;
@@ -11,12 +11,14 @@ interface TabBarProps {
   filesAvailable: boolean;
   filesOpen: boolean;
   monitorOpen: boolean;
+  forwardAvailable: boolean;
   canSplit: boolean;
   onSelect(id: string): void;
   onClose(id: string): void;
   onNew(): void;
   onToggleFiles(): void;
   onToggleMonitor(): void;
+  onOpenForward(): void;
   onSplit(direction: 'row' | 'column'): void;
   onOpenSettings(): void;
 }
@@ -27,12 +29,14 @@ export function TabBar({
   filesAvailable,
   filesOpen,
   monitorOpen,
+  forwardAvailable,
   canSplit,
   onSelect,
   onClose,
   onNew,
   onToggleFiles,
   onToggleMonitor,
+  onOpenForward,
   onSplit,
   onOpenSettings,
 }: TabBarProps) {
@@ -89,6 +93,18 @@ export function TabBar({
           onClick={onToggleFiles}
         >
           <FolderOpen size={16} strokeWidth={1.5} />
+        </button>
+      ) : null}
+      {forwardAvailable ? (
+        <button
+          className="tabbar__action"
+          type="button"
+          title="端口转发"
+          aria-label="端口转发"
+          data-testid="open-forwards"
+          onClick={onOpenForward}
+        >
+          <ArrowLeftRight size={16} strokeWidth={1.5} />
         </button>
       ) : null}
       <button

@@ -32,3 +32,11 @@ test('session_capability_missing_sftp_keeps_terminal_usable', () => {
       error.next === '终端仍可正常使用；需要文件操作请换一台主机',
   );
 });
+
+test('session_capability_missing_forward_is_reported', () => {
+  assert.throws(
+    () => requireSessionPort(null, { sessionId: 'ssh-1', sessionAlive: true, capability: 'forward' }),
+    (error: unknown) =>
+      error instanceof ProductError && error.code === 'UNSUPPORTED' && error.message === '这台主机不支持端口转发',
+  );
+});

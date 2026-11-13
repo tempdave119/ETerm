@@ -15,6 +15,7 @@ export type CommandId =
   | 'pane.split-column'
   | 'files.toggle'
   | 'panel.monitor'
+  | 'forward.open'
   | 'settings.open'
   | 'palette.open';
 
@@ -110,6 +111,12 @@ export const COMMANDS: readonly CommandDefinition[] = [
     group: '面板',
     keywords: ['monitor', 'system', 'cpu', 'memory', '监控', '资源'],
     shortcut: { code: 'KeyM', shift: true },
+  },
+  {
+    id: 'forward.open',
+    title: '端口转发',
+    group: '连接',
+    keywords: ['forward', 'tunnel', 'port', '转发', '隧道'],
   },
   {
     id: 'settings.open',

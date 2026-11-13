@@ -1,9 +1,9 @@
 /**
- * 四个资源端口。能力层只实现这些接口，界面只依赖这些接口；
+ * 资源端口。能力层只实现这些接口，界面只依赖这些接口；
  * 端口里不出现任何协议字段，协议只在会话配置里出现。
  */
 
-export type Capability = 'session' | 'exec' | 'file' | 'transfer';
+export type Capability = 'session' | 'exec' | 'file' | 'transfer' | 'forward';
 
 export interface SessionOpenOptions {
   protocol: string;
@@ -76,4 +76,27 @@ export interface TransferPort {
   download(sourcePath: string, targetPath: string): TransferTask;
   cancel(id: string): void;
   onProgress(handler: (progress: TransferProgress) => void): () => void;
+}
+
+export type ForwardDirection = 'local' | 'remote';
+
+export interface ForwardRequest {
+  direction: ForwardDirection;
+  /** 本地转发 = 本机监听地址；远程转发 = 远端监听地址（服务器侧）。 */
+  bindHost: string;
+  /** 本地转发允许 0，由系统分配；远程转发要求 1–65535。 */
+  bindPort: number;
+  targetHost: string;
+  targetPort: number;
+}
+
+export interface ForwardView extends ForwardRequest {
+  id: string;
+  createdAt: string;
+}
+
+export interface ForwardPort {
+  open(request: ForwardRequest): Promise<ForwardView>;
+  list(): ForwardView[];
+  close(id: string): Promise<void>;
 }

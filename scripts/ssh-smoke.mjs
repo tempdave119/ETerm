@@ -161,6 +161,20 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
     context.reject(['publickey', 'password']);
   });
   connection.on('ready', () => {
+    // 本地端口转发会从服务器侧回连目标：只放行本机 echo 端口。
+    connection.on('tcpip', (accept, reject, info) => {
+      if (info.destIP !== '127.0.0.1' || info.destPort !== echoPort) {
+        reject();
+        return;
+      }
+      const stream = accept();
+      const socket = net.connect(info.destPort, info.destIP, () => {
+        socket.pipe(stream).pipe(socket);
+      });
+      socket.on('error', () => stream.close());
+      stream.on('close', () => socket.destroy());
+    });
+
     connection.on('session', (accept) => {
       const session = accept();
       let shellProcess = null;
@@ -354,6 +368,11 @@ proxyServer.on('connect', (request, clientSocket, head) => {
 });
 await new Promise((resolve) => proxyServer.listen(0, '127.0.0.1', resolve));
 const proxyPort = proxyServer.address().port;
+
+// 端口转发的目标：本机 TCP echo。
+const echoServer = net.createServer((socket) => socket.pipe(socket));
+await new Promise((resolve) => echoServer.listen(0, '127.0.0.1', resolve));
+const echoPort = echoServer.address().port;
 
 // 无 SFTP 的对照服务器：只接认证与 shell，用来验证「能力降级」而不是报错阻塞终端。
 const noSftpConnections = new Set();
@@ -817,6 +836,61 @@ try {
   );
   await shotOf('tmp/ssh-smoke-proxy.png');
 
+  // 端口转发：本地监听 → 经 SSH 通道回连 echo 目标。
+  await clickOn('[data-testid="open-forwards"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="forward-dialog"]') !== null`),
+    5_000,
+    '端口转发弹窗',
+  );
+  await evaluate(setSelectScript('#forward-direction', 'local'));
+  await evaluate(setInputScript('#forward-bind-port', '0'));
+  await evaluate(setInputScript('#forward-target-host', '127.0.0.1'));
+  await evaluate(setInputScript('#forward-target-port', String(echoPort)));
+  await clickOn('[data-testid="forward-add"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid^="forward-row-"]') !== null`),
+    10_000,
+    '转发规则',
+  );
+  const forwardSession = await evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`);
+  const forwardList = await evaluate(
+    `window.eterm.listForwards(${JSON.stringify(forwardSession)}).then((result) => (result.ok ? result.value : []))`,
+  );
+  const forwardPort = Array.isArray(forwardList) ? forwardList[0]?.bindPort : undefined;
+  if (!forwardPort) throw new Error('没有拿到本地转发端口');
+
+  const forwarded = net.connect(forwardPort, '127.0.0.1');
+  await new Promise((resolve, reject) => {
+    forwarded.once('connect', resolve);
+    forwarded.once('error', reject);
+  });
+  forwarded.write('forward-ok');
+  const forwardedEcho = await new Promise((resolve, reject) => {
+    forwarded.once('data', resolve);
+    forwarded.once('error', reject);
+  });
+  if (forwardedEcho.toString() !== 'forward-ok') throw new Error('端口转发回显不正确');
+  forwarded.destroy();
+  await shotOf('tmp/ssh-smoke-forward.png');
+
+  await clickOn('[data-testid="forward-dialog"] button[title="停止转发"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid^="forward-row-"]') === null`),
+    5_000,
+    '停止转发',
+  );
+  await evaluate(`(() => {
+    const buttons = [...document.querySelectorAll('[data-testid="forward-dialog"] .button')];
+    buttons.find((button) => button.textContent === '关闭')?.click();
+    return true;
+  })()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="forward-dialog"]') === null`),
+    5_000,
+    '关闭端口转发',
+  );
+
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
   await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
   await waitErrorTitle('连不上主机', '错主机错误文案');
@@ -980,6 +1054,13 @@ try {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     proxyServer.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    echoServer.close(() => {
       clearTimeout(timer);
       resolve();
     });

@@ -1,6 +1,6 @@
 import { ProductError, normalizeError } from './errors.ts';
 import type { SessionHandle } from './manifest.ts';
-import type { Capability, ExitInfo, FilePort, SessionOpenOptions, TransferPort } from './ports.ts';
+import type { Capability, ExitInfo, FilePort, SessionOpenOptions, TransferPort, ForwardPort } from './ports.ts';
 import type { ModuleRegistry } from './registry.ts';
 
 export interface SessionEvents {
@@ -98,6 +98,10 @@ export class SessionService {
     return this.#sessions.get(sessionId)?.handle.transfer ?? null;
   }
 
+  forwardPort(sessionId: string): ForwardPort | null {
+    return this.#sessions.get(sessionId)?.handle.forward ?? null;
+  }
+
   dispose(): void {
     for (const sessionId of [...this.#sessions.keys()]) {
       this.close(sessionId);
@@ -122,5 +126,6 @@ function capabilitiesOf(handle: SessionHandle): Capability[] {
   if (handle.exec) capabilities.push('exec');
   if (handle.file) capabilities.push('file');
   if (handle.transfer) capabilities.push('transfer');
+  if (handle.forward) capabilities.push('forward');
   return capabilities;
 }

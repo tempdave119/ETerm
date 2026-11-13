@@ -708,6 +708,40 @@ button {
   outline-offset: 2px;
 }
 
+.forward-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  max-height: 180px;
+  overflow-y: auto;
+  padding: var(--space-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+}
+
+.forward-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  height: var(--row-height);
+  font-size: var(--font-aux);
+}
+
+.forward-row__direction {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.forward-row__path {
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .fingerprint {
   display: block;
   padding: var(--space-container);

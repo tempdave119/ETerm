@@ -3,6 +3,7 @@ import type {
   Capability,
   ExecPort,
   FilePort,
+  ForwardPort,
   SessionOpenOptions,
   SessionPort,
   TransferPort,
@@ -28,6 +29,7 @@ export interface SessionHandle {
   exec?: ExecPort;
   file?: FilePort;
   transfer?: TransferPort;
+  forward?: ForwardPort;
 }
 
 export interface ModuleExports {

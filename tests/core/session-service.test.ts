@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ProductError } from '../../src/core/errors.ts';
 import type { CapabilityModule, SessionHandle } from '../../src/core/manifest.ts';
-import type { ExecPort, FilePort, TransferPort } from '../../src/core/ports.ts';
+import type { ExecPort, FilePort, ForwardPort, TransferPort } from '../../src/core/ports.ts';
 import { ModuleRegistry } from '../../src/core/registry.ts';
 import { SessionService } from '../../src/core/session-service.ts';
 import { createFakeSession } from '../helpers/fake-session.ts';
@@ -48,11 +48,12 @@ test('session_service_capabilities_follow_actual_ports', async () => {
     exec: {} as ExecPort,
     file: {} as FilePort,
     transfer: {} as TransferPort,
+    forward: {} as ForwardPort,
   });
 
   const opened = await service.open({ protocol: 'fake', cols: 80, rows: 24 });
 
-  assert.deepEqual(opened.capabilities, ['session', 'exec', 'file', 'transfer']);
+  assert.deepEqual(opened.capabilities, ['session', 'exec', 'file', 'transfer', 'forward']);
 });
 
 test('session_service_forwards_input_and_resize', async () => {

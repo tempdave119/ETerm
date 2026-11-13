@@ -2,6 +2,7 @@ import type { Client, SFTPWrapper } from 'ssh2';
 import type { CapabilityModule, SessionHandle } from '../../core/manifest.ts';
 import { connectSsh } from './connection.ts';
 import { createExecPort } from './exec.ts';
+import { createForwardPort, type ForwardClientLike } from './forward.ts';
 import { openSessionPort } from './session.ts';
 import { createFilePort, type SftpLike } from './sftp.ts';
 import { createTransferPort, type SftpTransferLike } from './transfer.ts';
@@ -21,7 +22,7 @@ export const sshModule: CapabilityModule = {
   kind: 'capability',
   builtin: true,
   apiVersion: '^1.0.0',
-  provides: ['session', 'exec', 'file', 'transfer'],
+  provides: ['session', 'exec', 'file', 'transfer', 'forward'],
   activation: { onProtocol: 'ssh' },
   setup(ctx) {
     return {
@@ -50,6 +51,8 @@ export const sshModule: CapabilityModule = {
           const handle: SessionHandle = {
             session,
             exec: createExecPort(client),
+            // ssh2 的 Client 比最小接口宽，边界处收敛一次；转发不依赖 SFTP。
+            forward: createForwardPort(client as unknown as ForwardClientLike),
           };
           if (sftp) {
             // ssh2 的重载签名比最小接口宽，边界处收敛一次。
