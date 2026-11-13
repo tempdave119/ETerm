@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import electronPath from 'electron';
 
@@ -28,6 +31,16 @@ async function waitFor(check, timeoutMs, label) {
     await delay(200);
   }
   throw new Error(`等待超时：${label}${lastError ? `（${lastError.message}）` : ''}`);
+}
+
+function setSelectScript(selector, value) {
+  return `(() => {
+    const select = document.querySelector(${JSON.stringify(selector)});
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+    setter.call(select, ${JSON.stringify(value)});
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`;
 }
 
 function createClient(wsUrl) {
@@ -62,9 +75,13 @@ function createClient(wsUrl) {
 await run(process.execPath, ['scripts/build-main.mjs']);
 await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 
+// 每轮用独立数据目录：配置与布局从上一次跑剩的值会干扰断言。
+const dataDir = join(process.cwd(), 'tmp', 'smoke', randomUUID());
+mkdirSync(dataDir, { recursive: true });
+
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: 'inherit',
-  env: { ...process.env, ETERM_SMOKE: '1', ETERM_USER_DATA: 'tmp/smoke-data' },
+  env: { ...process.env, ETERM_SMOKE: '1', ETERM_USER_DATA: dataDir },
 });
 
 let client;
@@ -223,6 +240,125 @@ try {
 
   await evaluate(`document.querySelectorAll('.tab__close')[1].click()`);
   await waitFor(() => evaluate(`document.querySelectorAll('.terminal-host').length === 1`), 5_000, '关闭第二个标签');
+
+  // 设置：字号 / 密度 / 文件面板默认值即时生效，重开面板保持，可恢复默认。
+  const colsAtDefaultFont = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols;
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
+    5_000,
+    '设置面板',
+  );
+
+  await evaluate(setSelectScript('#settings-font-size', '18'));
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols < colsAtDefaultFont,
+    5_000,
+    '字号即时生效',
+  );
+
+  await evaluate(setSelectScript('#settings-density', 'compact'));
+  await waitFor(
+    () => evaluate(`document.querySelector('.app')?.dataset.density === 'compact'`),
+    5_000,
+    '密度即时生效',
+  );
+
+  await evaluate(`document.querySelector('[data-testid="settings-files-default"]').click()`);
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getConfig().then((result) => (result.ok ? result.value.files.openByDefault : null))`,
+      )) === false,
+    5_000,
+    '文件面板默认值写入',
+  );
+
+  const settingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/settings-smoke.png', Buffer.from(settingsShot.data, 'base64'));
+
+  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '关闭设置',
+  );
+
+  // 重开面板：值必须还在（写入磁盘后读回）。
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact'`,
+      ),
+    5_000,
+    '设置重开后保持',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-reset"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('.app')?.dataset.density === 'comfortable'`,
+      ),
+    5_000,
+    '恢复默认',
+  );
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols === colsAtDefaultFont,
+    5_000,
+    '字号恢复',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+
+  // 分隔条拖拽：比例跟着鼠标走，松手后落盘。
+  await evaluate(`document.querySelector('[data-testid="split-row"]').click()`);
+  await waitFor(() => evaluate(`document.querySelectorAll('.pane-node').length === 2`), 5_000, '本地分屏');
+  const divider = await evaluate(`(() => {
+    const element = document.querySelector('.split__divider');
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  })()`);
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: divider.x,
+    y: divider.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: divider.x + 150,
+    y: divider.y,
+    button: 'left',
+    buttons: 1,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: divider.x + 150,
+    y: divider.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await waitFor(
+    () => evaluate(`Number(document.querySelector('.split__child')?.style.flexGrow) > 0.55`),
+    5_000,
+    '拖拽后比例变化',
+  );
+  await waitFor(
+    async () => {
+      try {
+        const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
+        const template = parsed.splits?.local;
+        return template?.type === 'split' && template.ratio > 0.55 ? template : null;
+      } catch {
+        return null;
+      }
+    },
+    5_000,
+    '拖拽比例落盘',
+  );
 
   const shot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });

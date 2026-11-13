@@ -5,12 +5,14 @@ import { SessionService } from '../core/session-service.ts';
 import { localTerminalModule } from '../modules/local-terminal/index.ts';
 import { sshModule } from '../modules/ssh/index.ts';
 import { ConnectionStore } from '../services/connections/store.ts';
+import { ConfigStore } from '../services/config/store.ts';
 import { CredentialStore } from '../services/credentials/store.ts';
 import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { LayoutStore } from '../services/layouts/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
 import { IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
+import { registerConfigIpc } from './config-ipc.ts';
 import { registerConnectionsIpc } from './connections-ipc.ts';
 import { registerCredentialsIpc } from './credentials-ipc.ts';
 import { registerFilesIpc } from './files-ipc.ts';
@@ -22,6 +24,7 @@ import { registerTransfersIpc } from './transfers-ipc.ts';
 
 interface AppServices {
   connections: ConnectionStore;
+  config: ConfigStore;
   credentials: CredentialStore;
   knownHosts: KnownHostsStore;
   layouts: LayoutStore;
@@ -36,6 +39,7 @@ registry.setupAll();
 
 let disposeIpc: (() => void) | null = null;
 let disposeConnectionsIpc: (() => void) | null = null;
+let disposeConfigIpc: (() => void) | null = null;
 let disposeConnectionOpenIpc: (() => void) | null = null;
 let disposeFilesIpc: (() => void) | null = null;
 let disposeTransfersIpc: (() => void) | null = null;
@@ -86,6 +90,13 @@ function createWindow(): void {
     },
   });
   disposeTransfersIpc = registerTransfersIpc(transferQueue, service, window);
+  if (appServices) {
+    const settings = appServices.config;
+    disposeConfigIpc = registerConfigIpc(settings, window, (config) => {
+      transferQueue?.setMaxConcurrent(config.transfer.concurrency);
+    });
+    void settings.get().then((config) => transferQueue?.setMaxConcurrent(config.transfer.concurrency));
+  }
 
   window.once('ready-to-show', () => window.show());
   window.on('closed', () => {
@@ -97,6 +108,8 @@ function createWindow(): void {
     disposeFilesIpc = null;
     disposeTransfersIpc?.();
     disposeTransfersIpc = null;
+    disposeConfigIpc?.();
+    disposeConfigIpc = null;
     transferQueue?.dispose();
     transferQueue = null;
     sessions?.dispose();
@@ -119,6 +132,7 @@ void app.whenReady().then(() => {
   const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
   const services: AppServices = {
     connections: new ConnectionStore({ baseDir }),
+    config: new ConfigStore({ baseDir }),
     credentials: new CredentialStore({ baseDir, codec: createSafeStorageCodec() }),
     knownHosts: new KnownHostsStore({ baseDir }),
     layouts: new LayoutStore({ baseDir }),
@@ -147,6 +161,8 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   disposeConnectionsIpc?.();
   disposeConnectionsIpc = null;
+  disposeConfigIpc?.();
+  disposeConfigIpc = null;
   disposeKnownHostsIpc?.();
   disposeKnownHostsIpc = null;
   disposeLayoutsIpc?.();

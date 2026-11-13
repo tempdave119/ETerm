@@ -198,3 +198,21 @@ test('queue_respects_max_concurrent', async () => {
   await flush();
   assert.equal(queue.find(third.id)?.status, 'running');
 });
+
+test('queue_set_max_concurrent_pumps_pending_tasks', async () => {
+  const { queue, port } = createQueue(1);
+  const first = queue.enqueue(request('h.txt'));
+  const second = queue.enqueue(request('i.txt'));
+
+  assert.equal(queue.find(second.id)?.status, 'queued');
+
+  queue.setMaxConcurrent(2);
+  assert.equal(queue.find(second.id)?.status, 'running');
+
+  queue.setMaxConcurrent(1);
+  port?.finish('port-1');
+  port?.finish('port-2');
+  await flush();
+  assert.equal(queue.find(first.id)?.status, 'done');
+  assert.equal(queue.find(second.id)?.status, 'done');
+});

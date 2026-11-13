@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import type {
+  AppConfig,
   ConnectionInput,
   ConnectionRecord,
   GroupRecord,
@@ -10,12 +11,14 @@ import type {
 import { extractFingerprint } from '../shared/fingerprints.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
 import {
+  clampRatio,
   collectLeaves,
   countLeaves,
   findLeaf,
   firstLeaf,
   instantiateLayout,
   removeAt,
+  setRatioAt,
   splitAt,
   toTemplate,
   type LayoutNode,
@@ -29,6 +32,7 @@ import { FilePanel } from './components/FilePanel.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
+import { SettingsPanel } from './components/SettingsPanel.tsx';
 import { TabBar } from './components/TabBar.tsx';
 import { TransferPanel } from './components/TransferPanel.tsx';
 
@@ -65,6 +69,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [filesOpen, setFilesOpen] = useState(true);
   const [transfers, setTransfers] = useState<TransferView[]>([]);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.eterm.listConnections();
@@ -79,6 +86,14 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    void window.eterm.getConfig().then((result) => {
+      if (result.ok) setConfig(result.value);
+      else setError(result.error);
+    });
+    return window.eterm.onConfigChange(setConfig);
+  }, []);
 
   useEffect(() => {
     void window.eterm.listTransfers().then((result) => {
@@ -103,6 +118,25 @@ export function App() {
   const retryTransfer = useCallback(async (id: string): Promise<void> => {
     const result = await window.eterm.retryTransfer(id);
     if (!result.ok) setError(result.error);
+  }, []);
+
+  const saveConfig = useCallback(async (next: AppConfig): Promise<void> => {
+    setSettingsError(null);
+    const result = await window.eterm.saveConfig(next);
+    if (result.ok) setConfig(result.value);
+    else setSettingsError(result.error.message);
+  }, []);
+
+  const resetConfig = useCallback(async (): Promise<void> => {
+    setSettingsError(null);
+    const result = await window.eterm.resetConfig();
+    if (result.ok) setConfig(result.value);
+    else setSettingsError(result.error.message);
+  }, []);
+
+  const openSettings = useCallback((): void => {
+    setSettingsError(null);
+    setSettingsOpen(true);
   }, []);
 
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
@@ -212,12 +246,12 @@ export function App() {
           layout,
           activePaneId: firstLeaf(layout).paneId,
         });
-        setFilesOpen(true);
+        setFilesOpen(config?.files.openByDefault ?? true);
       } finally {
         setBusy(false);
       }
     },
-    [addTab, loadLayout],
+    [addTab, config, loadLayout],
   );
 
   const confirmHostKey = useCallback(async (): Promise<void> => {
@@ -362,9 +396,29 @@ export function App() {
         ),
       );
       void persistLayout(tab.connectionId ?? 'local', layout);
-      setFilesOpen(true);
+      setFilesOpen(config?.files.openByDefault ?? true);
     },
-    [activeTab, persistLayout],
+    [activeTab, config, persistLayout],
+  );
+
+  const resizePane = useCallback((tabId: string, splitId: string, ratio: number): void => {
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.id === tabId ? { ...tab, layout: setRatioAt(tab.layout, splitId, ratio) } : tab,
+      ),
+    );
+  }, []);
+
+  const finishResize = useCallback(
+    (tabId: string, splitId: string, ratio: number): void => {
+      const tab = tabs.find((item) => item.id === tabId);
+      if (!tab) return;
+      // 松手才落盘：拖动过程中的比例只存在内存里。
+      const layout = setRatioAt(tab.layout, splitId, clampRatio(ratio));
+      setTabs((current) => current.map((item) => (item.id === tabId ? { ...item, layout } : item)));
+      void persistLayout(tab.connectionId ?? 'local', layout);
+    },
+    [persistLayout, tabs],
   );
 
   const setPaneActive = useCallback((tabId: string, paneId: string): void => {
@@ -426,15 +480,21 @@ export function App() {
         event.preventDefault();
         void splitActivePane(event.shiftKey ? 'column' : 'row');
       }
+      if (key === ',') {
+        event.preventDefault();
+        openSettings();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openLocalTerminal, openNewForm, splitActivePane]);
+  }, [openLocalTerminal, openNewForm, openSettings, splitActivePane]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
+  const fontSize = config?.terminal.fontSize ?? 13;
+  const density = config?.ui.density ?? 'comfortable';
 
   return (
-    <div className="app">
+    <div className="app" data-density={density}>
       <TabBar
         tabs={tabs}
         activeId={activeTabId}
@@ -446,6 +506,7 @@ export function App() {
         onNew={() => void openLocalTerminal()}
         onToggleFiles={() => setFilesOpen((value) => !value)}
         onSplit={(direction) => void splitActivePane(direction)}
+        onOpenSettings={openSettings}
       />
       <div className="app__body">
         <SessionTree
@@ -485,8 +546,11 @@ export function App() {
                     activePaneId={tab.activePaneId}
                     tabActive={tab.id === activeTabId}
                     showHeaders={countLeaves(tab.layout) > 1}
+                    fontSize={fontSize}
                     onActivate={(paneId) => setPaneActive(tab.id, paneId)}
                     onClose={(paneId) => closePane(tab.id, paneId)}
+                    onResize={(splitId, ratio) => resizePane(tab.id, splitId, ratio)}
+                    onResizeEnd={(splitId, ratio) => finishResize(tab.id, splitId, ratio)}
                   />
                 </section>
               ))
@@ -520,6 +584,16 @@ export function App() {
 
       {hostKey ? (
         <HostKeyDialog prompt={hostKey} busy={busy} onCancel={() => setHostKey(null)} onConfirm={() => void confirmHostKey()} />
+      ) : null}
+
+      {settingsOpen && config ? (
+        <SettingsPanel
+          config={config}
+          error={settingsError}
+          onChange={(next) => void saveConfig(next)}
+          onReset={() => void resetConfig()}
+          onClose={() => setSettingsOpen(false)}
+        />
       ) : null}
     </div>
   );

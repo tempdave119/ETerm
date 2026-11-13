@@ -29,6 +29,13 @@ button {
   height: 100%;
 }
 
+/* 界面密度只覆盖尺寸 token，不新增颜色与字号 */
+.app[data-density="compact"] {
+  --row-height: 24px;
+  --control-height: 28px;
+  --panel-header-height: 28px;
+}
+
 /* 标签栏同时充当窗口拖拽区，左侧给红绿灯留位 */
 .tabbar {
   display: flex;
@@ -251,6 +258,12 @@ button {
   color: var(--text-primary);
 }
 
+.link-button:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 1px solid var(--status-info);
+  outline-offset: 2px;
+}
+
 /* 左侧会话树：默认展开 240px */
 .app__body {
   display: flex;
@@ -296,6 +309,15 @@ button {
 .icon-button:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
+}
+
+.icon-button:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.icon-button[disabled] {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .icon-button:focus-visible {
@@ -556,6 +578,16 @@ button {
   outline: 1px solid var(--status-info);
 }
 
+.form-row input:hover,
+.form-row select:hover {
+  border-color: var(--border-strong);
+}
+
+.form-row input[disabled],
+.form-row select[disabled] {
+  opacity: 0.5;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 96px;
@@ -572,6 +604,38 @@ button {
   margin: 0;
   color: var(--status-danger);
   font-size: var(--font-aux);
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  padding-top: var(--space-block);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-group__title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-aux);
+  font-weight: 600;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+}
+
+.settings-check input {
+  accent-color: var(--status-info);
+}
+
+.settings-check input:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: 2px;
 }
 
 .fingerprint {
@@ -616,6 +680,15 @@ button {
 .tabbar__action[data-active="true"] {
   background: var(--bg-panel);
   color: var(--text-primary);
+}
+
+.tabbar__action:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tabbar__action:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: 1px;
 }
 
 .tree-connection[data-dragging="true"] {
@@ -893,8 +966,30 @@ button {
 }
 
 .split__divider {
+  position: relative;
+  z-index: 1;
   flex: 0 0 1px;
   background: var(--border-subtle);
+  cursor: col-resize;
+}
+
+.split--column > .split__divider {
+  cursor: row-resize;
+}
+
+/* 1px 的线太细，用不可见的伪元素把命中区域撑到 7px */
+.split__divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.split--column > .split__divider::after {
+  inset: -3px 0;
+}
+
+.split__divider:hover {
+  background: var(--border-strong);
 }
 
 .pane-node {

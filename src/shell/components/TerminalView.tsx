@@ -35,9 +35,10 @@ const FONT_FAMILY = '"SFMono-Regular", Menlo, Monaco, "Courier New", monospace';
 interface TerminalViewProps {
   sessionId: string;
   active: boolean;
+  fontSize: number;
 }
 
-export function TerminalView({ sessionId, active }: TerminalViewProps) {
+export function TerminalView({ sessionId, active, fontSize }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -48,7 +49,7 @@ export function TerminalView({ sessionId, active }: TerminalViewProps) {
 
     const term = new Terminal({
       fontFamily: FONT_FAMILY,
-      fontSize: 13,
+      fontSize,
       lineHeight: 1.32,
       cursorBlink: true,
       allowProposedApi: true,
@@ -117,6 +118,16 @@ export function TerminalView({ sessionId, active }: TerminalViewProps) {
     });
     return () => cancelAnimationFrame(frame);
   }, [active, sessionId]);
+
+  useEffect(() => {
+    // 字号来自配置：改完立即作用到已开着的终端，再补一次尺寸同步。
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!term || !fit) return;
+    term.options.fontSize = fontSize;
+    fit.fit();
+    void window.eterm.resizeSession(sessionId, term.cols, term.rows);
+  }, [fontSize, sessionId]);
 
   return <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />;
 }

@@ -1,5 +1,6 @@
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
-import type { LayoutNode } from '../layout.ts';
+import type { LayoutNode, SplitNode } from '../layout.ts';
 import { TerminalView } from './TerminalView.tsx';
 
 interface PaneLayoutProps {
@@ -7,8 +8,11 @@ interface PaneLayoutProps {
   activePaneId: string;
   tabActive: boolean;
   showHeaders: boolean;
+  fontSize: number;
   onActivate(paneId: string): void;
   onClose(paneId: string): void;
+  onResize(splitId: string, ratio: number): void;
+  onResizeEnd(splitId: string, ratio: number): void;
 }
 
 export function PaneLayout({
@@ -16,8 +20,11 @@ export function PaneLayout({
   activePaneId,
   tabActive,
   showHeaders,
+  fontSize,
   onActivate,
   onClose,
+  onResize,
+  onResizeEnd,
 }: PaneLayoutProps) {
   if (node.type === 'leaf') {
     const active = node.paneId === activePaneId;
@@ -47,11 +54,41 @@ export function PaneLayout({
           </header>
         ) : null}
         <div className="pane-node__body">
-          <TerminalView sessionId={node.sessionId} active={active && tabActive} />
+          <TerminalView sessionId={node.sessionId} active={active && tabActive} fontSize={fontSize} />
         </div>
       </section>
     );
   }
+
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>, split: SplitNode): void => {
+    event.preventDefault();
+    const container = event.currentTarget.parentElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const previousCursor = document.body.style.cursor;
+    document.body.style.cursor = split.direction === 'row' ? 'col-resize' : 'row-resize';
+    let lastRatio = split.ratio;
+
+    const move = (moveEvent: PointerEvent): void => {
+      const ratio =
+        split.direction === 'row'
+          ? (moveEvent.clientX - rect.left) / rect.width
+          : (moveEvent.clientY - rect.top) / rect.height;
+      lastRatio = ratio;
+      onResize(split.id, ratio);
+    };
+    const stop = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      document.body.style.cursor = previousCursor;
+      // 拖动过程只改内存，松手才落盘；最后一个比例由这里显式交回，避免帧未刷新时写成旧值。
+      onResizeEnd(split.id, lastRatio);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
 
   return (
     <div className={node.direction === 'row' ? 'split split--row' : 'split split--column'}>
@@ -61,19 +98,31 @@ export function PaneLayout({
           activePaneId={activePaneId}
           tabActive={tabActive}
           showHeaders={showHeaders}
+          fontSize={fontSize}
           onActivate={onActivate}
           onClose={onClose}
+          onResize={onResize}
+          onResizeEnd={onResizeEnd}
         />
       </div>
-      <div className="split__divider" />
+      <div
+        className="split__divider"
+        role="separator"
+        aria-orientation={node.direction === 'row' ? 'vertical' : 'horizontal'}
+        data-testid={`split-divider-${node.id}`}
+        onPointerDown={(event) => startResize(event, node)}
+      />
       <div className="split__child" style={{ flexGrow: 1 - node.ratio, flexBasis: 0 }}>
         <PaneLayout
           node={node.second}
           activePaneId={activePaneId}
           tabActive={tabActive}
           showHeaders={showHeaders}
+          fontSize={fontSize}
           onActivate={onActivate}
           onClose={onClose}
+          onResize={onResize}
+          onResizeEnd={onResizeEnd}
         />
       </div>
     </div>

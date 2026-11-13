@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
+  CONFIG_IPC,
   CONNECTIONS_IPC,
   CONNECTION_IPC,
   CREDENTIALS_IPC,
@@ -8,6 +9,7 @@ import {
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
   TRANSFERS_IPC,
+  type AppConfig,
   type ConnectionInput,
   type ConnectionRecord,
   type ConnectionsSnapshot,
@@ -100,6 +102,16 @@ const api: EtermApi = {
     ipcRenderer.invoke(LAYOUTS_IPC.get, key) as Promise<IpcResult<LayoutTemplate | null>>,
   saveLayout: (key: string, template: LayoutTemplate) =>
     ipcRenderer.invoke(LAYOUTS_IPC.save, { key, template }) as Promise<IpcResult<null>>,
+
+  getConfig: () => ipcRenderer.invoke(CONFIG_IPC.get) as Promise<IpcResult<AppConfig>>,
+  saveConfig: (config: AppConfig) =>
+    ipcRenderer.invoke(CONFIG_IPC.save, config) as Promise<IpcResult<AppConfig>>,
+  resetConfig: () => ipcRenderer.invoke(CONFIG_IPC.reset) as Promise<IpcResult<AppConfig>>,
+  onConfigChange: (handler: (config: AppConfig) => void) => {
+    const listener = (_event: IpcRendererEvent, config: AppConfig): void => handler(config);
+    ipcRenderer.on(CONFIG_IPC.changed, listener);
+    return () => ipcRenderer.removeListener(CONFIG_IPC.changed, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('eterm', api);

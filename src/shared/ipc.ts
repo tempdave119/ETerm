@@ -1,6 +1,7 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, SessionOpenOptions } from '../core/ports.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
+import type { AppConfig, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type {
@@ -15,6 +16,7 @@ export type { ProductErrorInfo };
 export type { Capability };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
+export type { AppConfig, UiDensity };
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
@@ -54,6 +56,13 @@ export const TRANSFERS_IPC = {
 export const LAYOUTS_IPC = {
   get: 'layouts:get',
   save: 'layouts:save',
+} as const;
+
+export const CONFIG_IPC = {
+  get: 'config:get',
+  save: 'config:save',
+  reset: 'config:reset',
+  changed: 'config:changed',
 } as const;
 
 export interface FilePreview {
@@ -122,4 +131,9 @@ export interface EtermApi {
 
   getLayout(key: string): Promise<IpcResult<LayoutTemplate | null>>;
   saveLayout(key: string, template: LayoutTemplate): Promise<IpcResult<null>>;
+
+  getConfig(): Promise<IpcResult<AppConfig>>;
+  saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;
+  resetConfig(): Promise<IpcResult<AppConfig>>;
+  onConfigChange(handler: (config: AppConfig) => void): () => void;
 }

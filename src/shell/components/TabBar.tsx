@@ -1,4 +1,4 @@
-import { Columns2, FolderOpen, Rows2 } from 'lucide-react';
+import { Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
 
 interface TabInfo {
   id: string;
@@ -16,6 +16,7 @@ interface TabBarProps {
   onNew(): void;
   onToggleFiles(): void;
   onSplit(direction: 'row' | 'column'): void;
+  onOpenSettings(): void;
 }
 
 export function TabBar({
@@ -29,6 +30,7 @@ export function TabBar({
   onNew,
   onToggleFiles,
   onSplit,
+  onOpenSettings,
 }: TabBarProps) {
   return (
     <header className="tabbar">
@@ -85,6 +87,16 @@ export function TabBar({
           <FolderOpen size={16} strokeWidth={1.5} />
         </button>
       ) : null}
+      <button
+        className="tabbar__action"
+        type="button"
+        title="设置（⌘,）"
+        aria-label="设置"
+        data-testid="open-settings"
+        onClick={onOpenSettings}
+      >
+        <Settings size={16} strokeWidth={1.5} />
+      </button>
       <button className="tabbar__new" type="button" title="新建终端" aria-label="新建终端" onClick={onNew}>
         +
       </button>

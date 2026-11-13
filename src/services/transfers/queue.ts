@@ -48,7 +48,7 @@ let sequence = 0;
  */
 export class TransferQueue {
   readonly #options: TransferQueueOptions;
-  readonly #maxConcurrent: number;
+  #maxConcurrent: number;
   #tasks = new Map<string, Job>();
   #pending: string[] = [];
   #running = 0;
@@ -91,6 +91,13 @@ export class TransferQueue {
     return [...this.#tasks.values()]
       .map((job) => structuredClone(job.view))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  /** 并发数来自配置，改完即时生效：缩小不再启动新任务，放大立即补位。 */
+  setMaxConcurrent(value: number): void {
+    const next = Number.isFinite(value) ? Math.floor(value) : 1;
+    this.#maxConcurrent = Math.max(1, next);
+    this.#pump();
   }
 
   find(id: string): TransferView | null {

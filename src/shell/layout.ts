@@ -75,6 +75,24 @@ export function removeAt(node: LayoutNode, paneId: string): LayoutNode | null {
   return node;
 }
 
+/** 比例夹在 0.2–0.8：和布局模板的校验范围保持一致，拖到边上也不会把 pane 压没。 */
+export function clampRatio(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(0.8, Math.max(0.2, value));
+}
+
+/** 按 splitId 写回比例；找不到目标时原样返回。 */
+export function setRatioAt(node: LayoutNode, splitId: string, ratio: number): LayoutNode {
+  if (node.type === 'leaf') return node;
+  if (node.id === splitId) return { ...node, ratio: clampRatio(ratio) };
+
+  const first = setRatioAt(node.first, splitId, ratio);
+  if (first !== node.first) return { ...node, first };
+  const second = setRatioAt(node.second, splitId, ratio);
+  if (second !== node.second) return { ...node, second };
+  return node;
+}
+
 /** 只保留结构，不存 sessionId；持久化用。 */
 export function toTemplate(node: LayoutNode): LayoutTemplate {
   if (node.type === 'leaf') return { type: 'leaf' };

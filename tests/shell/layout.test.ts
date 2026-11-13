@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  clampRatio,
   collectLeaves,
   countLeaves,
   findLeaf,
   firstLeaf,
   removeAt,
+  setRatioAt,
   splitAt,
   type LayoutNode,
   type PaneLeaf,
@@ -95,4 +97,49 @@ test('layout_remove_nested_leaf_keeps_shape', () => {
 
 test('layout_remove_last_leaf_returns_null', () => {
   assert.equal(removeAt(leaf('a'), 'a'), null);
+});
+
+test('layout_set_ratio_updates_nested_split_only', () => {
+  const tree: LayoutNode = {
+    type: 'split',
+    id: 's1',
+    direction: 'row',
+    ratio: 0.5,
+    first: leaf('a'),
+    second: { type: 'split', id: 's2', direction: 'column', ratio: 0.5, first: leaf('b'), second: leaf('c') },
+  };
+
+  const next = setRatioAt(tree, 's2', 0.7) as Extract<LayoutNode, { type: 'split' }>;
+
+  assert.equal(next.ratio, 0.5);
+  assert.equal((next.second as Extract<LayoutNode, { type: 'split' }>).ratio, 0.7);
+  assert.equal((tree.second as Extract<LayoutNode, { type: 'split' }>).ratio, 0.5);
+});
+
+test('layout_set_ratio_clamps_to_template_range', () => {
+  const tree: LayoutNode = {
+    type: 'split',
+    id: 's1',
+    direction: 'row',
+    ratio: 0.5,
+    first: leaf('a'),
+    second: leaf('b'),
+  };
+
+  assert.equal((setRatioAt(tree, 's1', 0.1) as Extract<LayoutNode, { type: 'split' }>).ratio, 0.2);
+  assert.equal((setRatioAt(tree, 's1', 0.95) as Extract<LayoutNode, { type: 'split' }>).ratio, 0.8);
+  assert.equal(clampRatio(Number.NaN), 0.5);
+});
+
+test('layout_set_ratio_returns_same_tree_when_split_missing', () => {
+  const tree: LayoutNode = {
+    type: 'split',
+    id: 's1',
+    direction: 'row',
+    ratio: 0.5,
+    first: leaf('a'),
+    second: leaf('b'),
+  };
+
+  assert.equal(setRatioAt(tree, 'missing', 0.7), tree);
 });
