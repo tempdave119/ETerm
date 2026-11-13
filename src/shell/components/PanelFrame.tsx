@@ -49,26 +49,30 @@ export function PanelFrame({ panelId, title, dock, actions, children, onMove }: 
       <header className="panel-frame__header">
         <span className="panel-frame__title">{title}</span>
         {actions ? <span className="panel-frame__actions">{actions}</span> : null}
-        <button
-          className="icon-button"
-          type="button"
-          title="面板位置"
-          aria-label="面板位置"
-          data-testid={`panel-menu-${panelId}`}
-          onClick={() => setMenuOpen((value) => !value)}
-        >
-          <Settings2 size={13} strokeWidth={1.5} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          title={`关闭${title}`}
-          aria-label={`关闭${title}`}
-          data-testid={`panel-close-${panelId}`}
-          onClick={() => onMove(null)}
-        >
-          <X size={13} strokeWidth={1.5} />
-        </button>
+        {dock === null ? null : (
+          <>
+            <button
+              className="icon-button"
+              type="button"
+              title="面板位置"
+              aria-label="面板位置"
+              data-testid={`panel-menu-${panelId}`}
+              onClick={() => setMenuOpen((value) => !value)}
+            >
+              <Settings2 size={13} strokeWidth={1.5} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              title={`关闭${title}`}
+              aria-label={`关闭${title}`}
+              data-testid={`panel-close-${panelId}`}
+              onClick={() => onMove(null)}
+            >
+              <X size={13} strokeWidth={1.5} />
+            </button>
+          </>
+        )}
         {menuOpen ? (
           <div className="panel-menu" role="menu" data-testid={`panel-menu-list-${panelId}`}>
             {DOCK_IDS.map((target) => (

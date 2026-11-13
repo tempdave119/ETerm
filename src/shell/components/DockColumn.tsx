@@ -1,4 +1,4 @@
-import { Fragment, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { DockId } from '../../shared/panels.ts';
 import type { PanelDefinition } from '../panels/registry.ts';
 
@@ -21,6 +21,10 @@ interface DockColumnProps {
  * 区内尺寸用累计比例换算成 flexGrow，窗口缩放时比例保持不变。
  */
 export function DockColumn({ dock, panels, dividers, onResize, onResizeEnd }: DockColumnProps) {
+  // 拖动时每帧只提交一次比例，避免 pointermove 高频触发整棵面板树重渲染。
+  const frameRef = useRef<number | null>(null);
+  const pendingRatio = useRef(0);
+
   if (panels.length === 0) return null;
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>, index: number): void => {
@@ -36,11 +40,20 @@ export function DockColumn({ dock, panels, dividers, onResize, onResizeEnd }: Do
 
     const move = (moveEvent: PointerEvent): void => {
       lastRatio = (moveEvent.clientY - rect.top) / rect.height;
-      onResize(index, lastRatio);
+      pendingRatio.current = lastRatio;
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        onResize(index, pendingRatio.current);
+      });
     };
     const stop = (): void => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
       document.body.style.cursor = previousCursor;
       // 拖动过程只改内存，松手才落盘；显式交回最后一个比例，避免帧未刷新时写成旧值。
       onResizeEnd(index, lastRatio);
