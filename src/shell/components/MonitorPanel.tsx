@@ -6,6 +6,8 @@ import { PanelFrame } from './PanelFrame.tsx';
 interface MonitorPanelProps {
   /** 有值且会话具备 exec 能力时采样远端；null 时采样本机。 */
   sessionId: string | null;
+  /** 来源说明：远端为 user@host:port，本机为「这台 Mac」。 */
+  targetLabel: string;
   dock: DockId | null;
   onMove(target: DockId | null): void;
   canPanelMoveUp?: boolean;
@@ -19,6 +21,7 @@ const REMOTE_POLL_INTERVAL = 2000;
 /** 本机 / 远端资源面板：本地 1 秒、远端 2 秒采样一次。 */
 export function MonitorPanel({
   sessionId,
+  targetLabel,
   dock,
   onMove,
   canPanelMoveUp,
@@ -61,19 +64,22 @@ export function MonitorPanel({
   return (
     <PanelFrame
       panelId="monitor"
-      title="系统资源"
+      title={sessionId ? '系统资源 · 远端' : '系统资源 · 本机'}
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
       canMoveDown={canPanelMoveDown}
       onReorder={onPanelReorder}
-      actions={
-        <span className="monitor-source" data-testid="monitor-source">
-          {sessionId ? '远端' : '本机'}
-        </span>
-      }
     >
       <div className="monitor-panel__body">
+        <div className={`monitor-source ${sessionId ? 'monitor-source--remote' : ''}`} data-testid="monitor-source">
+          <span className="monitor-source__badge" data-testid="monitor-source-badge">
+            {sessionId ? '远端' : '本机'}
+          </span>
+          <span className="monitor-source__target" title={targetLabel}>
+            {targetLabel}
+          </span>
+        </div>
         <div className="monitor-row">
           <span>CPU</span>
           <span className="monitor-row__value" data-testid="monitor-cpu">
@@ -105,6 +111,38 @@ export function MonitorPanel({
           <span>CPU 核数</span>
           <span className="monitor-row__value">{stats?.cpus ?? '—'}</span>
         </div>
+
+        <div className="monitor-row">
+          <span>运行时间</span>
+          <span className="monitor-row__value" data-testid="monitor-uptime">
+            {stats ? formatUptime(stats.uptime) : '—'}
+          </span>
+        </div>
+
+        {stats?.filesystems?.length ? (
+          <div className="monitor-filesystems" data-testid="monitor-filesystems">
+            <div className="monitor-section-title">文件系统</div>
+            {stats.filesystems.map((item) => {
+              const percent = item.total > 0 ? Math.min(100, Math.round((item.used / item.total) * 100)) : 0;
+              return (
+                <div className="monitor-fs" key={item.path}>
+                  <div className="monitor-fs__head">
+                    <span className="monitor-fs__path" title={item.path}>
+                      {item.path}
+                    </span>
+                    <span className="monitor-row__value">
+                      {formatBytes(item.used)} / {formatBytes(item.total)}
+                    </span>
+                  </div>
+                  <div className="monitor-meter">
+                    <span className="monitor-meter__fill" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
         {error ? (
           <p className="monitor-error" data-testid="monitor-error">
             {error}
@@ -113,6 +151,16 @@ export function MonitorPanel({
       </div>
     </PanelFrame>
   );
+}
+
+function formatUptime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
 function formatBytes(value: number): string {

@@ -1,5 +1,6 @@
+import { statfsSync } from 'node:fs';
 import os from 'node:os';
-import type { SystemStats } from '../../shared/ipc.ts';
+import type { FileSystemUsage, SystemStats } from '../../shared/ipc.ts';
 
 export interface CpuSnapshot {
   idle: number;
@@ -32,6 +33,15 @@ export function readSystemStats(previous: CpuSnapshot | null): {
   const snapshot = cpuSnapshot();
   const memTotal = os.totalmem();
   const load = os.loadavg();
+  let filesystems: FileSystemUsage[] = [];
+  try {
+    const root = statfsSync('/');
+    const total = root.bsize * root.blocks;
+    const available = root.bsize * root.bavail;
+    filesystems = [{ path: '/', used: Math.max(0, total - available), total }];
+  } catch {
+    filesystems = [];
+  }
   return {
     stats: {
       cpuPercent: cpuPercentBetween(previous, snapshot),
@@ -40,6 +50,7 @@ export function readSystemStats(previous: CpuSnapshot | null): {
       load: [load[0] ?? 0, load[1] ?? 0, load[2] ?? 0],
       uptime: os.uptime(),
       cpus: os.cpus().length,
+      filesystems,
     },
     snapshot,
   };

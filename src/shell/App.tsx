@@ -381,6 +381,15 @@ export function App() {
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const activePane = activeTab ? (findLeaf(activeTab.layout, activeTab.activePaneId) ?? firstLeaf(activeTab.layout)) : null;
+  const monitorConnection = activeTab?.connectionId
+    ? (connections.find((item) => item.id === activeTab.connectionId) ?? null)
+    : null;
+  const monitorRemote = Boolean(activeTab?.connectionId && activePane?.capabilities.includes('exec'));
+  const monitorTargetLabel = monitorRemote
+    ? monitorConnection
+      ? `${monitorConnection.username ?? ''}@${monitorConnection.host ?? ''}${monitorConnection.port ? `:${monitorConnection.port}` : ''}`.replace(/^@/, '')
+      : '远端主机'
+    : '这台 Mac';
   const activeConnectionId = activePane?.connectionId ?? null;
   const filesAvailable = activePane?.capabilities.includes('file') === true;
   const forwardAvailable = activePane?.capabilities.includes('forward') === true;
@@ -858,9 +867,8 @@ export function App() {
       case 'monitor':
         return (
           <MonitorPanel
-            sessionId={
-              activeTab?.connectionId && activePane?.capabilities.includes('exec') ? activePane.sessionId : null
-            }
+            sessionId={monitorRemote ? (activePane?.sessionId ?? null) : null}
+            targetLabel={monitorTargetLabel}
             dock={dock}
             onMove={(target) => movePanelTo('monitor', target)}
             {...panelChrome('monitor', dock)}

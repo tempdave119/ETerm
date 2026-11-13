@@ -375,7 +375,7 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
         const stream = acceptExec();
         if (String(info?.command ?? '').includes('MemTotal')) {
           stream.write(
-            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\n',
+            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\nuptime=7200\nfs=/|524288|1048576\n',
           );
         } else {
           stream.write('ok\n');
@@ -671,10 +671,14 @@ try {
     `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm', metaKey: true, shiftKey: true, bubbles: true }))`,
   );
   await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="monitor-source"]')?.textContent === '远端'`),
+    () => evaluate(`document.querySelector('[data-testid="monitor-source-badge"]')?.textContent === '远端'`),
     5_000,
     '远端资源来源',
   );
+  const monitorTarget = await evaluate(
+    `document.querySelector('.monitor-source__target')?.textContent ?? ''`,
+  );
+  if (!monitorTarget.includes('@')) throw new Error(`远端资源缺少连接标识：${monitorTarget}`);
   await waitFor(
     () => evaluate(`/\\d+%/.test(document.querySelector('[data-testid="monitor-cpu"]')?.textContent ?? '')`),
     10_000,
@@ -686,6 +690,19 @@ try {
     10_000,
     '远端内存',
   );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-uptime"]')?.textContent === '2h 0m'`),
+    10_000,
+    '远端运行时间',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-filesystems"]') !== null`),
+    10_000,
+    '远端文件系统',
+  );
+  const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  mkdirSync('tmp', { recursive: true });
+  writeFileSync('tmp/ssh-smoke-monitor.png', Buffer.from(monitorShot.data, 'base64'));
 
   // 关闭预览与标签，再次点击连接：指纹已保存，不应再弹确认。
   await evaluate(`document.querySelector('[data-testid="file-preview"] .button--primary').click()`);

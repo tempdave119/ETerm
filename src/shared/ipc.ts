@@ -102,6 +102,12 @@ export interface FilePreview {
   binary: boolean;
 }
 
+export interface FileSystemUsage {
+  path: string;
+  used: number;
+  total: number;
+}
+
 export interface SystemStats {
   cpuPercent: number;
   memUsed: number;
@@ -109,6 +115,8 @@ export interface SystemStats {
   load: [number, number, number];
   uptime: number;
   cpus: number;
+  /** 本机取根分区；远端取 df 的主要挂载点。 */
+  filesystems?: FileSystemUsage[];
 }
 
 export const CONNECTION_IPC = {

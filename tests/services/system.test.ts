@@ -23,5 +23,8 @@ test('system_stats_reads_memory_and_load_from_host', () => {
   assert.ok(stats.memUsed >= 0 && stats.memUsed <= stats.memTotal);
   assert.equal(stats.load.length, 3);
   assert.ok(stats.cpus > 0);
+  assert.ok(stats.uptime > 0);
+  assert.ok((stats.filesystems?.length ?? 0) >= 1);
+  assert.equal(stats.filesystems?.[0]?.path, '/');
   assert.equal(stats.cpuPercent, 0);
 });
