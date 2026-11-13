@@ -6,6 +6,8 @@ interface SessionTreeProps {
   groups: GroupRecord[];
   connections: ConnectionRecord[];
   activeConnectionId: string | null;
+  /** 正在建立连接的连接 id；写入期间该行禁点，避免重复点出多个标签。 */
+  connectingId: string | null;
   query: string;
   onQueryChange(value: string): void;
   onConnect(connection: ConnectionRecord): void;
@@ -20,6 +22,7 @@ export function SessionTree({
   groups,
   connections,
   activeConnectionId,
+  connectingId,
   query,
   onQueryChange,
   onConnect,
@@ -164,6 +167,7 @@ export function SessionTree({
                           key={connection.id}
                           connection={connection}
                           active={connection.id === activeConnectionId}
+                          connecting={connectingId === connection.id}
                           dragEnabled={!keyword}
                           dragging={draggingId === connection.id}
                           dragOver={dragOverId === connection.id}
@@ -188,6 +192,7 @@ export function SessionTree({
                     key={connection.id}
                     connection={connection}
                     active={connection.id === activeConnectionId}
+                    connecting={connectingId === connection.id}
                     dragEnabled={!keyword}
                     dragging={draggingId === connection.id}
                     dragOver={dragOverId === connection.id}
@@ -212,6 +217,7 @@ export function SessionTree({
 interface ConnectionRowProps {
   connection: ConnectionRecord;
   active: boolean;
+  connecting: boolean;
   dragEnabled: boolean;
   dragging: boolean;
   dragOver: boolean;
@@ -227,6 +233,7 @@ interface ConnectionRowProps {
 function ConnectionRow({
   connection,
   active,
+  connecting,
   dragEnabled,
   dragging,
   dragOver,
@@ -267,9 +274,19 @@ function ConnectionRow({
       }}
     >
       <Server size={16} strokeWidth={1.5} className="tree-connection__icon" />
-      <button className="tree-connection__main" type="button" onClick={() => onConnect(connection)}>
+      <button
+        className="tree-connection__main"
+        type="button"
+        disabled={connecting}
+        data-testid={`connection-open-${connection.name}`}
+        onClick={() => onConnect(connection)}
+      >
         <span className="tree-connection__name">{connection.name}</span>
-        {connection.host ? <span className="tree-connection__host">{connection.host}</span> : null}
+        {connecting ? (
+          <span className="tree-connection__pending">连接中…</span>
+        ) : connection.host ? (
+          <span className="tree-connection__host">{connection.host}</span>
+        ) : null}
       </button>
       <span className="tree-connection__actions">
         <button

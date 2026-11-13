@@ -142,6 +142,9 @@ button {
 .pane {
   position: absolute;
   inset: 0;
+  /* 必须是 flex 容器：分屏树的 .split 靠 flex: 1 撑满，否则两个 pane 高度塔陷为 0。 */
+  display: flex;
+  flex-direction: column;
   padding: var(--space-base) 0 0 var(--space-base);
 }
 
@@ -156,6 +159,12 @@ button {
 
 .terminal-host .xterm {
   height: 100%;
+}
+
+/* xterm.css 把 viewport 背景固定为纯黑，浅色主题下终端底部会露出黑边；
+   透明后露出画布背景，与两套终端主题的 background 同值。 */
+.terminal-host .xterm-viewport {
+  background-color: transparent !important;
 }
 
 /* 空态三段式：一句说明 + 一个动作 + 一个可选提示 */
@@ -452,6 +461,18 @@ button {
   font-size: var(--font-aux);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* 连接建立中的行内提示：取代 host 显示，行本身禁点。 */
+.tree-connection__pending {
+  flex: 0 0 auto;
+  color: var(--status-info);
+  font-size: var(--font-aux);
+  white-space: nowrap;
+}
+
+.tree-connection__main:disabled {
+  cursor: progress;
 }
 
 .tree-connection__actions {
@@ -875,6 +896,8 @@ button {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
+  /* 叠在文件面板下方时用上边框分区，单开时也只是一条分隔线。 */
+  border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1129,6 +1152,8 @@ button {
 
 .split__child {
   display: flex;
+  /* 列方向：让内部的 .pane-node 靠 flex: 1 撑满高度，不再依赖内容撑开。 */
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
 }

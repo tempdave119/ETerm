@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type {
   AppConfig,
@@ -74,6 +74,9 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [hostKey, setHostKey] = useState<HostKeyPrompt | null>(null);
   const [busy, setBusy] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+  // state 更新要等下一次渲染，同一帧内连点拦不住，所以用 ref 做互斥锁。
+  const connectingRef = useRef<string | null>(null);
   const [panels, setPanels] = useState<PanelState>(defaultPanelState);
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -249,6 +252,9 @@ export function App() {
 
   const openConnection = useCallback(
     async (connection: ConnectionRecord): Promise<void> => {
+      if (connectingRef.current) return;
+      connectingRef.current = connection.id;
+      setConnectingId(connection.id);
       setBusy(true);
       setError(null);
       try {
@@ -298,6 +304,8 @@ export function App() {
         });
         updatePanels({ ...panels, files: config?.files.openByDefault ?? true });
       } finally {
+        connectingRef.current = null;
+        setConnectingId(null);
         setBusy(false);
       }
     },
@@ -636,6 +644,7 @@ export function App() {
           groups={groups}
           connections={connections}
           activeConnectionId={activeConnectionId}
+          connectingId={connectingId}
           query={query}
           onQueryChange={setQuery}
           onConnect={(connection) => void openConnection(connection)}
