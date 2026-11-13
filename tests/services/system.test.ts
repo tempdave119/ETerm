@@ -29,5 +29,6 @@ test('system_stats_reads_memory_and_load_from_host', () => {
   assert.equal(stats.filesystems?.[0]?.path, '/');
   assert.ok((stats.processes?.length ?? 0) >= 1);
   assert.ok((stats.processes?.length ?? 0) <= 5);
+  assert.ok((stats.processesByCpu?.length ?? 0) <= 5);
   assert.equal(stats.cpuPercent, 0);
 });

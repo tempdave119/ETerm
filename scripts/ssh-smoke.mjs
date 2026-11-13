@@ -375,7 +375,7 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
         const stream = acceptExec();
         if (String(info?.command ?? '').includes('MemTotal')) {
           stream.write(
-            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\nuptime=7200\nhostname=mock-remote\nfs=/|524288|1048576\nproc=101 512000 1.2 2.5 node\nproc=102 256000 0.5 1.2 zsh\nproc=103 128000 0.1 0.6 sshd\nproc=104 64000 0.0 0.3 bash\nproc=105 32000 0.0 0.1 cron\n',
+            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\nuptime=7200\nhostname=mock-remote\nfs=/|524288|1048576\nproc=101 512000 1.2 2.5 node\nproc=102 256000 0.5 1.2 zsh\nproc=103 128000 0.1 0.6 sshd\nproc=104 64000 0.0 0.3 bash\nproc=105 32000 0.0 0.1 cron\nproccpu=102 256000 12.5 1.2 zsh\nproccpu=101 512000 1.2 2.5 node\nproccpu=103 128000 0.1 0.6 sshd\nproccpu=104 64000 0.0 0.3 bash\nproccpu=105 32000 0.0 0.1 cron\n',
           );
         } else {
           stream.write('ok\n');
@@ -718,6 +718,16 @@ try {
     `document.querySelector('[data-testid="monitor-processes"] .monitor-process__name')?.textContent ?? ''`,
   );
   if (topProcess !== 'node') throw new Error(`进程 Top5 排序异常：${topProcess}`);
+  await evaluate(`document.querySelector('[data-testid="process-sort-cpu"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-processes"]')?.dataset.sort === 'cpu'`),
+    5_000,
+    '进程 CPU 排序',
+  );
+  const topCpuProcess = await evaluate(
+    `document.querySelector('[data-testid="monitor-processes"] .monitor-process__name')?.textContent ?? ''`,
+  );
+  if (topCpuProcess !== 'zsh') throw new Error(`进程 CPU 排序异常：${topCpuProcess}`);
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync('tmp/ssh-smoke-monitor.png', Buffer.from(monitorShot.data, 'base64'));

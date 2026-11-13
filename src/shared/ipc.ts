@@ -130,6 +130,8 @@ export interface SystemStats {
   hostname?: string;
   /** 按常驻内存排序的前 5 个进程。 */
   processes?: ProcessUsage[];
+  /** 按 CPU 占用排序的前 5 个进程。 */
+  processesByCpu?: ProcessUsage[];
 }
 
 export const CONNECTION_IPC = {

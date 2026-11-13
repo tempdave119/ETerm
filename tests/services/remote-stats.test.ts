@@ -15,6 +15,8 @@ test('remote_stats_parses_linux_output', () => {
       'fs=/|524288|1048576',
       'proc=101 4096 1.0 0.1 big proc',
       'proc=102 1024 0.5 0.05 small',
+      'proccpu=102 1024 9.5 0.05 hot',
+      'proccpu=101 4096 0.5 0.1 big proc',
     ].join('\n'),
   );
 
@@ -27,6 +29,7 @@ test('remote_stats_parses_linux_output', () => {
   assert.deepEqual(stats.filesystems, [{ path: '/', used: 536870912, total: 1073741824 }]);
   assert.deepEqual(stats.processes?.map((item) => item.name), ['big proc', 'small']);
   assert.equal(stats.processes?.[0]?.rss, 4096 * 1024);
+  assert.deepEqual(stats.processesByCpu?.map((item) => item.name), ['hot', 'big proc']);
   assert.deepEqual(stats.load, [0.52, 0.58, 0.59]);
 });
 

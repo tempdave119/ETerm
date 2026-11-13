@@ -1170,6 +1170,49 @@ button {
   font-weight: 600;
 }
 
+.monitor-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  margin-top: var(--space-tight);
+}
+
+.monitor-section-head .monitor-section-title {
+  margin-top: 0;
+}
+
+.monitor-sort {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.monitor-sort button {
+  height: 20px;
+  padding: 0 var(--space-tight);
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.monitor-sort button:hover {
+  color: var(--text-secondary);
+}
+
+.monitor-sort button.is-active {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.monitor-sort button:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: -1px;
+}
+
 .monitor-filesystems {
   display: flex;
   flex-direction: column;

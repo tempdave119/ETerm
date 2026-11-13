@@ -29,6 +29,7 @@ export const REMOTE_STATS_COMMAND = [
   'echo "hostname=$hostname"',
   'df -kP 2>/dev/null | awk \'NR>1 && $1 !~ /^(devfs|devtmpfs|tmpfs|overlay|shm|udev|none)$/ && $6 != "" {print "fs=" $6 "|" $3 "|" $2}\' | head -n 6',
   'ps -A -o pid=,rss=,%cpu=,%mem=,comm= 2>/dev/null | sort -k2 -nr | head -n 5 | sed "s/^/proc=/"',
+  'ps -A -o pid=,rss=,%cpu=,%mem=,comm= 2>/dev/null | sort -k3 -nr | head -n 5 | sed "s/^/proccpu=/"',
 ].join('\n');
 
 function toNumber(value: string | undefined): number {
@@ -70,6 +71,7 @@ export function parseRemoteStats(stdout: string): SystemStats {
     cpus,
     filesystems,
     hostname: values.get('hostname') || undefined,
-    processes: parseProcessList(stdout),
+    processes: parseProcessList(stdout, { prefix: 'proc=' }),
+    processesByCpu: parseProcessList(stdout, { sortBy: 'cpu', prefix: 'proccpu=' }),
   };
 }

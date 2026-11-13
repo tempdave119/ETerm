@@ -45,15 +45,17 @@ export function readSystemStats(previous: CpuSnapshot | null): {
     filesystems = [];
   }
   let processes: ProcessUsage[] = [];
+  let processesByCpu: ProcessUsage[] = [];
   try {
-    processes = parseProcessList(
-      execFileSync('ps', ['-A', '-o', 'pid=,rss=,%cpu=,%mem=,comm='], {
-        encoding: 'utf8',
-        maxBuffer: 1024 * 1024,
-      }),
-    );
+    const output = execFileSync('ps', ['-A', '-o', 'pid=,rss=,%cpu=,%mem=,comm='], {
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024,
+    });
+    processes = parseProcessList(output);
+    processesByCpu = parseProcessList(output, { sortBy: 'cpu' });
   } catch {
     processes = [];
+    processesByCpu = [];
   }
   return {
     stats: {
@@ -66,6 +68,7 @@ export function readSystemStats(previous: CpuSnapshot | null): {
       filesystems,
       hostname: os.hostname(),
       processes,
+      processesByCpu,
     },
     snapshot,
   };

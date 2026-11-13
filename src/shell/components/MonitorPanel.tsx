@@ -33,6 +33,7 @@ export function MonitorPanel({
 }: MonitorPanelProps) {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [processSort, setProcessSort] = useState<'memory' | 'cpu'>('memory');
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +64,10 @@ export function MonitorPanel({
   }, [sessionId]);
 
   const memoryPercent = stats && stats.memTotal > 0 ? Math.round((stats.memUsed / stats.memTotal) * 100) : 0;
+  const processList =
+    processSort === 'cpu'
+      ? (stats?.processesByCpu?.length ? stats.processesByCpu : (stats?.processes ?? []))
+      : (stats?.processes ?? []);
 
   return (
     <PanelFrame
@@ -161,10 +166,30 @@ export function MonitorPanel({
           </div>
         ) : null}
 
-        {stats?.processes?.length ? (
-          <div className="monitor-processes" data-testid="monitor-processes">
-            <div className="monitor-section-title">占用最高进程</div>
-            {stats.processes.map((proc) => (
+        {processList.length ? (
+          <div className="monitor-processes" data-testid="monitor-processes" data-sort={processSort}>
+            <div className="monitor-section-head">
+              <div className="monitor-section-title">占用最高进程</div>
+              <div className="monitor-sort" role="group" aria-label="进程排序">
+                <button
+                  type="button"
+                  className={processSort === 'memory' ? 'is-active' : ''}
+                  data-testid="process-sort-memory"
+                  onClick={() => setProcessSort('memory')}
+                >
+                  内存
+                </button>
+                <button
+                  type="button"
+                  className={processSort === 'cpu' ? 'is-active' : ''}
+                  data-testid="process-sort-cpu"
+                  onClick={() => setProcessSort('cpu')}
+                >
+                  CPU
+                </button>
+              </div>
+            </div>
+            {processList.map((proc) => (
               <div className="monitor-process" key={`${proc.pid}-${proc.name}`}>
                 <span className="monitor-process__name" title={proc.name}>
                   {proc.name}

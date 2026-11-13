@@ -20,6 +20,18 @@ test('processes_parse_sorts_by_rss_and_keeps_spaces_in_name', () => {
   assert.equal(processes[0]?.memPercent, 0.4);
 });
 
+test('processes_parse_sorts_by_cpu_when_requested', () => {
+  const processes = parseProcessList(
+    ['1 100 1.0 0.1 a', '2 50 50.0 0.2 b', '3 200 10.0 0.3 c'].join('\n'),
+    { sortBy: 'cpu' },
+  );
+
+  assert.deepEqual(
+    processes.map((item) => item.name),
+    ['b', 'c', 'a'],
+  );
+});
+
 test('processes_parse_ignores_bad_and_limits_to_five', () => {
   const lines = ['bad line', '1 100 0.1 0.1 a', '2 200 0.1 0.1 b', '3 300 0.1 0.1 c', '4 400 0.1 0.1 d', '5 500 0.1 0.1 e', '6 600 0.1 0.1 f'];
   const processes = parseProcessList(lines.join('\n'));
