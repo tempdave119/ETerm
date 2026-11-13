@@ -33,6 +33,16 @@ async function waitFor(check, timeoutMs, label) {
   throw new Error(`等待超时：${label}${lastError ? `（${lastError.message}）` : ''}`);
 }
 
+function setInputScript(selector, value) {
+  return `(() => {
+    const input = document.querySelector(${JSON.stringify(selector)});
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, ${JSON.stringify(value)});
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`;
+}
+
 function setSelectScript(selector, value) {
   return `(() => {
     const select = document.querySelector(${JSON.stringify(selector)});
@@ -238,8 +248,57 @@ try {
   const firstScreen = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
   if (!firstScreen.includes('package.json')) throw new Error('切回后第一个终端内容丢失');
 
+  // 命令注册表的快捷键通路：⌘⇧] / ⌘⇧[ 切换标签。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'BracketRight', key: ']', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('.pane[data-active="true"] .terminal-host')?.dataset.sessionId === ${JSON.stringify(secondId)}`,
+      ),
+    3_000,
+    '⌘⇧] 切换标签',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'BracketLeft', key: '[', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('.pane[data-active="true"] .terminal-host')?.dataset.sessionId === ${JSON.stringify(sessionId)}`,
+      ),
+    3_000,
+    '⌘⇧[ 切回标签',
+  );
+
   await evaluate(`document.querySelectorAll('.tab__close')[1].click()`);
   await waitFor(() => evaluate(`document.querySelectorAll('.terminal-host').length === 1`), 5_000, '关闭第二个标签');
+
+  // ⌘K 命令面板：搜索「设置」并执行，设置面板随之打开。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK', key: 'k', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-palette"]') !== null`),
+    5_000,
+    '命令面板',
+  );
+  const paletteShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/palette-smoke.png', Buffer.from(paletteShot.data, 'base64'));
+  await evaluate(setInputScript('#command-query', '设置'));
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-settings.open"]') !== null`),
+    5_000,
+    '命令过滤',
+  );
+  await evaluate(`document.querySelector('[data-testid="command-settings.open"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
+    5_000,
+    '命令打开设置',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
 
   // 设置：字号 / 密度 / 文件面板默认值即时生效，重开面板保持，可恢复默认。
   const colsAtDefaultFont = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols;

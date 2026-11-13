@@ -25,7 +25,9 @@ import {
   type PaneLeaf,
   type SplitDirection,
 } from './layout.ts';
+import { findCommandByShortcut, type CommandId } from './commands/registry.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
+import { CommandPalette } from './components/CommandPalette.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
 import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
@@ -72,6 +74,7 @@ export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.eterm.listConnections();
@@ -464,30 +467,80 @@ export function App() {
     [tabs],
   );
 
+  const cycleTab = useCallback(
+    (delta: number): void => {
+      if (tabs.length < 2) return;
+      const index = tabs.findIndex((tab) => tab.id === activeTabId);
+      if (index < 0) return;
+      const next = tabs[(index + delta + tabs.length) % tabs.length];
+      if (next) setActiveId(next.id);
+    },
+    [activeTabId, tabs],
+  );
+
+  const runCommand = useCallback(
+    (id: CommandId): void => {
+      switch (id) {
+        case 'terminal.new':
+          void openLocalTerminal();
+          break;
+        case 'connection.new':
+          openNewForm();
+          break;
+        case 'tab.close':
+          if (activeTabId) closeTab(activeTabId);
+          break;
+        case 'tab.next':
+          cycleTab(1);
+          break;
+        case 'tab.prev':
+          cycleTab(-1);
+          break;
+        case 'pane.close':
+          if (activeTab && activePane) closePane(activeTab.id, activePane.paneId);
+          break;
+        case 'pane.split-row':
+          void splitActivePane('row');
+          break;
+        case 'pane.split-column':
+          void splitActivePane('column');
+          break;
+        case 'files.toggle':
+          if (filesAvailable) setFilesOpen((value) => !value);
+          break;
+        case 'settings.open':
+          openSettings();
+          break;
+        case 'palette.open':
+          setPaletteOpen(true);
+          break;
+      }
+    },
+    [
+      activePane,
+      activeTab,
+      activeTabId,
+      closePane,
+      closeTab,
+      cycleTab,
+      filesAvailable,
+      openLocalTerminal,
+      openNewForm,
+      openSettings,
+      splitActivePane,
+    ],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      const key = event.key.toLowerCase();
-      if (key === 't') {
-        event.preventDefault();
-        void openLocalTerminal();
-      }
-      if (key === 'n') {
-        event.preventDefault();
-        openNewForm();
-      }
-      if (key === 'd') {
-        event.preventDefault();
-        void splitActivePane(event.shiftKey ? 'column' : 'row');
-      }
-      if (key === ',') {
-        event.preventDefault();
-        openSettings();
-      }
+      const command = findCommandByShortcut(event);
+      if (!command) return;
+      event.preventDefault();
+      runCommand(command.id);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openLocalTerminal, openNewForm, openSettings, splitActivePane]);
+  }, [runCommand]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
   const fontSize = config?.terminal.fontSize ?? 13;
@@ -593,6 +646,16 @@ export function App() {
           onChange={(next) => void saveConfig(next)}
           onReset={() => void resetConfig()}
           onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
+
+      {paletteOpen ? (
+        <CommandPalette
+          onRun={(id) => {
+            setPaletteOpen(false);
+            runCommand(id);
+          }}
+          onClose={() => setPaletteOpen(false)}
         />
       ) : null}
     </div>
