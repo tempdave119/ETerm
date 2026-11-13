@@ -187,3 +187,75 @@ test('connections_reorder_requires_all_ids', async () => {
   await assert.rejects(store.reorderConnections([]), /必须包含全部连接/);
   await assert.rejects(store.reorderConnections([first.id, 'missing']), /必须包含全部连接/);
 });
+
+test('connections_jump_reference_persists_and_rejects_cycles', async () => {
+  const { dir, store } = await createStore();
+  const jump = await store.saveConnection({ name: 'jump', protocol: 'ssh', host: '10.0.0.9', username: 'ops' });
+  const target = await store.saveConnection({
+    name: 'web',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+    jumpConnectionId: jump.id,
+  });
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  assert.equal(snapshot.connections.find((item) => item.id === target.id)?.jumpConnectionId, jump.id);
+
+  // 把跳板机指向目标本身，保存时就该被环检测拦住。
+  await assert.rejects(
+    store.saveConnection({
+      id: jump.id,
+      name: 'jump',
+      protocol: 'ssh',
+      host: '10.0.0.9',
+      username: 'ops',
+      jumpConnectionId: target.id,
+    }),
+    /跳板链存在循环/,
+  );
+});
+
+test('connections_jump_self_and_local_are_rejected', async () => {
+  const { store } = await createStore();
+  const jump = await store.saveConnection({ name: 'jump', protocol: 'ssh', host: '10.0.0.9', username: 'ops' });
+
+  await assert.rejects(
+    store.saveConnection({
+      id: jump.id,
+      name: 'jump',
+      protocol: 'ssh',
+      host: '10.0.0.9',
+      username: 'ops',
+      jumpConnectionId: jump.id,
+    }),
+    /跳板机不能是自己/,
+  );
+  await assert.rejects(
+    store.saveConnection({ name: 'local', protocol: 'local', jumpConnectionId: jump.id }),
+    /本地终端不能设置跳板机/,
+  );
+  await assert.rejects(
+    store.saveConnection({ name: 'bad', protocol: 'ssh', host: '10.0.0.1', username: 'root', jumpConnectionId: 'missing' }),
+    /跳板机连接不存在/,
+  );
+});
+
+test('connections_delete_jump_clears_references', async () => {
+  const { dir, store } = await createStore();
+  const jump = await store.saveConnection({ name: 'jump', protocol: 'ssh', host: '10.0.0.9', username: 'ops' });
+  const target = await store.saveConnection({
+    name: 'web',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+    jumpConnectionId: jump.id,
+  });
+
+  await store.deleteConnection(jump.id);
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  assert.equal(snapshot.connections.find((item) => item.id === target.id)?.jumpConnectionId, undefined);
+});

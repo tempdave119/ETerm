@@ -50,6 +50,8 @@ function readConnectionInput(raw: unknown): ConnectionInput {
     auth: readAuth(value.auth),
     groupId: value.groupId === null ? null : readOptionalString(value.groupId, '分组', ID_MAX),
     keyPath: readOptionalString(value.keyPath, '私钥路径', PATH_MAX),
+    jumpConnectionId:
+      value.jumpConnectionId === null ? null : readOptionalString(value.jumpConnectionId, '跳板机', ID_MAX),
   };
 }
 

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve, sep } from 'node:path';
 import electronPath from 'electron';
@@ -306,6 +307,37 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
 
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
+
+// 跳板机：只做认证 + direct-tcpip 转发，通道接到主服务器端口。
+const jumpConnections = new Set();
+const jumpServer = new Server(
+  { hostKeys: [utils.generateKeyPairSync('ed25519').private] },
+  (connection) => {
+    jumpConnections.add(connection);
+    connection.on('close', () => jumpConnections.delete(connection));
+    connection.on('error', () => {});
+    connection.on('authentication', (context) => {
+      if (context.method === 'publickey') context.accept();
+      else context.reject(['publickey']);
+    });
+    connection.on('ready', () => {
+      connection.on('tcpip', (accept, reject, info) => {
+        if (info.destIP !== '127.0.0.1' || info.destPort !== port) {
+          reject();
+          return;
+        }
+        const stream = accept();
+        const socket = net.connect(info.destPort, info.destIP, () => {
+          socket.pipe(stream).pipe(socket);
+        });
+        socket.on('error', () => stream.close());
+        stream.on('close', () => socket.destroy());
+      });
+    });
+  },
+);
+await new Promise((resolve) => jumpServer.listen(0, '127.0.0.1', resolve));
+const jumpPort = jumpServer.address().port;
 
 // 无 SFTP 的对照服务器：只接认证与 shell，用来验证「能力降级」而不是报错阻塞终端。
 const noSftpConnections = new Set();
@@ -658,6 +690,75 @@ try {
       label,
     );
 
+  // 跳板机：先保存一个只做转发的连接，再让目标连接经由它。
+  await clickOn('.session-tree__header button[title="新建连接"]');
+  await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '跳板连接表单');
+  await evaluate(setInputScript('#connection-name', 'mock-jump'));
+  await evaluate(setInputScript('#connection-host', '127.0.0.1'));
+  await evaluate(setInputScript('#connection-port', String(jumpPort)));
+  await evaluate(setInputScript('#connection-user', 'tester'));
+  await evaluate(setSelectScript('#connection-auth', 'key'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-key') !== null`), 5_000, '跳板私钥字段');
+  await evaluate(setInputScript('#connection-key', keyPath));
+  await clickOn('[data-testid="connection-save"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="connection-row-mock-jump"]') !== null`),
+    10_000,
+    '跳板连接保存',
+  );
+
+  await clickOn('.session-tree__header button[title="新建连接"]');
+  await waitFor(() => evaluate(`document.querySelector('#connection-jump') !== null`), 5_000, '跳板下拉');
+  await evaluate(setInputScript('#connection-name', 'mock-via-jump'));
+  await evaluate(setInputScript('#connection-host', '127.0.0.1'));
+  await evaluate(setInputScript('#connection-port', String(port)));
+  await evaluate(setInputScript('#connection-user', 'tester'));
+  await evaluate(setSelectScript('#connection-auth', 'key'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-key') !== null`), 5_000, '跳板目标私钥');
+  await evaluate(setInputScript('#connection-key', keyPath));
+  const jumpValue = await evaluate(
+    `[...document.querySelectorAll('#connection-jump option')].find((option) => option.textContent.startsWith('mock-jump'))?.value ?? ''`,
+  );
+  if (!jumpValue) throw new Error('跳板机下拉里没有 mock-jump');
+  await evaluate(setSelectScript('#connection-jump', jumpValue));
+  await clickOn('[data-testid="connection-save-connect"]');
+
+  // 跳板首次连接仍需确认它自己的指纹，而不是目标主机的。
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="hostkey-trust"]') !== null`),
+    15_000,
+    '跳板指纹确认',
+  );
+  const jumpFingerprint = String(await evaluate(`document.querySelector('.fingerprint')?.textContent ?? ''`));
+  if (!jumpFingerprint.startsWith('SHA256:')) throw new Error(`跳板指纹格式异常：${jumpFingerprint}`);
+  await clickOn('[data-testid="hostkey-trust"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="mock-via-jump"]') !== null`),
+    15_000,
+    '跳板标签',
+  );
+  const jumpSession = await waitFor(
+    () => evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+    10_000,
+    '跳板会话',
+  );
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(jumpSession)})`)).trim().length > 0,
+    10_000,
+    '跳板 prompt',
+  );
+  const jumpTyped = await evaluate(`window.__etermDebug.type(${JSON.stringify(jumpSession)}, "echo jump-ok\\r")`);
+  if (!jumpTyped) throw new Error('跳板会话已关闭，无法输入');
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(jumpSession)})`));
+      return (text.match(/jump-ok/g) ?? []).length === 2;
+    },
+    10_000,
+    '跳板命令回显',
+  );
+  await shotOf('tmp/ssh-smoke-jump.png');
+
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
   await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
   await waitErrorTitle('连不上主机', '错主机错误文案');
@@ -796,6 +897,7 @@ try {
   if (app.exitCode === null) app.kill('SIGKILL');
   for (const connection of connections) connection.end();
   for (const connection of noSftpConnections) connection.end();
+  for (const connection of jumpConnections) connection.end();
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     server.close(() => {
@@ -806,6 +908,13 @@ try {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     noSftpServer.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    jumpServer.close(() => {
       clearTimeout(timer);
       resolve();
     });

@@ -7,6 +7,8 @@ export interface SshTarget {
   privateKey?: string;
   passphrase?: string;
   agent?: string;
+  /** 跳板链：先连上 jump，再从它开一条到本目标的 TCP 通道。 */
+  jump?: SshTarget;
 }
 
 function readString(value: unknown, field: string, maxLength: number): string {
@@ -17,10 +19,11 @@ function readString(value: unknown, field: string, maxLength: number): string {
 }
 
 /** 只校验结构与边界；密码 / 私钥将来由凭据服务在确认后注入，不从渲染层直传。 */
-export function parseSshTarget(raw: unknown): SshTarget {
+export function parseSshTarget(raw: unknown, depth = 0): SshTarget {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('SSH 连接参数缺失');
   }
+  if (depth > 4) throw new Error('跳板链最多 4 层');
 
   const record = raw as Record<string, unknown>;
   const rawPort = record.port === undefined ? 22 : record.port;
@@ -41,6 +44,7 @@ export function parseSshTarget(raw: unknown): SshTarget {
   if (record.privateKey !== undefined) target.privateKey = readString(record.privateKey, 'privateKey', 65536);
   if (record.passphrase !== undefined) target.passphrase = readString(record.passphrase, 'passphrase', 4096);
   if (record.agent !== undefined) target.agent = readString(record.agent, 'agent', 4096);
+  if (record.jump !== undefined) target.jump = parseSshTarget(record.jump, depth + 1);
 
   return target;
 }

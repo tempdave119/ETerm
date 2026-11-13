@@ -91,6 +91,10 @@ export class ConnectionStore {
       const index = file.connections.findIndex((item) => item.id === id);
       if (index < 0) throw new Error(`连接不存在：${id}`);
       file.connections.splice(index, 1);
+      // 被删的连接若仍被当作跳板，一并解除引用，避免留下打不开的连接。
+      for (const connection of file.connections) {
+        if (connection.jumpConnectionId === id) delete connection.jumpConnectionId;
+      }
     });
   }
 
@@ -261,7 +265,16 @@ function normalizeConnection(
   }
 
   if (input.protocol === 'local') {
+    if (input.jumpConnectionId) throw new Error('本地终端不能设置跳板机');
     return { id, name, protocol: 'local', auth, groupId };
+  }
+
+  const jumpConnectionId = optionalString(input.jumpConnectionId, '跳板机连接 id', 64);
+  if (jumpConnectionId) {
+    if (jumpConnectionId === id) throw new Error('跳板机不能是自己');
+    const jump = file.connections.find((item) => item.id === jumpConnectionId);
+    if (!jump || jump.protocol !== 'ssh') throw new Error(`跳板机连接不存在：${jumpConnectionId}`);
+    assertNoJumpCycle(file, id, jumpConnectionId);
   }
 
   return {
@@ -274,7 +287,21 @@ function normalizeConnection(
     auth,
     groupId,
     keyPath: optionalString(input.keyPath, '私钥路径', 4096),
+    jumpConnectionId,
   };
+}
+
+/** 保存时就把环挡住，避免运行时再碰到 A→B→A 的跳板链。 */
+function assertNoJumpCycle(file: ConnectionsFile, id: string, jumpId: string): void {
+  let current: string | undefined = jumpId;
+  const seen = new Set<string>();
+  while (current) {
+    if (current === id) throw new Error('跳板链存在循环');
+    if (seen.has(current)) throw new Error('跳板链存在循环');
+    seen.add(current);
+    if (seen.size > 16) throw new Error('跳板链太深');
+    current = file.connections.find((item) => item.id === current)?.jumpConnectionId;
+  }
 }
 
 function parseFile(value: unknown): ConnectionsFile {
@@ -334,6 +361,7 @@ function parseConnection(value: unknown): ConnectionRecord {
     port: requireInteger(record.port, '端口', 1, 65535),
     username: requireString(record.username, '用户名', 255),
     keyPath: optionalString(record.keyPath, '私钥路径', 4096),
+    jumpConnectionId: optionalString(record.jumpConnectionId, '跳板机连接 id', 64),
   };
 }
 

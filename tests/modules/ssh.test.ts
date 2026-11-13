@@ -1,5 +1,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import ssh2 from 'ssh2';
 import type { AddressInfo } from 'node:net';
 import type { Connection } from 'ssh2';
@@ -69,12 +70,58 @@ await new Promise<void>((resolve) => {
 });
 const { port } = server.address() as AddressInfo;
 
+// 跳板机：只做认证 + direct-tcpip 转发，把通道接到主服务器端口。
+const jumpKey = utils.generateKeyPairSync('ed25519');
+const parsedJumpKey = utils.parseKey(jumpKey.public);
+if (parsedJumpKey instanceof Error) throw parsedJumpKey;
+const JUMP_FINGERPRINT = fingerprintOf(parsedJumpKey.getPublicSSH());
+const jumpConnections = new Set<Connection>();
+const jumpServer = new Server({ hostKeys: [jumpKey.private] }, (client) => {
+  jumpConnections.add(client);
+  client.on('close', () => jumpConnections.delete(client));
+  client.on('error', () => {});
+  client.on('authentication', (context) => {
+    if (context.method === 'password' && context.username === USERNAME && context.password === PASSWORD) {
+      context.accept();
+      return;
+    }
+    context.reject(['password']);
+  });
+  client.on('ready', () => {
+    client.on('tcpip', (accept, reject, info) => {
+      if (info.destIP !== '127.0.0.1' || info.destPort !== port) {
+        reject();
+        return;
+      }
+      const stream = accept();
+      const socket = net.connect(info.destPort, info.destIP, () => {
+        socket.pipe(stream).pipe(socket);
+      });
+      socket.on('error', () => stream.close());
+      stream.on('close', () => socket.destroy());
+    });
+  });
+});
+
+await new Promise<void>((resolve) => {
+  jumpServer.listen(0, '127.0.0.1', resolve);
+});
+const { port: jumpPort } = jumpServer.address() as AddressInfo;
+
 after(async () => {
   // 失败用例（指纹 / 认证）会留下服务器侧半开连接，收尾时统一断开，避免测试进程挂住。
   for (const connection of connections) connection.end();
+  for (const connection of jumpConnections) connection.end();
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, 1000);
     server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    jumpServer.close(() => {
       clearTimeout(timer);
       resolve();
     });
@@ -162,6 +209,55 @@ test('ssh_refused_connection_maps_to_unreachable_not_fingerprint', async () => {
   await assert.rejects(
     openDirect({ port: 1, hostKeyFingerprint: undefined }),
     (error: unknown) => error instanceof ProductError && error.code === 'HOST_UNREACHABLE',
+  );
+});
+
+test('ssh_jump_host_forwards_to_target', async () => {
+  const handle = await openDirect({
+    jump: {
+      host: '127.0.0.1',
+      port: jumpPort,
+      username: USERNAME,
+      password: PASSWORD,
+      hostKeyFingerprint: JUMP_FINGERPRINT,
+    },
+  });
+  const chunks: string[] = [];
+  handle.session.onData((data) => chunks.push(data));
+
+  await waitFor(() => chunks.join('').includes('mock$ '));
+  handle.session.write('via-jump\r');
+  await waitFor(() => chunks.join('').includes('via-jump'));
+  handle.session.close();
+});
+
+test('ssh_jump_fingerprint_error_reports_jump_host', async () => {
+  await assert.rejects(
+    openDirect({
+      jump: { host: '127.0.0.1', port: jumpPort, username: USERNAME, password: PASSWORD },
+    }),
+    (error: unknown) =>
+      error instanceof ProductError &&
+      error.code === 'HOST_KEY_CHANGED' &&
+      error.host === '127.0.0.1' &&
+      error.port === jumpPort &&
+      (error.detail ?? '').includes('SHA256:'),
+  );
+});
+
+test('ssh_jump_forward_failure_is_reported', async () => {
+  await assert.rejects(
+    openDirect({
+      port: 1,
+      jump: {
+        host: '127.0.0.1',
+        port: jumpPort,
+        username: USERNAME,
+        password: PASSWORD,
+        hostKeyFingerprint: JUMP_FINGERPRINT,
+      },
+    }),
+    (error: unknown) => error instanceof ProductError && error.message === '跳板机无法连到目标主机',
   );
 });
 

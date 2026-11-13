@@ -198,3 +198,96 @@ test('resolve_missing_connection_is_reported', async () => {
     (error: unknown) => error instanceof ProductError && error.message === '连接不存在',
   );
 });
+
+test('resolve_jump_connection_builds_chain_with_own_credentials', async () => {
+  const store = await createStore();
+  const jump = await store.saveConnection({
+    name: 'jump',
+    protocol: 'ssh',
+    host: '10.0.0.9',
+    username: 'ops',
+  });
+  const target = await store.saveConnection({
+    name: 'web',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+    jumpConnectionId: jump.id,
+  });
+
+  const options = await resolveOpenOptions(
+    { connectionId: target.id, cols: 80, rows: 24 },
+    makeDeps({
+      connections: store,
+      credentials: { get: async (_id, kind) => (kind === 'password' ? 'pw' : null) },
+      knownHosts: {
+        get: async (host) => (host === '10.0.0.9' ? 'SHA256:JUMPJUMPJUMP' : 'SHA256:TARGETTARGET'),
+      },
+    }),
+  );
+
+  const resolved = options.target as SshTarget;
+  assert.equal(resolved.host, '10.0.0.1');
+  assert.equal(resolved.hostKeyFingerprint, 'SHA256:TARGETTARGET');
+  assert.equal(resolved.jump?.host, '10.0.0.9');
+  assert.equal(resolved.jump?.username, 'ops');
+  assert.equal(resolved.jump?.password, 'pw');
+  assert.equal(resolved.jump?.hostKeyFingerprint, 'SHA256:JUMPJUMPJUMP');
+  assert.equal(resolved.jump?.jump, undefined);
+});
+
+test('resolve_jump_cycle_is_reported', async () => {
+  const base = { protocol: 'ssh' as const, username: 'root', auth: 'password' as const, port: 22 };
+  const a = {
+    ...base,
+    id: 'a',
+    name: 'a',
+    host: '10.0.0.1',
+    groupId: null,
+    order: 0,
+    createdAt: '',
+    updatedAt: '',
+    jumpConnectionId: 'b',
+  };
+  const b = { ...a, id: 'b', name: 'b', host: '10.0.0.2', jumpConnectionId: 'a' };
+
+  await assert.rejects(
+    resolveOpenOptions(
+      { connectionId: 'a', cols: 80, rows: 24 },
+      makeDeps({
+        connections: {
+          getConnection: async (id) => (id === 'a' ? a : id === 'b' ? b : null),
+        },
+        credentials: { get: async () => 'pw' },
+      }),
+    ),
+    (error: unknown) => error instanceof ProductError && error.message === '跳板链存在循环',
+  );
+});
+
+test('resolve_jump_depth_is_limited', async () => {
+  const base = { protocol: 'ssh' as const, username: 'root', auth: 'password' as const, port: 22 };
+  const make = (id: string, jumpConnectionId?: string) => ({
+    ...base,
+    id,
+    name: id,
+    host: `10.0.0.${id}`,
+    groupId: null,
+    order: 0,
+    createdAt: '',
+    updatedAt: '',
+    jumpConnectionId,
+  });
+  const chain = [make('1', '2'), make('2', '3'), make('3', '4'), make('4', '5'), make('5')];
+
+  await assert.rejects(
+    resolveOpenOptions(
+      { connectionId: '1', cols: 80, rows: 24 },
+      makeDeps({
+        connections: { getConnection: async (id) => chain.find((item) => item.id === id) ?? null },
+        credentials: { get: async () => 'pw' },
+      }),
+    ),
+    (error: unknown) => error instanceof ProductError && error.message === '跳板链最多 4 层',
+  );
+});

@@ -11,6 +11,8 @@ export interface ConnectionRecord {
   auth: AuthMethod;
   groupId: string | null;
   keyPath?: string;
+  /** 跳板机：引用另一个已保存的 ssh 连接，复用它的凭据与指纹。 */
+  jumpConnectionId?: string;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -37,6 +39,7 @@ export interface ConnectionInput {
   auth?: AuthMethod;
   groupId?: string | null;
   keyPath?: string;
+  jumpConnectionId?: string | null;
 }
 
 export interface GroupInput {

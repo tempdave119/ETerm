@@ -49,7 +49,11 @@ export async function resolveOpenOptions(
   };
 }
 
-async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): Promise<SshTarget> {
+async function resolveSshTarget(
+  record: ConnectionRecord,
+  deps: ResolverDeps,
+  chain: string[] = [],
+): Promise<SshTarget> {
   if (!record.host || !record.username) {
     throw new ProductError('INTERNAL', { message: '连接配置不完整', next: '编辑连接，补全主机与用户名', detail: record.id });
   }
@@ -62,6 +66,33 @@ async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): P
 
   const fingerprint = await deps.knownHosts.get(target.host, target.port);
   if (fingerprint) target.hostKeyFingerprint = fingerprint;
+
+  if (record.jumpConnectionId) {
+    if (chain.includes(record.id)) {
+      throw new ProductError('INTERNAL', {
+        message: '跳板链存在循环',
+        next: '编辑连接，重新选择跳板机',
+        detail: record.jumpConnectionId,
+      });
+    }
+    if (chain.length >= 3) {
+      throw new ProductError('INTERNAL', {
+        message: '跳板链最多 4 层',
+        next: '减少跳板层数后重试',
+        detail: record.jumpConnectionId,
+      });
+    }
+
+    const jumpRecord = await deps.connections.getConnection(record.jumpConnectionId);
+    if (!jumpRecord || jumpRecord.protocol !== 'ssh') {
+      throw new ProductError('INTERNAL', {
+        message: '跳板机连接不存在',
+        next: '编辑连接，重新选择跳板机',
+        detail: record.jumpConnectionId,
+      });
+    }
+    target.jump = await resolveSshTarget(jumpRecord, deps, [...chain, record.id]);
+  }
 
   switch (record.auth) {
     case 'password': {

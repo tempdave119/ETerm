@@ -20,7 +20,7 @@ description: "F-13.1 交付物：7 个产品错误码 + INTERNAL 的人话、下
 | ---- | ------------ | ----------- | ----------- | -------- |
 | `AUTH_FAILED` | 认证失败：用户名、密码或私钥不匹配 | 核对用户名与密码 / 私钥后重试 | ssh2 原始错误；解析连接时为私钥路径或连接 id | 密码或用户名错误、私钥/口令不匹配、认证方式全部失败 |
 | `HOST_UNREACHABLE` | 连不上主机：网络不通或端口未开放 | 确认主机地址与端口，再试一次 | 原始错误 message（含 host:port） | 端口拒绝、域名解析失败、网络不可达、连接被重置、SFTP 状态 6 / 7 |
-| `HOST_KEY_CHANGED` | 主机指纹变了，可能是重装或劫持 | 确认主机身份后再决定是否继续 | 观察到的主机指纹 | 首次连接无指纹（message 覆盖为「首次连接需要确认主机指纹」）；指纹与 known_hosts 不一致 |
+| `HOST_KEY_CHANGED` | 主机指纹变了，可能是重装或劫持 | 确认主机身份后再决定是否继续 | 观察到的主机指纹；错误额外带失败那一跳的 host / port（可能是跳板机） | 首次连接无指纹（message 覆盖为「首次连接需要确认主机指纹」）；指纹与 known_hosts 不一致 |
 | `TIMEOUT` | 超时：服务器无响应 | 检查网络后重试 | 原始错误 message | 握手超时、`ETIMEDOUT`、ssh2 `client-timeout` |
 | `PERMISSION_DENIED` | 权限不足：这个操作被拒绝 | 换有权限的账号，或调整目标文件权限 | 远端路径 + 原始错误 message | 远端文件无权限（SFTP 3）、本地 `EACCES` / `EPERM` |
 | `FILE_NOT_FOUND` | 文件不存在 | 刷新目录后重新选择 | 远端或本地路径 + 原始错误 message | 文件被删除、路径写错（`ENOENT`、SFTP 2） |
@@ -61,7 +61,7 @@ description: "F-13.1 交付物：7 个产品错误码 + INTERNAL 的人话、下
 | 空态 | `EmptyState` + `ErrorMessage` | 没有标签时错误直接落在空态里，不重复显示错误条 |
 | 文件面板 | `FilePanel` + `ErrorMessage` | 列目录 / 上传下载入口失败；预览失败在弹窗里用同一组件 |
 | 传输行 | `TransferPanel` + `ErrorMessage` | 失败任务在行下方展开三段式；成功 / 取消不显示错误块 |
-| 指纹弹窗 | `HostKeyDialog` | `HOST_KEY_CHANGED` 且能解析出指纹时改用弹窗确认，不显示错误条 |
+| 指纹弹窗 | `HostKeyDialog` | `HOST_KEY_CHANGED` 且能解析出指纹时改用弹窗确认，不显示错误条；用错误的 host / port 定位失败的是跳板机还是目标主机 |
 
 ## 验证
 

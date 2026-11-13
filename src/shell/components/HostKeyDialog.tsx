@@ -4,6 +4,9 @@ export interface HostKeyPrompt {
   connection: ConnectionRecord;
   fingerprint: string;
   first: boolean;
+  /** 失败的那一跳，可能是跳板机而不是目标主机。 */
+  host: string;
+  port: number;
 }
 
 interface HostKeyDialogProps {
@@ -14,15 +17,14 @@ interface HostKeyDialogProps {
 }
 
 export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDialogProps) {
-  const host = prompt.connection.host ?? '';
-  const port = prompt.connection.port ?? 22;
+  const viaJump = prompt.host !== prompt.connection.host || prompt.port !== (prompt.connection.port ?? 22);
 
   return (
     <div className="modal-backdrop" role="presentation">
       <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label="确认主机指纹">
         <h2 className="modal__title">{prompt.first ? '首次连接，确认主机指纹' : '主机指纹已变化'}</h2>
         <p className="form-hint">
-          {prompt.connection.name} · {host}:{port}
+          {prompt.connection.name} · {prompt.host}:{prompt.port}
         </p>
         <code className="fingerprint">{prompt.fingerprint}</code>
         <p className="form-hint">
@@ -30,6 +32,7 @@ export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDial
             ? '确认这是目标主机后保存，之后连接不再询问。'
             : '可能是主机重装，也可能是中间人劫持。确认无误后再保存新指纹。'}
         </p>
+        {viaJump ? <p className="form-hint">这是跳板机的指纹，确认后再连目标主机。</p> : null}
         <div className="modal__actions">
           <button className="button" type="button" onClick={onCancel} disabled={busy}>
             取消

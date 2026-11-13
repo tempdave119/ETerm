@@ -254,8 +254,10 @@ export function App() {
           if (!result.ok) {
             for (const leaf of leaves) void window.eterm.closeSession(leaf.sessionId);
             const fingerprint = extractFingerprint(result.error.detail ?? '');
-            if (leaves.length === 0 && result.error.code === 'HOST_KEY_CHANGED' && fingerprint && connection.host) {
-              setHostKey({ connection, fingerprint, first: result.error.message.includes('首次') });
+            const host = result.error.host ?? connection.host;
+            const port = result.error.port ?? connection.port ?? 22;
+            if (leaves.length === 0 && result.error.code === 'HOST_KEY_CHANGED' && fingerprint && host) {
+              setHostKey({ connection, fingerprint, first: result.error.message.includes('首次'), host, port });
               return;
             }
             setError(result.error);
@@ -293,10 +295,10 @@ export function App() {
 
   const confirmHostKey = useCallback(async (): Promise<void> => {
     if (!hostKey) return;
-    const { connection, fingerprint } = hostKey;
+    const { connection, fingerprint, host, port } = hostKey;
     setBusy(true);
     try {
-      const saved = await window.eterm.rememberHostKey(connection.host ?? '', connection.port ?? 22, fingerprint);
+      const saved = await window.eterm.rememberHostKey(host, port, fingerprint);
       if (!saved.ok) {
         setError(saved.error);
         setHostKey(null);
@@ -693,6 +695,7 @@ export function App() {
       {form ? (
         <ConnectionForm
           groups={groups}
+          connections={connections}
           editing={form.editing}
           hasStoredPassword={form.hasPassword}
           hasStoredPassphrase={form.hasPassphrase}

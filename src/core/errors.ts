@@ -45,24 +45,37 @@ export interface ProductErrorInfo {
   message: string;
   next: string;
   detail?: string;
+  /** 指纹确认等场景需要知道是哪一跳主机失败；其余错误不带。 */
+  host?: string;
+  port?: number;
 }
 
 export class ProductError extends Error {
   readonly code: ProductErrorCode;
   readonly next: string;
   readonly detail?: string;
+  readonly host?: string;
+  readonly port?: number;
 
-  constructor(code: ProductErrorCode, options: { message?: string; next?: string; detail?: string } = {}) {
+  constructor(
+    code: ProductErrorCode,
+    options: { message?: string; next?: string; detail?: string; host?: string; port?: number } = {},
+  ) {
     super(options.message ?? PRODUCT_ERRORS[code].message);
     this.name = 'ProductError';
     this.code = code;
     // 同一个码在不同场景下的下一步不同（首次确认指纹 vs 指纹变化），允许逐条覆盖。
     this.next = options.next ?? PRODUCT_ERRORS[code].next;
     this.detail = options.detail;
+    this.host = options.host;
+    this.port = options.port;
   }
 
   toInfo(): ProductErrorInfo {
-    return { code: this.code, message: this.message, next: this.next, detail: this.detail };
+    const info: ProductErrorInfo = { code: this.code, message: this.message, next: this.next, detail: this.detail };
+    if (this.host !== undefined) info.host = this.host;
+    if (this.port !== undefined) info.port = this.port;
+    return info;
   }
 }
 

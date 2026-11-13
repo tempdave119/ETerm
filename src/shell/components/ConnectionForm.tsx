@@ -8,6 +8,7 @@ export interface FormSecrets {
 
 interface ConnectionFormProps {
   groups: GroupRecord[];
+  connections: ConnectionRecord[];
   editing: ConnectionRecord | null;
   hasStoredPassword: boolean;
   hasStoredPassphrase: boolean;
@@ -19,6 +20,7 @@ interface ConnectionFormProps {
 
 export function ConnectionForm({
   groups,
+  connections,
   editing,
   hasStoredPassword,
   hasStoredPassphrase,
@@ -34,6 +36,7 @@ export function ConnectionForm({
   const [auth, setAuth] = useState(editing?.auth ?? 'password');
   const [groupId, setGroupId] = useState(editing?.groupId ?? '');
   const [keyPath, setKeyPath] = useState(editing?.keyPath ?? '');
+  const [jumpConnectionId, setJumpConnectionId] = useState(editing?.jumpConnectionId ?? '');
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export function ConnectionForm({
       auth,
       groupId: groupId || null,
       keyPath: auth === 'key' ? keyPath.trim() : undefined,
+      jumpConnectionId: jumpConnectionId || null,
     };
 
     onSubmit(
@@ -183,6 +187,25 @@ export function ConnectionForm({
         ) : null}
 
         {auth === 'agent' ? <p className="form-hint">使用当前 SSH_AUTH_SOCK；没有启动 agent 时会提示。</p> : null}
+
+        <div className="form-row">
+          <label htmlFor="connection-jump">经由跳板机</label>
+          <select
+            id="connection-jump"
+            data-testid="connection-jump"
+            value={jumpConnectionId}
+            onChange={(event) => setJumpConnectionId(event.target.value)}
+          >
+            <option value="">不使用</option>
+            {connections
+              .filter((connection) => connection.protocol === 'ssh' && connection.id !== editing?.id)
+              .map((connection) => (
+                <option key={connection.id} value={connection.id}>
+                  {connection.name}（{connection.host}）
+                </option>
+              ))}
+          </select>
+        </div>
 
         <div className="form-row">
           <label htmlFor="connection-group">分组</label>
