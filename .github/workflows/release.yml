@@ -1,6 +1,6 @@
 name: release
 
-# 打 tag 即出包：x64 dmg 交给 Intel runner 构建，成功后自动创建 Release 并挂上产物。
+# 打 tag 即出包：x64 / arm64 分别交给对应架构的 runner 构建，再统一发布到一个 Release。
 # branches 里的 ci-probe 是诊断用临时入口，定位完 CI 环境差异后移除。
 on:
   push:
@@ -13,8 +13,17 @@ permissions:
   contents: write
 
 jobs:
-  macos-x64:
-    runs-on: macos-15-intel
+  build:
+    name: build-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x64
+          - runner: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v5
@@ -36,16 +45,18 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee /tmp/build.log
 
+      # --publish never 必须显式给：electron-builder 看到 git tag 会自动尝试发布，
+      # 缺 GH_TOKEN 直接失败；发布统一交给下面的 publish job。
       - name: 打包 dmg
         run: |
           set -o pipefail
-          npx electron-builder --mac dmg 2>&1 | tee -a /tmp/build.log
+          npx electron-builder --mac dmg --${{ matrix.arch }} --publish never 2>&1 | tee -a /tmp/build.log
 
       - name: 失败诊断
         if: failure()
         run: |
           {
-            echo "## 构建失败诊断"
+            echo "## 构建失败诊断（${{ matrix.arch }}）"
             echo ""
             echo "- node: $(node -v)"
             echo "- npm: $(npm -v)"
@@ -57,12 +68,32 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmg-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/*.dmg.blockmap
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: 创建 Release 并上传产物
-        if: startsWith(github.ref, 'refs/tags/') && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          ls -la artifacts
           gh release create "$GITHUB_REF_NAME" \
             --title "ETerm ${GITHUB_REF_NAME#v}" \
             --generate-notes \
-            release/*.dmg release/*.dmg.blockmap
+            artifacts/*.dmg artifacts/*.dmg.blockmap
