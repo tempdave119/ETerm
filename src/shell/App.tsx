@@ -93,6 +93,8 @@ export function App() {
   const panelLayoutRef = useRef<PanelLayout>(defaultPanelLayout());
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  // 同步保存最新配置：同一帧内连续切换排序时，后一次要基于前一次的值。
+  const configRef = useRef<AppConfig | null>(null);
   // 配置保存要串行：连续改设置时，后一次保存必须基于前一次的结果，不能互相覆盖。
   const configQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingConfigSaves = useRef(0);
@@ -122,12 +124,15 @@ export function App() {
 
   useEffect(() => {
     void window.eterm.getConfig().then((result) => {
-      if (result.ok) setConfig(result.value);
-      else setError(result.error);
+      if (result.ok) {
+        configRef.current = result.value;
+        setConfig(result.value);
+      } else setError(result.error);
     });
     return window.eterm.onConfigChange((next) => {
       // 本地还有未完成的保存时忽略广播，避免旧广播覆盖刚改的值。
       if (pendingConfigSaves.current > 0) return;
+      configRef.current = next;
       setConfig(next);
     });
   }, []);
@@ -275,14 +280,17 @@ export function App() {
     setSettingsError(null);
     // 乐观更新，下一次设置改动基于最新值克隆；保存本身串行执行。
     const version = ++configVersionRef.current;
+    configRef.current = next;
     setConfig(next);
     pendingConfigSaves.current += 1;
     configQueueRef.current = configQueueRef.current
       .then(async () => {
         const result = await window.eterm.saveConfig(next);
         // 只接受最后一次改动的返回值，旧响应不能覆盖新值。
-        if (result.ok && version === configVersionRef.current) setConfig(result.value);
-        else if (!result.ok) setSettingsError(result.error.message);
+        if (result.ok && version === configVersionRef.current) {
+          configRef.current = result.value;
+          setConfig(result.value);
+        } else if (!result.ok) setSettingsError(result.error.message);
       })
       .catch((error: unknown) => {
         setSettingsError(error instanceof Error ? error.message : '保存配置失败');
@@ -292,6 +300,15 @@ export function App() {
       });
   }, []);
 
+  const changeProcessSort = useCallback(
+    (sort: AppConfig['ui']['monitorProcessSort']): void => {
+      const current = configRef.current;
+      if (!current || current.ui.monitorProcessSort === sort) return;
+      saveConfig({ ...current, ui: { ...current.ui, monitorProcessSort: sort } });
+    },
+    [saveConfig],
+  );
+
   const resetConfig = useCallback((): void => {
     setSettingsError(null);
     const version = ++configVersionRef.current;
@@ -299,8 +316,10 @@ export function App() {
     configQueueRef.current = configQueueRef.current
       .then(async () => {
         const result = await window.eterm.resetConfig();
-        if (result.ok && version === configVersionRef.current) setConfig(result.value);
-        else if (!result.ok) setSettingsError(result.error.message);
+        if (result.ok && version === configVersionRef.current) {
+          configRef.current = result.value;
+          setConfig(result.value);
+        } else if (!result.ok) setSettingsError(result.error.message);
       })
       .catch((error: unknown) => {
         setSettingsError(error instanceof Error ? error.message : '重置配置失败');
@@ -870,6 +889,8 @@ export function App() {
             sessionId={monitorRemote ? (activePane?.sessionId ?? null) : null}
             targetLabel={monitorTargetLabel}
             connectionName={monitorConnection?.name ?? null}
+            processSort={config?.ui.monitorProcessSort ?? 'memory'}
+            onProcessSortChange={changeProcessSort}
             dock={dock}
             onMove={(target) => movePanelTo('monitor', target)}
             {...panelChrome('monitor', dock)}

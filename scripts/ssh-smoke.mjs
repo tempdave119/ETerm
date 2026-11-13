@@ -728,6 +728,14 @@ try {
     `document.querySelector('[data-testid="monitor-processes"] .monitor-process__name')?.textContent ?? ''`,
   );
   if (topCpuProcess !== 'zsh') throw new Error(`进程 CPU 排序异常：${topCpuProcess}`);
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getConfig().then((result) => (result.ok ? result.value.ui.monitorProcessSort : null))`,
+      )) === 'cpu',
+    5_000,
+    '进程排序写入配置',
+  );
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync('tmp/ssh-smoke-monitor.png', Buffer.from(monitorShot.data, 'base64'));

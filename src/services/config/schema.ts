@@ -5,6 +5,7 @@
 
 export type UiDensity = 'comfortable' | 'compact';
 export type ThemePreference = 'system' | 'dark' | 'light';
+export type MonitorProcessSort = 'memory' | 'cpu';
 export type RightClickAction = 'paste' | 'menu' | 'off';
 
 export interface AppConfig {
@@ -26,6 +27,8 @@ export interface AppConfig {
   ui: {
     density: UiDensity;
     theme: ThemePreference;
+    /** 资源面板「占用最高进程」的排序，跨重启保留。 */
+    monitorProcessSort: MonitorProcessSort;
   };
   files: {
     openByDefault: boolean;
@@ -48,7 +51,7 @@ export function defaultConfig(): AppConfig {
     terminal: { fontSize: 13, rightClick: 'paste', rightClickCopySelection: false },
     ssh: { keepaliveInterval: 30, keepaliveCountMax: 3 },
     transfer: { concurrency: 1 },
-    ui: { density: 'comfortable', theme: 'system' },
+    ui: { density: 'comfortable', theme: 'system', monitorProcessSort: 'memory' },
     files: { openByDefault: true },
   };
 }
@@ -106,6 +109,10 @@ export function sanitizeConfig(value: unknown): AppConfig {
         ui.theme === 'system' || ui.theme === 'dark' || ui.theme === 'light'
           ? ui.theme
           : defaults.ui.theme,
+      monitorProcessSort:
+        ui.monitorProcessSort === 'memory' || ui.monitorProcessSort === 'cpu'
+          ? ui.monitorProcessSort
+          : defaults.ui.monitorProcessSort,
     },
     files: {
       openByDefault:
@@ -137,7 +144,11 @@ export function parseConfigInput(value: unknown): AppConfig {
       keepaliveCountMax: requireInteger(ssh.keepaliveCountMax, '保活重试次数', KEEPALIVE_COUNT_RANGE),
     },
     transfer: { concurrency: requireInteger(transfer.concurrency, '传输并发', TRANSFER_CONCURRENCY_RANGE) },
-    ui: { density: requireDensity(ui.density), theme: requireTheme(ui.theme) },
+    ui: {
+      density: requireDensity(ui.density),
+      theme: requireTheme(ui.theme),
+      monitorProcessSort: requireMonitorProcessSort(ui.monitorProcessSort),
+    },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
   };
 }
@@ -186,6 +197,11 @@ function requireDensity(value: unknown): UiDensity {
 function requireTheme(value: unknown): ThemePreference {
   if (value === 'system' || value === 'dark' || value === 'light') return value;
   throw new Error('外观主题只能是 system、dark 或 light');
+}
+
+function requireMonitorProcessSort(value: unknown): MonitorProcessSort {
+  if (value === 'memory' || value === 'cpu') return value;
+  throw new Error('进程排序只能是 memory 或 cpu');
 }
 
 function requireBoolean(value: unknown, label: string): boolean {

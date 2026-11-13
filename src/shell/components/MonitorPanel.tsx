@@ -10,6 +10,9 @@ interface MonitorPanelProps {
   targetLabel: string;
   /** 连接名称；本机为 null。 */
   connectionName: string | null;
+  /** 进程 Top5 排序，来自配置，跨重启保留。 */
+  processSort: 'memory' | 'cpu';
+  onProcessSortChange(sort: 'memory' | 'cpu'): void;
   dock: DockId | null;
   onMove(target: DockId | null): void;
   canPanelMoveUp?: boolean;
@@ -25,6 +28,8 @@ export function MonitorPanel({
   sessionId,
   targetLabel,
   connectionName,
+  processSort,
+  onProcessSortChange,
   dock,
   onMove,
   canPanelMoveUp,
@@ -33,7 +38,6 @@ export function MonitorPanel({
 }: MonitorPanelProps) {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [processSort, setProcessSort] = useState<'memory' | 'cpu'>('memory');
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +179,7 @@ export function MonitorPanel({
                   type="button"
                   className={processSort === 'memory' ? 'is-active' : ''}
                   data-testid="process-sort-memory"
-                  onClick={() => setProcessSort('memory')}
+                  onClick={() => onProcessSortChange('memory')}
                 >
                   内存
                 </button>
@@ -183,7 +187,7 @@ export function MonitorPanel({
                   type="button"
                   className={processSort === 'cpu' ? 'is-active' : ''}
                   data-testid="process-sort-cpu"
-                  onClick={() => setProcessSort('cpu')}
+                  onClick={() => onProcessSortChange('cpu')}
                 >
                   CPU
                 </button>

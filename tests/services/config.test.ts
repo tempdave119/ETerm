@@ -81,6 +81,7 @@ test('config_file_keeps_valid_fields_when_one_field_is_bad', () => {
   assert.equal(file.config.transfer.concurrency, 2);
   assert.equal(file.config.ui.density, 'comfortable');
   assert.equal(file.config.ui.theme, 'system');
+  assert.equal(file.config.ui.monitorProcessSort, 'memory');
   assert.equal(file.config.files.openByDefault, false);
 });
 
@@ -108,6 +109,10 @@ test('config_input_rejects_out_of_range_values', () => {
   assert.throws(() => parseConfigInput({ ...base, transfer: { concurrency: 5 } }), /传输并发/);
   assert.throws(() => parseConfigInput({ ...base, ui: { density: 'wide' } }), /界面密度/);
   assert.throws(() => parseConfigInput({ ...base, ui: { density: 'comfortable', theme: 'blue' } }), /外观主题/);
+  assert.throws(
+    () => parseConfigInput({ ...base, ui: { ...base.ui, monitorProcessSort: 'disk' } }),
+    /进程排序/,
+  );
   assert.throws(() => parseConfigInput({ ...base, files: { openByDefault: 'yes' } }), /默认展开文件面板/);
   assert.throws(() => parseConfigInput(null), /配置必须是对象/);
 });
@@ -117,7 +122,7 @@ test('config_input_accepts_valid_full_config', () => {
     terminal: { fontSize: 11, rightClick: 'menu', rightClickCopySelection: true },
     ssh: { keepaliveInterval: 120, keepaliveCountMax: 5 },
     transfer: { concurrency: 4 },
-    ui: { density: 'compact', theme: 'light' },
+    ui: { density: 'compact', theme: 'light', monitorProcessSort: 'cpu' },
     files: { openByDefault: false },
   };
 
@@ -134,4 +139,14 @@ test('config_save_writes_versioned_file', async () => {
   };
   assert.equal(raw.version, 1);
   assert.deepEqual(raw.config, defaultConfig());
+});
+
+test('config_persists_monitor_process_sort', async () => {
+  const { store } = await createStore();
+  const next = defaultConfig();
+  next.ui.monitorProcessSort = 'cpu';
+
+  await store.save(next);
+
+  assert.equal((await store.get()).ui.monitorProcessSort, 'cpu');
 });
