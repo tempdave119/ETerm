@@ -38,6 +38,25 @@ export function findLeaf(node: LayoutNode, paneId: string): PaneLeaf | null {
   return findLeaf(node.first, paneId) ?? findLeaf(node.second, paneId);
 }
 
+/** 自动重连后把 pane 的旧 sessionId / 能力换成新会话，其余布局信息不动。 */
+export function replaceLeafSession(
+  node: LayoutNode,
+  paneId: string,
+  sessionId: string,
+  capabilities: Capability[],
+): LayoutNode {
+  if (node.type === 'leaf') {
+    if (node.paneId !== paneId) return node;
+    return { ...node, sessionId, capabilities };
+  }
+
+  const first = replaceLeafSession(node.first, paneId, sessionId, capabilities);
+  if (first !== node.first) return { ...node, first };
+  const second = replaceLeafSession(node.second, paneId, sessionId, capabilities);
+  if (second !== node.second) return { ...node, second };
+  return node;
+}
+
 export function firstLeaf(node: LayoutNode): PaneLeaf {
   return node.type === 'leaf' ? node : firstLeaf(node.first);
 }

@@ -164,7 +164,11 @@ export function TerminalView({
     const detach = attachSession(sessionId, {
       onData: (data) => term.write(data),
       onExit: (info) => {
-        term.write(`\r\n\x1b[2m[进程已退出，代码 ${info.code ?? '未知'}]\x1b[0m\r\n`);
+        const line =
+          info.reason === 'network'
+            ? '\r\n\x1b[2m[连接断开，正在重连…]\x1b[0m\r\n'
+            : `\r\n\x1b[2m[进程已退出，代码 ${info.code ?? '未知'}]\x1b[0m\r\n`;
+        term.write(line);
       },
     });
     const detachDebug = registerTerminal(sessionId, term);

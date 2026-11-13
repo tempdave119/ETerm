@@ -20,6 +20,7 @@ import {
   firstLeaf,
   instantiateLayout,
   removeAt,
+  replaceLeafSession,
   setRatioAt,
   splitAt,
   toTemplate,
@@ -64,9 +65,17 @@ let tabSequence = 0;
 let paneSequence = 0;
 let splitSequence = 0;
 
+const RECONNECT_MAX = 3;
+
 export function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const tabsRef = useRef<Tab[]>([]);
+  const plannedClosuresRef = useRef<Set<string>>(new Set());
+  const reconnectTimersRef = useRef<Map<string, number>>(new Map());
+  const [reconnectNotice, setReconnectNotice] = useState<{ tabId: string; paneId: string; attempt: number } | null>(
+    null,
+  );
   const [connections, setConnections] = useState<ConnectionRecord[]>([]);
   const [groups, setGroups] = useState<GroupRecord[]>([]);
   const [query, setQuery] = useState('');
@@ -158,6 +167,99 @@ export function App() {
       });
     });
   }, []);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
+  const cancelReconnect = useCallback((paneId: string): void => {
+    const timer = reconnectTimersRef.current.get(paneId);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      reconnectTimersRef.current.delete(paneId);
+    }
+    setReconnectNotice((current) => (current?.paneId === paneId ? null : current));
+  }, []);
+
+  const scheduleReconnect = useCallback(
+    (tabId: string, paneId: string, connectionId: string, attempt: number): void => {
+      if (reconnectTimersRef.current.has(paneId)) return;
+      setReconnectNotice({ tabId, paneId, attempt });
+      const timer = window.setTimeout(() => {
+        reconnectTimersRef.current.delete(paneId);
+        void (async () => {
+          const currentTab = tabsRef.current.find((item) => item.id === tabId);
+          const leaf = currentTab ? findLeaf(currentTab.layout, paneId) : null;
+          if (!currentTab || !leaf) return;
+
+          const result = await window.eterm.openConnection({ connectionId, cols: 80, rows: 24 });
+          if (result.ok) {
+            const latestTab = tabsRef.current.find((item) => item.id === tabId);
+            const latestLeaf = latestTab ? findLeaf(latestTab.layout, paneId) : null;
+            if (!latestTab || !latestLeaf) {
+              void window.eterm.closeSession(result.value.sessionId);
+              return;
+            }
+            setTabs((current) =>
+              current.map((item) =>
+                item.id === tabId
+                  ? {
+                      ...item,
+                      layout: replaceLeafSession(
+                        item.layout,
+                        paneId,
+                        result.value.sessionId,
+                        result.value.capabilities,
+                      ),
+                    }
+                  : item,
+              ),
+            );
+            setReconnectNotice(null);
+            setError(null);
+            return;
+          }
+
+          if (attempt < RECONNECT_MAX) {
+            scheduleReconnect(tabId, paneId, connectionId, attempt + 1);
+          } else {
+            setReconnectNotice(null);
+            setError(result.error);
+          }
+        })();
+      }, Math.min(8000, 1000 * 2 ** (attempt - 1)));
+      reconnectTimersRef.current.set(paneId, timer);
+    },
+    [],
+  );
+
+  const closeSessionPlanned = useCallback((sessionId: string): void => {
+    plannedClosuresRef.current.add(sessionId);
+    window.setTimeout(() => plannedClosuresRef.current.delete(sessionId), 5000);
+    void window.eterm.closeSession(sessionId);
+  }, []);
+
+  useEffect(() => {
+    return window.eterm.onSessionExit((sessionId, info) => {
+      if (plannedClosuresRef.current.delete(sessionId)) return;
+      if (info.reason !== 'network') return;
+      const tab = tabsRef.current.find((item) =>
+        collectLeaves(item.layout).some((leaf) => leaf.sessionId === sessionId),
+      );
+      if (!tab?.connectionId) return;
+      const leaf = collectLeaves(tab.layout).find((item) => item.sessionId === sessionId);
+      if (!leaf) return;
+      scheduleReconnect(tab.id, leaf.paneId, tab.connectionId, 1);
+    });
+  }, [scheduleReconnect]);
+
+  useEffect(
+    () => () => {
+      for (const timer of reconnectTimersRef.current.values()) window.clearTimeout(timer);
+      reconnectTimersRef.current.clear();
+    },
+    [],
+  );
 
   const cancelTransfer = useCallback(async (id: string): Promise<void> => {
     const result = await window.eterm.cancelTransfer(id);
@@ -579,7 +681,8 @@ export function App() {
       const leaf = findLeaf(tab.layout, paneId);
       if (!leaf) return;
 
-      void window.eterm.closeSession(leaf.sessionId);
+      cancelReconnect(paneId);
+      closeSessionPlanned(leaf.sessionId);
       const leaves = collectLeaves(tab.layout);
       if (leaves.length <= 1) {
         setTabs((current) => current.filter((item) => item.id !== tabId));
@@ -597,18 +700,21 @@ export function App() {
       );
       void persistLayout(tab.connectionId ?? 'local', layout);
     },
-    [persistLayout, tabs],
+    [cancelReconnect, closeSessionPlanned, persistLayout, tabs],
   );
 
   const closeTab = useCallback(
     (id: string): void => {
       const tab = tabs.find((item) => item.id === id);
       if (tab) {
-        for (const leaf of collectLeaves(tab.layout)) void window.eterm.closeSession(leaf.sessionId);
+        for (const leaf of collectLeaves(tab.layout)) {
+          cancelReconnect(leaf.paneId);
+          closeSessionPlanned(leaf.sessionId);
+        }
       }
       setTabs((current) => current.filter((item) => item.id !== id));
     },
-    [tabs],
+    [cancelReconnect, closeSessionPlanned, tabs],
   );
 
   const cycleTab = useCallback(
@@ -828,6 +934,11 @@ export function App() {
               <button className="icon-button" type="button" title="关闭" aria-label="关闭错误" onClick={() => setError(null)}>
                 <X size={14} strokeWidth={1.5} />
               </button>
+            </div>
+          ) : null}
+          {reconnectNotice ? (
+            <div className="reconnect-bar" data-testid="reconnect-bar">
+              连接断开，正在重连（{reconnectNotice.attempt}/{RECONNECT_MAX}）…
             </div>
           ) : null}
           <div className="workspace__content">

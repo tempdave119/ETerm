@@ -18,6 +18,8 @@ export interface SessionOpenOptions {
 export interface ExitInfo {
   code: number | null;
   signal?: number;
+  /** 能力模块能区分「用户退出 shell」与「链路断开」；渲染层据此决定是否自动重连。 */
+  reason?: 'closed' | 'network';
 }
 
 export interface SessionPort {

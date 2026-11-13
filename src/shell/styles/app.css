@@ -527,6 +527,16 @@ button {
   font-size: var(--font-aux);
 }
 
+.reconnect-bar {
+  margin: var(--space-base);
+  padding: var(--space-base) var(--space-container);
+  border: 1px solid var(--status-info);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: var(--font-aux);
+}
+
 /* 三段式错误：人话 → 下一步 → 折叠详情；原始错误只进 details */
 .error-message {
   display: flex;

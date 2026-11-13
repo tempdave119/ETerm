@@ -46,8 +46,9 @@ export function createSessionPort(client: Client, stream: ClientChannel): Sessio
   stream.on('exit', (code: number | null) => {
     exitCode = typeof code === 'number' ? code : null;
   });
-  stream.on('close', () => finish({ code: exitCode }));
-  client.on('close', () => finish({ code: exitCode }));
+  // exit code 为 null 说明 shell 没正常退出，按链路断开处理；用户主动关标签由渲染层另行标记。
+  stream.on('close', () => finish({ code: exitCode, reason: exitCode === null ? 'network' : 'closed' }));
+  client.on('close', () => finish({ code: exitCode, reason: 'network' }));
 
   return {
     write: (data) => {

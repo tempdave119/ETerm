@@ -559,7 +559,7 @@ try {
 
   await evaluate(`document.querySelector('[data-testid="hostkey-trust"]').click()`);
 
-  const sessionId = await waitFor(
+  let sessionId = await waitFor(
     () => evaluate(`document.querySelector('.terminal-host')?.dataset.sessionId ?? ''`),
     15_000,
     'SSH 终端挂载',
@@ -623,6 +623,42 @@ try {
     writeFileSync('tmp/ssh-swap.png', Buffer.from(swapShot.data, 'base64'));
     throw new SwapDone('swap-ok');
   }
+
+  // 自动重连：服务器侧断开连接，客户端 1 秒后重连并恢复终端。
+  for (const connection of connections) connection.end();
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="reconnect-bar"]') !== null`),
+    10_000,
+    '自动重连提示',
+  );
+  const reconnectedId = await waitFor(
+    async () => {
+      const id = await evaluate(`document.querySelector('.terminal-host')?.dataset.sessionId ?? ''`);
+      return id && id !== sessionId ? id : null;
+    },
+    15_000,
+    '自动重连新会话',
+  );
+  sessionId = reconnectedId;
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).trim().length > 0,
+    10_000,
+    '重连 prompt',
+  );
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(sessionId)}, "echo auto-reconnect-ok\\r")`);
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
+      return (text.match(/auto-reconnect-ok/g) ?? []).length === 2;
+    },
+    10_000,
+    '重连命令回显',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="reconnect-bar"]') === null`),
+    10_000,
+    '重连提示消失',
+  );
 
   // 关闭预览与标签，再次点击连接：指纹已保存，不应再弹确认。
   await evaluate(`document.querySelector('[data-testid="file-preview"] .button--primary').click()`);

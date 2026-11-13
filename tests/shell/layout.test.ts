@@ -7,6 +7,7 @@ import {
   findLeaf,
   firstLeaf,
   removeAt,
+  replaceLeafSession,
   setRatioAt,
   splitAt,
   type LayoutNode,
@@ -32,6 +33,16 @@ test('layout_counts_and_collects_leaves', () => {
   assert.equal(firstLeaf(tree).paneId, 'a');
   assert.equal(findLeaf(tree, 'c')?.paneId, 'c');
   assert.equal(findLeaf(tree, 'missing'), null);
+});
+
+test('layout_replace_leaf_session_updates_only_target', () => {
+  const tree = splitAt(leaf('a'), 'a', leaf('b'), 'row', 's1');
+  const next = replaceLeafSession(tree, 'b', 'session-new', ['session', 'file']);
+
+  assert.equal(findLeaf(next, 'b')?.sessionId, 'session-new');
+  assert.deepEqual(findLeaf(next, 'b')?.capabilities, ['session', 'file']);
+  assert.equal(findLeaf(next, 'a')?.sessionId, 'session-a');
+  assert.equal(replaceLeafSession(tree, 'missing', 'x', []), tree);
 });
 
 test('layout_split_leaf_creates_split_node', () => {
