@@ -2,10 +2,13 @@ name: release
 
 # 打 tag 即出包：x64 / arm64 分别交给对应架构的 runner 构建，再统一发布到一个 Release。
 # arm64 不要用 macos-latest（当前指向 macOS 26，构建失败），固定用 macos-15。
+# ci-probe 分支仅用于验证工作流本身，验证完移除。
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - "ci-probe"
 
 permissions:
   contents: write
@@ -24,10 +27,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: 检出代码
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 安装 Node 24
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -74,7 +77,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传构建产物
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: dmg-${{ matrix.arch }}
           path: |
@@ -85,14 +88,14 @@ jobs:
   publish:
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # gh 靠 git remote 确认目标仓库，不 checkout 会直接报 not a git repository。
       - name: 检出代码
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 汇总构建产物
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
