@@ -167,6 +167,39 @@ button {
   background-color: transparent !important;
 }
 
+.terminal-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 140px;
+  padding: var(--space-tight);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.terminal-menu__item {
+  display: block;
+  width: 100%;
+  height: var(--row-height);
+  padding: 0 var(--space-container);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  text-align: left;
+}
+
+.terminal-menu__item:hover {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.terminal-menu__item:focus-visible {
+  outline: 1px solid var(--status-info);
+}
+
 /* 空态三段式：一句说明 + 一个动作 + 一个可选提示 */
 .empty {
   display: flex;
@@ -547,6 +580,37 @@ button {
 
 .modal--compact {
   width: 400px;
+}
+
+.modal--settings {
+  width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.settings-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-block);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-tight);
+}
+
+.settings-panel__body .form-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-base);
+}
+
+.settings-panel__body .form-row label {
+  font-size: var(--font-body);
+}
+
+.settings-panel__body .form-row input,
+.settings-panel__body .form-row select {
+  width: 100%;
 }
 
 /* 命令面板：顶部输入 + 可滚动结果列表 */

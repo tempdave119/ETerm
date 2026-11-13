@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { ProductError } from '../../src/core/errors.ts';
 import { resolveOpenOptions, type ResolverDeps } from '../../src/host/resolve-connection.ts';
 import type { SshTarget } from '../../src/modules/ssh/target.ts';
+import { defaultConfig } from '../../src/services/config/schema.ts';
 import { ConnectionStore } from '../../src/services/connections/store.ts';
 
 const FINGERPRINT = 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -53,6 +54,36 @@ test('resolve_password_connection_builds_ssh_target', async () => {
   assert.equal(target.username, 'root');
   assert.equal(target.password, 'secret');
   assert.equal(target.hostKeyFingerprint, FINGERPRINT);
+  assert.equal(target.keepaliveInterval, 30_000);
+  assert.equal(target.keepaliveCountMax, 3);
+});
+
+test('resolve_keepalive_config_is_forwarded_to_target', async () => {
+  const store = await createStore();
+  const connection = await store.saveConnection({
+    name: 'web',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+  });
+
+  const options = await resolveOpenOptions(
+    { connectionId: connection.id, cols: 80, rows: 24 },
+    makeDeps({
+      connections: store,
+      credentials: { get: async () => 'secret' },
+      config: {
+        get: async () => ({
+          ...defaultConfig(),
+          ssh: { keepaliveInterval: 120, keepaliveCountMax: 5 },
+        }),
+      },
+    }),
+  );
+
+  const target = options.target as SshTarget;
+  assert.equal(target.keepaliveInterval, 120_000);
+  assert.equal(target.keepaliveCountMax, 5);
 });
 
 test('resolve_missing_password_is_reported', async () => {

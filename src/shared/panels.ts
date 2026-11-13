@@ -153,6 +153,59 @@ export function movePanel(layout: PanelLayout, panelId: PanelId, target: DockId 
   };
 }
 
+/**
+ * 在同一个停靠区内上移 / 下移一个面板。
+ * 每个面板的比例跟着面板走，而不是跟着位置走；否则调换顺序后大小会错位。
+ */
+export function movePanelWithinDock(
+  layout: PanelLayout,
+  dock: DockId,
+  panelId: PanelId,
+  delta: -1 | 1,
+): PanelLayout {
+  const panels = layout.docks[dock];
+  const index = panels.indexOf(panelId);
+  const target = index + delta;
+  if (index < 0 || target < 0 || target >= panels.length) return layout;
+
+  const ratios = panelRatios(layout.dividers[dock], panels.length);
+  const entries = panels.map((id, position) => ({ id, ratio: ratios[position] ?? 1 / panels.length }));
+  const [moved] = entries.splice(index, 1);
+  if (!moved) return layout;
+  entries.splice(target, 0, moved);
+
+  return {
+    docks: { ...layout.docks, [dock]: entries.map((entry) => entry.id) },
+    dividers: { ...layout.dividers, [dock]: cumulativeDividers(entries.map((entry) => entry.ratio)) },
+  };
+}
+
+/** 把累计分隔换算成每个面板的占比；缺分隔时用均匀分布补齐。 */
+function panelRatios(dividers: number[], count: number): number[] {
+  if (count <= 1) return [1];
+  const expected = count - 1;
+  const values = dividers.slice(0, expected);
+  while (values.length < expected) values.push((values.length + 1) / count);
+  const boundaries = [...normalizeDividers(values), 1];
+  const ratios: number[] = [];
+  let previous = 0;
+  for (const boundary of boundaries) {
+    ratios.push(Math.max(0, boundary - previous));
+    previous = boundary;
+  }
+  return ratios;
+}
+
+function cumulativeDividers(ratios: number[]): number[] {
+  const result: number[] = [];
+  let sum = 0;
+  for (let index = 0; index < ratios.length - 1; index += 1) {
+    sum += ratios[index] ?? 0;
+    result.push(sum);
+  }
+  return normalizeDividers(result);
+}
+
 export function removePanel(layout: PanelLayout, panelId: PanelId): PanelLayout {
   const dock = panelDockOf(layout, panelId);
   if (!dock) return layout;

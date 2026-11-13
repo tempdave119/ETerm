@@ -12,13 +12,26 @@ interface PanelFrameProps {
   actions?: ReactNode;
   children: ReactNode;
   onMove(target: DockId | null): void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onReorder?(delta: -1 | 1): void;
 }
 
 /**
  * 面板统一外壳：标题 + 自定义动作 + 齿轮菜单（换停靠区 / 关闭）。
  * 菜单是手写下拉，点击外部或 Escape 关闭，不引 UI 库。
  */
-export function PanelFrame({ panelId, title, dock, actions, children, onMove }: PanelFrameProps) {
+export function PanelFrame({
+  panelId,
+  title,
+  dock,
+  actions,
+  children,
+  onMove,
+  canMoveUp = false,
+  canMoveDown = false,
+  onReorder,
+}: PanelFrameProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLElement>(null);
 
@@ -75,12 +88,43 @@ export function PanelFrame({ panelId, title, dock, actions, children, onMove }: 
         )}
         {menuOpen ? (
           <div className="panel-menu" role="menu" data-testid={`panel-menu-list-${panelId}`}>
+            {onReorder ? (
+              <>
+                <button
+                  className="panel-menu__item"
+                  type="button"
+                  role="menuitem"
+                  data-testid={`panel-up-${panelId}`}
+                  disabled={!canMoveUp}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onReorder(-1);
+                  }}
+                >
+                  上移
+                </button>
+                <button
+                  className="panel-menu__item"
+                  type="button"
+                  role="menuitem"
+                  data-testid={`panel-down-${panelId}`}
+                  disabled={!canMoveDown}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onReorder(1);
+                  }}
+                >
+                  下移
+                </button>
+              </>
+            ) : null}
             {DOCK_IDS.map((target) => (
               <button
                 key={target}
                 className="panel-menu__item"
                 type="button"
                 role="menuitem"
+                data-testid={`panel-dock-${panelId}-${target}`}
                 disabled={target === dock}
                 onClick={() => pick(target)}
               >

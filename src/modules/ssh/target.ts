@@ -15,6 +15,10 @@ export interface SshTarget {
   agent?: string;
   /** 直连时经代理开通道；已经走跳板时忽略（流量已经在跳板里）。 */
   proxy?: ProxyConfig;
+  /** 毫秒；ssh2 每 N 毫秒发一次 keepalive 全局请求。 */
+  keepaliveInterval?: number;
+  /** 连续无响应达到上限才断开。 */
+  keepaliveCountMax?: number;
   /** 跳板链：先连上 jump，再从它开一条到本目标的 TCP 通道。 */
   jump?: SshTarget;
 }
@@ -52,6 +56,28 @@ export function parseSshTarget(raw: unknown, depth = 0): SshTarget {
   if (record.privateKey !== undefined) target.privateKey = readString(record.privateKey, 'privateKey', 65536);
   if (record.passphrase !== undefined) target.passphrase = readString(record.passphrase, 'passphrase', 4096);
   if (record.agent !== undefined) target.agent = readString(record.agent, 'agent', 4096);
+  if (record.keepaliveInterval !== undefined) {
+    if (
+      typeof record.keepaliveInterval !== 'number' ||
+      !Number.isInteger(record.keepaliveInterval) ||
+      record.keepaliveInterval < 0 ||
+      record.keepaliveInterval > 3_600_000
+    ) {
+      throw new Error('SSH 连接参数 keepaliveInterval 无效');
+    }
+    target.keepaliveInterval = record.keepaliveInterval;
+  }
+  if (record.keepaliveCountMax !== undefined) {
+    if (
+      typeof record.keepaliveCountMax !== 'number' ||
+      !Number.isInteger(record.keepaliveCountMax) ||
+      record.keepaliveCountMax < 0 ||
+      record.keepaliveCountMax > 100
+    ) {
+      throw new Error('SSH 连接参数 keepaliveCountMax 无效');
+    }
+    target.keepaliveCountMax = record.keepaliveCountMax;
+  }
   if (record.proxy !== undefined) target.proxy = parseProxyConfig(record.proxy);
   if (record.jump !== undefined) target.jump = parseSshTarget(record.jump, depth + 1);
 

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import type { AppConfig, ThemePreference, UiDensity } from '../../shared/ipc.ts';
 import { panelById } from '../panels/registry.ts';
@@ -18,6 +18,11 @@ const CONCURRENCY = [1, 2, 3, 4];
 
 /** 设置在主窗口内即时生效：每次改动直接提交，不做「保存」按钮。 */
 export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDockChange, onReset, onClose }: SettingsPanelProps) {
+  const configRef = useRef(config);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose();
@@ -27,15 +32,17 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
   }, [onClose]);
 
   const update = (patch: (draft: AppConfig) => void): void => {
-    const next = structuredClone(config);
+    const next = structuredClone(configRef.current);
     patch(next);
+    configRef.current = next;
     onChange(next);
   };
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label="设置" data-testid="settings-panel">
+      <div className="modal modal--settings" role="dialog" aria-modal="true" aria-label="设置" data-testid="settings-panel">
         <h2 className="modal__title">设置</h2>
+        <div className="settings-panel__body">
 
         <section className="settings-group">
           <h3 className="settings-group__title">终端</h3>
@@ -58,10 +65,84 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
               ))}
             </select>
           </div>
+          <div className="form-row">
+            <label htmlFor="settings-right-click">右键点击</label>
+            <select
+              id="settings-right-click"
+              data-testid="settings-right-click"
+              value={config.terminal.rightClick}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.terminal.rightClick = event.target.value as AppConfig['terminal']['rightClick'];
+                })
+              }
+            >
+              <option value="paste">粘贴</option>
+              <option value="menu">右键菜单</option>
+              <option value="off">关闭</option>
+            </select>
+          </div>
+          <label className="settings-check">
+            <input
+              type="checkbox"
+              data-testid="settings-right-click-copy"
+              checked={config.terminal.rightClickCopySelection}
+              disabled={config.terminal.rightClick !== 'paste'}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.terminal.rightClickCopySelection = event.target.checked;
+                })
+              }
+            />
+            有选中内容时复制，否则粘贴
+          </label>
         </section>
 
         <section className="settings-group">
-          <h3 className="settings-group__title">传输</h3>
+          <h3 className="settings-group__title">连接</h3>
+          <div className="form-row">
+            <label htmlFor="settings-keepalive">保活间隔</label>
+            <select
+              id="settings-keepalive"
+              data-testid="settings-keepalive"
+              value={config.ssh.keepaliveInterval}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.ssh.keepaliveInterval = Number(event.target.value);
+                })
+              }
+            >
+              {[10, 30, 60, 120, 300].map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {seconds < 60 ? `${seconds} 秒` : `${seconds / 60} 分钟`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-row">
+            <label htmlFor="settings-keepalive-count">无响应重试</label>
+            <select
+              id="settings-keepalive-count"
+              data-testid="settings-keepalive-count"
+              value={config.ssh.keepaliveCountMax}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.ssh.keepaliveCountMax = Number(event.target.value);
+                })
+              }
+            >
+              {[1, 2, 3, 4, 5].map((count) => (
+                <option key={count} value={count}>
+                  {count} 次
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="form-hint">每 N 秒发一次保活请求；连续无响应达到上限才断开。对新连接生效。</p>
+        </section>
+
+        <section className="settings-group">
+          <h3 className="settings-group__title">文件与传输</h3>
           <div className="form-row">
             <label htmlFor="settings-concurrency">同时传输</label>
             <select
@@ -82,6 +163,19 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
             </select>
           </div>
           <p className="form-hint">改动立即生效：正在跑的任务不受影响，排队任务按新并发补位。</p>
+          <label className="settings-check">
+            <input
+              type="checkbox"
+              data-testid="settings-files-default"
+              checked={config.files.openByDefault}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.files.openByDefault = event.target.checked;
+                })
+              }
+            />
+            连接时默认展开文件面板
+          </label>
         </section>
 
         <section className="settings-group">
@@ -119,19 +213,6 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
               <option value="compact">紧凑</option>
             </select>
           </div>
-          <label className="settings-check">
-            <input
-              type="checkbox"
-              data-testid="settings-files-default"
-              checked={config.files.openByDefault}
-              onChange={(event) =>
-                update((draft) => {
-                  draft.files.openByDefault = event.target.checked;
-                })
-              }
-            />
-            连接时默认展开文件面板
-          </label>
         </section>
 
         <section className="settings-group">
@@ -156,6 +237,7 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
             </div>
           ))}
         </section>
+        </div>
 
         {error ? <p className="form-error">{error}</p> : null}
 

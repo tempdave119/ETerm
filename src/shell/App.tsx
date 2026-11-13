@@ -11,7 +11,7 @@ import type {
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
-import { defaultPanelLayout, isPanelOpen, movePanel, panelDockOf, setDivider, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
+import { defaultPanelLayout, isPanelOpen, movePanel, movePanelWithinDock, panelDockOf, setDivider, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
 import {
   clampRatio,
   collectLeaves,
@@ -84,6 +84,10 @@ export function App() {
   const panelLayoutRef = useRef<PanelLayout>(defaultPanelLayout());
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  // 配置保存要串行：连续改设置时，后一次保存必须基于前一次的结果，不能互相覆盖。
+  const configQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingConfigSaves = useRef(0);
+  const configVersionRef = useRef(0);
   const [components, setComponents] = useState<ComponentDescriptor[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -112,7 +116,11 @@ export function App() {
       if (result.ok) setConfig(result.value);
       else setError(result.error);
     });
-    return window.eterm.onConfigChange(setConfig);
+    return window.eterm.onConfigChange((next) => {
+      // 本地还有未完成的保存时忽略广播，避免旧广播覆盖刚改的值。
+      if (pendingConfigSaves.current > 0) return;
+      setConfig(next);
+    });
   }, []);
 
   useEffect(() => {
@@ -161,18 +169,43 @@ export function App() {
     if (!result.ok) setError(result.error);
   }, []);
 
-  const saveConfig = useCallback(async (next: AppConfig): Promise<void> => {
+  const saveConfig = useCallback((next: AppConfig): void => {
     setSettingsError(null);
-    const result = await window.eterm.saveConfig(next);
-    if (result.ok) setConfig(result.value);
-    else setSettingsError(result.error.message);
+    // 乐观更新，下一次设置改动基于最新值克隆；保存本身串行执行。
+    const version = ++configVersionRef.current;
+    setConfig(next);
+    pendingConfigSaves.current += 1;
+    configQueueRef.current = configQueueRef.current
+      .then(async () => {
+        const result = await window.eterm.saveConfig(next);
+        // 只接受最后一次改动的返回值，旧响应不能覆盖新值。
+        if (result.ok && version === configVersionRef.current) setConfig(result.value);
+        else if (!result.ok) setSettingsError(result.error.message);
+      })
+      .catch((error: unknown) => {
+        setSettingsError(error instanceof Error ? error.message : '保存配置失败');
+      })
+      .finally(() => {
+        pendingConfigSaves.current -= 1;
+      });
   }, []);
 
-  const resetConfig = useCallback(async (): Promise<void> => {
+  const resetConfig = useCallback((): void => {
     setSettingsError(null);
-    const result = await window.eterm.resetConfig();
-    if (result.ok) setConfig(result.value);
-    else setSettingsError(result.error.message);
+    const version = ++configVersionRef.current;
+    pendingConfigSaves.current += 1;
+    configQueueRef.current = configQueueRef.current
+      .then(async () => {
+        const result = await window.eterm.resetConfig();
+        if (result.ok && version === configVersionRef.current) setConfig(result.value);
+        else if (!result.ok) setSettingsError(result.error.message);
+      })
+      .catch((error: unknown) => {
+        setSettingsError(error instanceof Error ? error.message : '重置配置失败');
+      })
+      .finally(() => {
+        pendingConfigSaves.current -= 1;
+      });
   }, []);
 
   const openSettings = useCallback((): void => {
@@ -205,6 +238,16 @@ export function App() {
   const movePanelTo = useCallback(
     (id: PanelId, target: DockId | null): void => {
       applyPanelLayout(movePanel(panelLayoutRef.current, id, target), true);
+    },
+    [applyPanelLayout],
+  );
+
+  const movePanelOrder = useCallback(
+    (id: PanelId, delta: -1 | 1): void => {
+      const current = panelLayoutRef.current;
+      const dock = panelDockOf(current, id);
+      if (!dock) return;
+      applyPanelLayout(movePanelWithinDock(current, dock, id, delta), true);
     },
     [applyPanelLayout],
   );
@@ -653,6 +696,16 @@ export function App() {
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
 
+  const panelChrome = (id: PanelId, dock: DockId) => {
+    const panels = panelLayout.docks[dock];
+    const index = panels.indexOf(id);
+    return {
+      canPanelMoveUp: index > 0,
+      canPanelMoveDown: index >= 0 && index < panels.length - 1,
+      onPanelReorder: (delta: -1 | 1) => movePanelOrder(id, delta),
+    };
+  };
+
   const renderPanel = (id: PanelId, dock: DockId): ReactNode => {
     switch (id) {
       case 'sessions':
@@ -672,6 +725,7 @@ export function App() {
             onDelete={(connection) => void removeConnection(connection)}
             onAddGroup={(name) => void addGroup(name)}
             onReorder={(orderedIds) => void reorderConnections(orderedIds)}
+            {...panelChrome('sessions', dock)}
           />
         );
       case 'files':
@@ -680,14 +734,29 @@ export function App() {
             sessionId={activePane.sessionId}
             dock={dock}
             onMove={(target) => movePanelTo('files', target)}
+            {...panelChrome('files', dock)}
           />
         ) : (
-          <PanelFrame panelId="files" title="文件" dock={dock} onMove={(target) => movePanelTo('files', target)}>
+          <PanelFrame
+            panelId="files"
+            title="文件"
+            dock={dock}
+            onMove={(target) => movePanelTo('files', target)}
+            canMoveUp={panelChrome('files', dock).canPanelMoveUp}
+            canMoveDown={panelChrome('files', dock).canPanelMoveDown}
+            onReorder={panelChrome('files', dock).onPanelReorder}
+          >
             <p className="panel-empty">打开一个 SSH 连接后可以浏览远端文件</p>
           </PanelFrame>
         );
       case 'monitor':
-        return <MonitorPanel dock={dock} onMove={(target) => movePanelTo('monitor', target)} />;
+        return (
+          <MonitorPanel
+            dock={dock}
+            onMove={(target) => movePanelTo('monitor', target)}
+            {...panelChrome('monitor', dock)}
+          />
+        );
       case 'transfers':
         return (
           <TransferPanel
@@ -699,6 +768,7 @@ export function App() {
             onOpenFiles={() => {
               if (!panelDockOf(panelLayoutRef.current, 'files')) togglePanel('files');
             }}
+            {...panelChrome('transfers', dock)}
           />
         );
       default:
@@ -713,6 +783,8 @@ export function App() {
   const rightPanels = dockPanels('right');
   const bottomPanels = dockPanels('bottom');
   const fontSize = config?.terminal.fontSize ?? 13;
+  const rightClick = config?.terminal.rightClick ?? 'paste';
+  const rightClickCopySelection = config?.terminal.rightClickCopySelection ?? false;
   const density = config?.ui.density ?? 'comfortable';
   const themePreference = config?.ui.theme ?? 'system';
   const resolvedTheme = themePreference === 'system' ? systemTheme : themePreference;
@@ -775,6 +847,8 @@ export function App() {
                     showHeaders={countLeaves(tab.layout) > 1}
                     fontSize={fontSize}
                     theme={resolvedTheme}
+                    rightClick={rightClick}
+                    rightClickCopySelection={rightClickCopySelection}
                     onActivate={(paneId) => setPaneActive(tab.id, paneId)}
                     onClose={(paneId) => closePane(tab.id, paneId)}
                     onResize={(splitId, ratio) => resizePane(tab.id, splitId, ratio)}

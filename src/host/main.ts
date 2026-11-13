@@ -14,6 +14,7 @@ import { LayoutStore } from '../services/layouts/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
 import { IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
 import type { ComponentDescriptor } from '../shared/components.ts';
+import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
 import { loadComponents } from './components.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
@@ -64,6 +65,7 @@ let disposeComponentsIpc: (() => void) | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
+let disposeClipboardIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
 let appServices: AppServices | null = null;
@@ -103,6 +105,7 @@ function createWindow(): void {
   disposeFilesIpc = registerFilesIpc(service);
   disposeForwardsIpc = registerForwardsIpc(service);
   disposeSystemIpc = registerSystemIpc();
+  disposeClipboardIpc = registerClipboardIpc();
   transferQueue = new TransferQueue({
     getPort: (sessionId) => service.transferPort(sessionId),
     onChange: (task) => {
@@ -130,6 +133,8 @@ function createWindow(): void {
     disposeForwardsIpc = null;
     disposeSystemIpc?.();
     disposeSystemIpc = null;
+    disposeClipboardIpc?.();
+    disposeClipboardIpc = null;
     disposeTransfersIpc?.();
     disposeTransfersIpc = null;
     disposeConfigIpc?.();

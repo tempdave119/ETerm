@@ -5,10 +5,20 @@
 
 export type UiDensity = 'comfortable' | 'compact';
 export type ThemePreference = 'system' | 'dark' | 'light';
+export type RightClickAction = 'paste' | 'menu' | 'off';
 
 export interface AppConfig {
   terminal: {
     fontSize: number;
+    rightClick: RightClickAction;
+    /** 仅 rightClick = paste 时生效：有选中内容时复制，否则粘贴。 */
+    rightClickCopySelection: boolean;
+  };
+  ssh: {
+    /** 秒；每 N 秒发一次 keepalive 全局请求。 */
+    keepaliveInterval: number;
+    /** 连续无响应达到上限才断开。 */
+    keepaliveCountMax: number;
   };
   transfer: {
     concurrency: number;
@@ -24,6 +34,8 @@ export interface AppConfig {
 
 export const CONFIG_VERSION = 1;
 export const FONT_SIZE_RANGE = { min: 11, max: 20 } as const;
+export const KEEPALIVE_INTERVAL_RANGE = { min: 10, max: 300 } as const;
+export const KEEPALIVE_COUNT_RANGE = { min: 1, max: 5 } as const;
 export const TRANSFER_CONCURRENCY_RANGE = { min: 1, max: 4 } as const;
 
 export interface ConfigFile {
@@ -33,7 +45,8 @@ export interface ConfigFile {
 
 export function defaultConfig(): AppConfig {
   return {
-    terminal: { fontSize: 13 },
+    terminal: { fontSize: 13, rightClick: 'paste', rightClickCopySelection: false },
+    ssh: { keepaliveInterval: 30, keepaliveCountMax: 3 },
     transfer: { concurrency: 1 },
     ui: { density: 'comfortable', theme: 'system' },
     files: { openByDefault: true },
@@ -62,6 +75,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
 
   const record = value as Record<string, unknown>;
   const terminal = asRecord(record.terminal);
+  const ssh = asRecord(record.ssh);
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
@@ -69,6 +83,19 @@ export function sanitizeConfig(value: unknown): AppConfig {
   return {
     terminal: {
       fontSize: readInteger(terminal.fontSize, FONT_SIZE_RANGE, defaults.terminal.fontSize),
+      rightClick: readRightClick(terminal.rightClick, defaults.terminal.rightClick),
+      rightClickCopySelection: readBoolean(
+        terminal.rightClickCopySelection,
+        defaults.terminal.rightClickCopySelection,
+      ),
+    },
+    ssh: {
+      keepaliveInterval: readInteger(
+        ssh.keepaliveInterval,
+        KEEPALIVE_INTERVAL_RANGE,
+        defaults.ssh.keepaliveInterval,
+      ),
+      keepaliveCountMax: readInteger(ssh.keepaliveCountMax, KEEPALIVE_COUNT_RANGE, defaults.ssh.keepaliveCountMax),
     },
     transfer: {
       concurrency: readInteger(transfer.concurrency, TRANSFER_CONCURRENCY_RANGE, defaults.transfer.concurrency),
@@ -94,12 +121,21 @@ export function parseConfigInput(value: unknown): AppConfig {
   }
   const record = value as Record<string, unknown>;
   const terminal = asRecord(record.terminal);
+  const ssh = asRecord(record.ssh);
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
 
   return {
-    terminal: { fontSize: requireInteger(terminal.fontSize, '终端字号', FONT_SIZE_RANGE) },
+    terminal: {
+      fontSize: requireInteger(terminal.fontSize, '终端字号', FONT_SIZE_RANGE),
+      rightClick: requireRightClick(terminal.rightClick),
+      rightClickCopySelection: requireBoolean(terminal.rightClickCopySelection, '选中时复制'),
+    },
+    ssh: {
+      keepaliveInterval: requireInteger(ssh.keepaliveInterval, '保活间隔', KEEPALIVE_INTERVAL_RANGE),
+      keepaliveCountMax: requireInteger(ssh.keepaliveCountMax, '保活重试次数', KEEPALIVE_COUNT_RANGE),
+    },
     transfer: { concurrency: requireInteger(transfer.concurrency, '传输并发', TRANSFER_CONCURRENCY_RANGE) },
     ui: { density: requireDensity(ui.density), theme: requireTheme(ui.theme) },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
@@ -120,6 +156,19 @@ function readInteger(
   return typeof value === 'number' && Number.isInteger(value) && value >= range.min && value <= range.max
     ? value
     : fallback;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function readRightClick(value: unknown, fallback: RightClickAction): RightClickAction {
+  return value === 'paste' || value === 'menu' || value === 'off' ? value : fallback;
+}
+
+function requireRightClick(value: unknown): RightClickAction {
+  if (value === 'paste' || value === 'menu' || value === 'off') return value;
+  throw new Error('右键行为只能是 paste、menu 或 off');
 }
 
 function requireInteger(value: unknown, label: string, range: { min: number; max: number }): number {

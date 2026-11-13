@@ -73,7 +73,8 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
         agent: target.agent,
         sock,
         readyTimeout: 10_000,
-        keepaliveInterval: 15_000,
+        keepaliveInterval: target.keepaliveInterval ?? 30_000,
+        keepaliveCountMax: target.keepaliveCountMax ?? 3,
         hostVerifier: (key: Buffer) => {
           observedFingerprint = fingerprintOf(key);
           if (!expected) return false;

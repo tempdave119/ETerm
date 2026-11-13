@@ -26,6 +26,10 @@ test('config_save_persists_after_reload', async () => {
   const { dir, store } = await createStore();
   const next = defaultConfig();
   next.terminal.fontSize = 16;
+  next.terminal.rightClick = 'menu';
+  next.terminal.rightClickCopySelection = true;
+  next.ssh.keepaliveInterval = 60;
+  next.ssh.keepaliveCountMax = 5;
   next.transfer.concurrency = 3;
   next.ui.density = 'compact';
   next.files.openByDefault = false;
@@ -70,6 +74,10 @@ test('config_file_keeps_valid_fields_when_one_field_is_bad', () => {
   });
 
   assert.equal(file.config.terminal.fontSize, 13);
+  assert.equal(file.config.terminal.rightClick, 'paste');
+  assert.equal(file.config.terminal.rightClickCopySelection, false);
+  assert.equal(file.config.ssh.keepaliveInterval, 30);
+  assert.equal(file.config.ssh.keepaliveCountMax, 3);
   assert.equal(file.config.transfer.concurrency, 2);
   assert.equal(file.config.ui.density, 'comfortable');
   assert.equal(file.config.ui.theme, 'system');
@@ -89,6 +97,13 @@ test('config_input_rejects_out_of_range_values', () => {
   assert.throws(() => parseConfigInput({ ...base, terminal: { fontSize: 10 } }), /终端字号/);
   assert.throws(() => parseConfigInput({ ...base, terminal: { fontSize: 21 } }), /终端字号/);
   assert.throws(() => parseConfigInput({ ...base, terminal: { fontSize: 13.5 } }), /终端字号/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, rightClick: 'copy' } }), /右键行为/);
+  assert.throws(
+    () => parseConfigInput({ ...base, terminal: { ...base.terminal, rightClickCopySelection: 'yes' } }),
+    /选中时复制/,
+  );
+  assert.throws(() => parseConfigInput({ ...base, ssh: { keepaliveInterval: 5, keepaliveCountMax: 3 } }), /保活间隔/);
+  assert.throws(() => parseConfigInput({ ...base, ssh: { keepaliveInterval: 30, keepaliveCountMax: 9 } }), /保活重试次数/);
   assert.throws(() => parseConfigInput({ ...base, transfer: { concurrency: 0 } }), /传输并发/);
   assert.throws(() => parseConfigInput({ ...base, transfer: { concurrency: 5 } }), /传输并发/);
   assert.throws(() => parseConfigInput({ ...base, ui: { density: 'wide' } }), /界面密度/);
@@ -99,7 +114,8 @@ test('config_input_rejects_out_of_range_values', () => {
 
 test('config_input_accepts_valid_full_config', () => {
   const input = {
-    terminal: { fontSize: 11 },
+    terminal: { fontSize: 11, rightClick: 'menu', rightClickCopySelection: true },
+    ssh: { keepaliveInterval: 120, keepaliveCountMax: 5 },
     transfer: { concurrency: 4 },
     ui: { density: 'compact', theme: 'light' },
     files: { openByDefault: false },

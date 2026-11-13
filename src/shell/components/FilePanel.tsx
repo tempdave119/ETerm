@@ -9,9 +9,12 @@ interface FilePanelProps {
   sessionId: string;
   dock: DockId | null;
   onMove(target: DockId | null): void;
+  canPanelMoveUp?: boolean;
+  canPanelMoveDown?: boolean;
+  onPanelReorder?(delta: -1 | 1): void;
 }
 
-export function FilePanel({ sessionId, dock, onMove }: FilePanelProps) {
+export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMoveDown, onPanelReorder }: FilePanelProps) {
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,6 +84,9 @@ export function FilePanel({ sessionId, dock, onMove }: FilePanelProps) {
       title="文件"
       dock={dock}
       onMove={onMove}
+      canMoveUp={canPanelMoveUp}
+      canMoveDown={canPanelMoveDown}
+      onReorder={onPanelReorder}
       actions={
         <>
           <button

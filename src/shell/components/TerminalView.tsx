@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
+import type { RightClickAction } from '../../shared/ipc.ts';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
 
@@ -64,12 +66,43 @@ interface TerminalViewProps {
   active: boolean;
   fontSize: number;
   theme: TerminalTheme;
+  rightClick: RightClickAction;
+  rightClickCopySelection: boolean;
 }
 
-export function TerminalView({ sessionId, active, fontSize, theme }: TerminalViewProps) {
+function copySelection(term: Terminal | null): void {
+  if (!term || !term.hasSelection()) return;
+  void window.eterm.writeClipboard(term.getSelection());
+  term.clearSelection();
+}
+
+function pasteClipboard(term: Terminal | null): void {
+  if (!term) return;
+  void window.eterm.readClipboard().then((result) => {
+    if (result.ok && result.value) term.paste(result.value);
+  });
+}
+
+export function TerminalView({
+  sessionId,
+  active,
+  fontSize,
+  theme,
+  rightClick,
+  rightClickCopySelection,
+}: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const rightClickRef = useRef(rightClick);
+  const copySelectionRef = useRef(rightClickCopySelection);
+
+  useEffect(() => {
+    rightClickRef.current = rightClick;
+    copySelectionRef.current = rightClickCopySelection;
+    if (rightClick !== 'menu') setMenu(null);
+  }, [rightClick, rightClickCopySelection]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -97,6 +130,37 @@ export function TerminalView({ sessionId, active, fontSize, theme }: TerminalVie
     term.open(host);
     fit.fit();
 
+    const onContextMenu = (event: MouseEvent): void => {
+      event.preventDefault();
+      const action = rightClickRef.current;
+      if (action === 'off') return;
+      if (action === 'paste') {
+        if (copySelectionRef.current && term.hasSelection()) copySelection(term);
+        else pasteClipboard(term);
+        return;
+      }
+      setMenu({
+        x: Math.min(event.clientX, Math.max(0, window.innerWidth - 160)),
+        y: Math.min(event.clientY, Math.max(0, window.innerHeight - 160)),
+      });
+    };
+    host.addEventListener('contextmenu', onContextMenu);
+
+    // ⌘C / ⌘V 走主进程剪贴板；Ctrl+C 仍交给终端发 SIGINT。
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !event.metaKey || event.altKey) return true;
+      if (event.code === 'KeyC') {
+        if (!term.hasSelection()) return true;
+        copySelection(term);
+        return false;
+      }
+      if (event.code === 'KeyV') {
+        pasteClipboard(term);
+        return false;
+      }
+      return true;
+    });
+
     const detach = attachSession(sessionId, {
       onData: (data) => term.write(data),
       onExit: (info) => {
@@ -119,6 +183,7 @@ export function TerminalView({ sessionId, active, fontSize, theme }: TerminalVie
     return () => {
       observer.disconnect();
       inputSubscription.dispose();
+      host.removeEventListener('contextmenu', onContextMenu);
       detach();
       detachDebug();
       term.dispose();
@@ -158,5 +223,82 @@ export function TerminalView({ sessionId, active, fontSize, theme }: TerminalVie
     term.options.theme = TERMINAL_THEMES[theme];
   }, [theme]);
 
-  return <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />;
+  useEffect(() => {
+    if (!menu) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if ((event.target as HTMLElement).closest('.terminal-menu')) return;
+      setMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenu(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menu]);
+
+  return (
+    <>
+      <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />
+      {menu
+        ? createPortal(
+            <div
+              className="terminal-menu"
+              role="menu"
+              data-testid="terminal-menu"
+              style={{ left: menu.x, top: menu.y }}
+            >
+              <button
+                className="terminal-menu__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  copySelection(termRef.current);
+                  setMenu(null);
+                }}
+              >
+                复制
+              </button>
+              <button
+                className="terminal-menu__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  pasteClipboard(termRef.current);
+                  setMenu(null);
+                }}
+              >
+                粘贴
+              </button>
+              <button
+                className="terminal-menu__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  termRef.current?.selectAll();
+                  setMenu(null);
+                }}
+              >
+                全选
+              </button>
+              <button
+                className="terminal-menu__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  termRef.current?.clear();
+                  setMenu(null);
+                }}
+              >
+                清屏
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
 }

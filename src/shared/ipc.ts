@@ -1,7 +1,7 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, ForwardDirection, ForwardRequest, ForwardView, SessionOpenOptions } from '../core/ports.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
-import type { AppConfig, ThemePreference, UiDensity } from '../services/config/schema.ts';
+import type { AppConfig, RightClickAction, ThemePreference, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
@@ -19,7 +19,7 @@ export type { Capability };
 export type { ForwardDirection, ForwardRequest, ForwardView };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
-export type { AppConfig, ThemePreference, UiDensity };
+export type { AppConfig, RightClickAction, ThemePreference, UiDensity };
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
@@ -74,6 +74,11 @@ export const LAYOUTS_IPC = {
 
 export const SYSTEM_IPC = {
   stats: 'system:stats',
+} as const;
+
+export const CLIPBOARD_IPC = {
+  read: 'clipboard:read',
+  write: 'clipboard:write',
 } as const;
 
 export const CONFIG_IPC = {
@@ -170,6 +175,9 @@ export interface EtermApi {
   savePanelLayout(state: PanelLayout): Promise<IpcResult<null>>;
 
   getSystemStats(): Promise<IpcResult<SystemStats>>;
+
+  readClipboard(): Promise<IpcResult<string>>;
+  writeClipboard(text: string): Promise<IpcResult<null>>;
 
   getConfig(): Promise<IpcResult<AppConfig>>;
   saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;

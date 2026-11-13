@@ -190,6 +190,30 @@ try {
     '真彩色输出',
   );
 
+  // 右键粘贴：默认 rightClick=paste，剪贴板经主进程白名单通道送到 xterm。
+  await evaluate(`window.eterm.writeClipboard('echo right-click-ok')`);
+  const contextMenuDispatched = await evaluate(`(() => {
+    const host = document.querySelector('.pane[data-active="true"] .terminal-host');
+    host?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }));
+    return Boolean(host);
+  })()`);
+  if (!contextMenuDispatched) throw new Error('找不到终端 host，无法触发右键');
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).includes('echo right-click-ok'),
+    5_000,
+    '右键粘贴文本',
+  );
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(sessionId)}, "\\r")`);
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
+      return (text.match(/right-click-ok/g) ?? []).length === 2;
+    },
+    8_000,
+    '右键粘贴执行',
+  );
+
   // 缩放：视口变化后 xterm 列数必须跟着变，否则界面与 PTY 尺寸不同步。
   const beforeSize = await evaluate(`JSON.stringify(window.__etermDebug.size(${JSON.stringify(sessionId)}))`);
   await client.send('Emulation.setDeviceMetricsOverride', {
@@ -309,6 +333,17 @@ try {
     '设置面板',
   );
 
+  const settingsWidth = await evaluate(
+    `document.querySelector('[data-testid="settings-panel"]')?.getBoundingClientRect().width ?? 0`,
+  );
+  if (settingsWidth < 560) throw new Error(`设置面板宽度不足：${settingsWidth}`);
+  if ((await evaluate(`document.querySelector('[data-testid="settings-keepalive"]') === null`)) ) {
+    throw new Error('设置面板缺少保活间隔');
+  }
+  if ((await evaluate(`document.querySelector('[data-testid="settings-right-click"]') === null`)) ) {
+    throw new Error('设置面板缺少右键行为');
+  }
+
   await evaluate(setSelectScript('#settings-font-size', '18'));
   await waitFor(
     async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols < colsAtDefaultFont,
@@ -345,6 +380,25 @@ try {
     '文件面板默认值写入',
   );
 
+  await evaluate(setSelectScript('#settings-keepalive', '60'));
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getConfig().then((result) => (result.ok ? result.value.ssh.keepaliveInterval : null))`,
+      )) === 60,
+    5_000,
+    '保活间隔写入',
+  );
+  await evaluate(setSelectScript('#settings-right-click', 'menu'));
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getConfig().then((result) => (result.ok ? result.value.terminal.rightClick : null))`,
+      )) === 'menu',
+    5_000,
+    '右键行为写入',
+  );
+
   const settingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/settings-smoke.png', Buffer.from(settingsShot.data, 'base64'));
 
@@ -360,7 +414,7 @@ try {
   await waitFor(
     () =>
       evaluate(
-        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact' && document.querySelector('#settings-theme')?.value === 'light'`,
+        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact' && document.querySelector('#settings-theme')?.value === 'light' && document.querySelector('#settings-keepalive')?.value === '60' && document.querySelector('#settings-right-click')?.value === 'menu'`,
       ),
     5_000,
     '设置重开后保持',
@@ -369,7 +423,7 @@ try {
   await waitFor(
     () =>
       evaluate(
-        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('#settings-density')?.value === 'comfortable' && document.querySelector('.app')?.dataset.density === 'comfortable' && document.querySelector('#settings-theme')?.value === 'system'`,
+        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('#settings-density')?.value === 'comfortable' && document.querySelector('.app')?.dataset.density === 'comfortable' && document.querySelector('#settings-theme')?.value === 'system' && document.querySelector('#settings-keepalive')?.value === '30' && document.querySelector('#settings-right-click')?.value === 'paste'`,
       ),
     5_000,
     '恢复默认',
@@ -380,6 +434,35 @@ try {
     '字号恢复',
   );
   await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+
+  // 右键菜单模式：配置切到 menu，验证菜单出现与粘贴动作。
+  const baseConfig = await evaluate(
+    `window.eterm.getConfig().then((result) => (result.ok ? result.value : null))`,
+  );
+  if (!baseConfig) throw new Error('读取配置失败');
+  await evaluate(
+    `window.eterm.saveConfig(${JSON.stringify({ ...baseConfig, terminal: { ...baseConfig.terminal, rightClick: 'menu' } })})`,
+  );
+  await evaluate(`(() => {
+    const host = document.querySelector('.pane[data-active="true"] .terminal-host');
+    host?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 200, clientY: 200 }));
+    return Boolean(host);
+  })()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="terminal-menu"]') !== null`),
+    5_000,
+    '右键菜单',
+  );
+  await evaluate(
+    `document.querySelector('[data-testid="terminal-menu"] .terminal-menu__item:nth-child(2)').click()`,
+  );
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).includes('echo right-click-ok'),
+    5_000,
+    '菜单粘贴',
+  );
+  await evaluate(`window.eterm.resetConfig()`);
 
   // 分隔条拖拽：比例跟着鼠标走，松手后落盘。
   await evaluate(`document.querySelector('[data-testid="split-row"]').click()`);
@@ -503,19 +586,61 @@ try {
     '停靠区分隔比例落盘',
   );
 
+  // 区内顺序：右侧 files / monitor，把 monitor 上移再下移，比例跟面板走。
+  const rightOrder = () =>
+    evaluate(`window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.docks.right : null))`);
+  const rightRatio = () =>
+    evaluate(
+      `window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.dividers.right[0] : null))`,
+    );
+  const initialOrder = await rightOrder();
+  if (!Array.isArray(initialOrder) || initialOrder[0] !== 'files') {
+    throw new Error(`右侧初始顺序异常：${JSON.stringify(initialOrder)}`);
+  }
+  const ratioBefore = await rightRatio();
+  if (typeof ratioBefore !== 'number' || ratioBefore >= 0.45) {
+    throw new Error(`右侧分隔比例异常：${String(ratioBefore)}`);
+  }
+
   await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
-  await evaluate(
-    `document.querySelector('[data-testid="panel-menu-list-monitor"] .panel-menu__item:nth-child(1)').click()`,
+  await evaluate(`document.querySelector('[data-testid="panel-up-monitor"]').click()`);
+  await waitFor(
+    async () => {
+      const order = await rightOrder();
+      return Array.isArray(order) && order[0] === 'monitor';
+    },
+    5_000,
+    '面板上移',
   );
+  const ratioAfterUp = await rightRatio();
+  if (typeof ratioAfterUp !== 'number' || ratioAfterUp <= 0.5) {
+    throw new Error(`上移后比例没有跟面板走：${String(ratioAfterUp)}`);
+  }
+
+  await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="panel-down-monitor"]').click()`);
+  await waitFor(
+    async () => {
+      const order = await rightOrder();
+      return Array.isArray(order) && order[0] === 'files';
+    },
+    5_000,
+    '面板下移',
+  );
+  const ratioAfterDown = await rightRatio();
+  if (typeof ratioAfterDown !== 'number' || Math.abs(ratioAfterDown - ratioBefore) > 0.01) {
+    throw new Error(`下移后比例未还原：${String(ratioAfterDown)} vs ${String(ratioBefore)}`);
+  }
+
+  await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="panel-dock-monitor-left"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelectorAll('[data-testid="dock-left"] .dock__item').length === 2`),
     5_000,
     '系统资源移到左侧',
   );
   await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
-  await evaluate(
-    `document.querySelector('[data-testid="panel-menu-list-monitor"] .panel-menu__item:nth-child(2)').click()`,
-  );
+  await evaluate(`document.querySelector('[data-testid="panel-dock-monitor-right"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),
     5_000,

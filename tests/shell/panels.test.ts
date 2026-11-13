@@ -5,12 +5,20 @@ import {
   defaultPanelLayout,
   isPanelOpen,
   movePanel,
+  movePanelWithinDock,
   panelDockOf,
   parsePanelLayout,
   removePanel,
   setDivider,
 } from '../../src/shared/panels.ts';
 import { PANELS, panelById, panelsInDock } from '../../src/shell/panels/registry.ts';
+
+function assertDividers(actual: number[], expected: number[]): void {
+  assert.equal(actual.length, expected.length);
+  expected.forEach((value, index) => {
+    assert.ok(Math.abs((actual[index] ?? 0) - value) < 1e-9, `第 ${index} 个分隔应为 ${value}，实际 ${actual[index]}`);
+  });
+}
 
 test('panels_registry_covers_six_unique_panels', () => {
   const ids = PANELS.map((panel) => panel.id);
@@ -106,6 +114,54 @@ test('panels_set_divider_clamps_between_neighbors', () => {
 
   // 单面板没有分隔可改。
   assert.deepEqual(setDivider(defaultPanelLayout(), 'left', 0, 0.5).dividers.left, []);
+});
+
+test('panels_move_within_dock_keeps_panel_ratios', () => {
+  const layout = defaultPanelLayout();
+  layout.docks.right = ['files', 'monitor'];
+  layout.dividers.right = [0.4];
+
+  const moved = movePanelWithinDock(layout, 'right', 'monitor', -1);
+
+  assert.deepEqual(moved.docks.right, ['monitor', 'files']);
+  // files 原来占 0.4，monitor 占 0.6；交换后比例跟面板走。
+  assertDividers(moved.dividers.right, [0.6]);
+});
+
+test('panels_move_within_dock_three_panels', () => {
+  const layout = defaultPanelLayout();
+  layout.docks.right = ['files', 'monitor', 'transfers'];
+  layout.dividers.right = [0.2, 0.7];
+
+  const moved = movePanelWithinDock(layout, 'right', 'monitor', -1);
+
+  assert.deepEqual(moved.docks.right, ['monitor', 'files', 'transfers']);
+  // 原比例 [0.2, 0.5, 0.3] → 新顺序 [0.5, 0.2, 0.3]。
+  assertDividers(moved.dividers.right, [0.5, 0.7]);
+});
+
+test('panels_move_within_dock_falls_back_to_uniform_dividers', () => {
+  const layout = defaultPanelLayout();
+  layout.docks.left = ['sessions', 'files', 'monitor'];
+  layout.dividers.left = [];
+
+  const moved = movePanelWithinDock(layout, 'left', 'monitor', -1);
+
+  assert.deepEqual(moved.docks.left, ['sessions', 'monitor', 'files']);
+  assertDividers(moved.dividers.left, [1 / 3, 2 / 3]);
+});
+
+test('panels_move_within_dock_is_noop_at_boundaries', () => {
+  const layout = defaultPanelLayout();
+  layout.docks.right = ['files', 'monitor'];
+  layout.dividers.right = [0.4];
+
+  assert.equal(movePanelWithinDock(layout, 'right', 'files', -1), layout);
+  assert.equal(movePanelWithinDock(layout, 'right', 'monitor', 1), layout);
+  assert.equal(movePanelWithinDock(layout, 'right', 'sessions', 1), layout);
+
+  const single = defaultPanelLayout();
+  assert.equal(movePanelWithinDock(single, 'right', 'files', 1), single);
 });
 
 test('panels_dockable_ids_cover_four_panels', () => {

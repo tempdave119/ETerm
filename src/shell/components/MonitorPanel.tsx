@@ -6,12 +6,15 @@ import { PanelFrame } from './PanelFrame.tsx';
 interface MonitorPanelProps {
   dock: DockId | null;
   onMove(target: DockId | null): void;
+  canPanelMoveUp?: boolean;
+  canPanelMoveDown?: boolean;
+  onPanelReorder?(delta: -1 | 1): void;
 }
 
 const POLL_INTERVAL = 1000;
 
 /** 本机资源面板：每秒拉一次 system:stats；第一次采样只建立 CPU 基线。 */
-export function MonitorPanel({ dock, onMove }: MonitorPanelProps) {
+export function MonitorPanel({ dock, onMove, canPanelMoveUp, canPanelMoveDown, onPanelReorder }: MonitorPanelProps) {
   const [stats, setStats] = useState<SystemStats | null>(null);
 
   useEffect(() => {
@@ -35,7 +38,15 @@ export function MonitorPanel({ dock, onMove }: MonitorPanelProps) {
   const memoryPercent = stats && stats.memTotal > 0 ? Math.round((stats.memUsed / stats.memTotal) * 100) : 0;
 
   return (
-    <PanelFrame panelId="monitor" title="系统资源" dock={dock} onMove={onMove}>
+    <PanelFrame
+      panelId="monitor"
+      title="系统资源"
+      dock={dock}
+      onMove={onMove}
+      canMoveUp={canPanelMoveUp}
+      canMoveDown={canPanelMoveDown}
+      onReorder={onPanelReorder}
+    >
       <div className="monitor-panel__body">
         <div className="monitor-row">
           <span>CPU</span>

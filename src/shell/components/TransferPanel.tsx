@@ -11,6 +11,9 @@ interface TransferPanelProps {
   onCancel(id: string): void;
   onRetry(id: string): void;
   onOpenFiles(): void;
+  canPanelMoveUp?: boolean;
+  canPanelMoveDown?: boolean;
+  onPanelReorder?(delta: -1 | 1): void;
 }
 
 const STATUS_LABEL: Record<TransferView['status'], string> = {
@@ -21,13 +24,26 @@ const STATUS_LABEL: Record<TransferView['status'], string> = {
   canceled: '已取消',
 };
 
-export function TransferPanel({ tasks, dock, onMove, onCancel, onRetry, onOpenFiles }: TransferPanelProps) {
+export function TransferPanel({
+  tasks,
+  dock,
+  onMove,
+  onCancel,
+  onRetry,
+  onOpenFiles,
+  canPanelMoveUp,
+  canPanelMoveDown,
+  onPanelReorder,
+}: TransferPanelProps) {
   return (
     <PanelFrame
       panelId="transfers"
       title="传输队列"
       dock={dock}
       onMove={onMove}
+      canMoveUp={canPanelMoveUp}
+      canMoveDown={canPanelMoveDown}
+      onReorder={onPanelReorder}
       actions={<span className="transfer-panel__count">{tasks.length}</span>}
     >
       <div className="transfer-panel__list">

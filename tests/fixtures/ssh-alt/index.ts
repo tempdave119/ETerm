@@ -29,6 +29,8 @@ interface AltTarget {
   passphrase?: string;
   agent?: string;
   hostKeyFingerprint?: string;
+  keepaliveInterval?: number;
+  keepaliveCountMax?: number;
 }
 
 const { Client: SshClient } = ssh2;
@@ -59,6 +61,8 @@ function parseTarget(input: unknown): AltTarget {
   if (typeof record.passphrase === 'string') target.passphrase = record.passphrase;
   if (typeof record.agent === 'string') target.agent = record.agent;
   if (typeof record.hostKeyFingerprint === 'string') target.hostKeyFingerprint = record.hostKeyFingerprint;
+  if (typeof record.keepaliveInterval === 'number') target.keepaliveInterval = record.keepaliveInterval;
+  if (typeof record.keepaliveCountMax === 'number') target.keepaliveCountMax = record.keepaliveCountMax;
   return target;
 }
 
@@ -107,7 +111,8 @@ function connect(target: AltTarget): Promise<Client> {
       passphrase: target.passphrase,
       agent: target.agent,
       readyTimeout: 10_000,
-      keepaliveInterval: 15_000,
+      keepaliveInterval: target.keepaliveInterval ?? 30_000,
+      keepaliveCountMax: target.keepaliveCountMax ?? 3,
       hostVerifier: (key: Buffer) => {
         observedFingerprint = fingerprintOf(key);
         if (!expected) return false;

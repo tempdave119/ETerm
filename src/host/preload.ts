@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
+  CLIPBOARD_IPC,
   COMPONENTS_IPC,
   CONFIG_IPC,
   CONNECTIONS_IPC,
@@ -122,6 +123,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(LAYOUTS_IPC.panelsSave, state) as Promise<IpcResult<null>>,
 
   getSystemStats: () => ipcRenderer.invoke(SYSTEM_IPC.stats) as Promise<IpcResult<SystemStats>>,
+
+  readClipboard: () => ipcRenderer.invoke(CLIPBOARD_IPC.read) as Promise<IpcResult<string>>,
+  writeClipboard: (text: string) =>
+    ipcRenderer.invoke(CLIPBOARD_IPC.write, text) as Promise<IpcResult<null>>,
 
   getConfig: () => ipcRenderer.invoke(CONFIG_IPC.get) as Promise<IpcResult<AppConfig>>,
   saveConfig: (config: AppConfig) =>

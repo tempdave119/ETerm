@@ -4,6 +4,7 @@ import { isAbsolute, join } from 'node:path';
 import { ProductError } from '../core/errors.ts';
 import type { SessionOpenOptions } from '../core/ports.ts';
 import type { SshTarget } from '../modules/ssh/target.ts';
+import { defaultConfig, type AppConfig } from '../services/config/schema.ts';
 import type { ConnectionStore } from '../services/connections/store.ts';
 import type { ConnectionRecord } from '../services/connections/types.ts';
 import type { CredentialStore } from '../services/credentials/store.ts';
@@ -13,6 +14,7 @@ export interface ResolverDeps {
   connections: Pick<ConnectionStore, 'getConnection'>;
   credentials: Pick<CredentialStore, 'get'>;
   knownHosts: Pick<KnownHostsStore, 'get'>;
+  config?: { get(): Promise<AppConfig> };
   readKeyFile?: (path: string) => Promise<string>;
   env?: Record<string, string | undefined>;
   homeDir?: string;
@@ -51,11 +53,25 @@ export async function resolveOpenOptions(
     };
   }
 
+  const keepalive = await resolveKeepalive(deps);
   return {
     protocol: 'ssh',
     cols: options.cols,
     rows: options.rows,
-    target: await resolveSshTarget(record, deps),
+    target: await resolveSshTarget(record, deps, [], keepalive),
+  };
+}
+
+interface KeepaliveConfig {
+  intervalMs: number;
+  countMax: number;
+}
+
+async function resolveKeepalive(deps: ResolverDeps): Promise<KeepaliveConfig> {
+  const config = deps.config ? await deps.config.get() : defaultConfig();
+  return {
+    intervalMs: config.ssh.keepaliveInterval * 1000,
+    countMax: config.ssh.keepaliveCountMax,
   };
 }
 
@@ -63,6 +79,7 @@ async function resolveSshTarget(
   record: ConnectionRecord,
   deps: ResolverDeps,
   chain: string[] = [],
+  keepalive?: KeepaliveConfig,
 ): Promise<SshTarget> {
   if (!record.host || !record.username) {
     throw new ProductError('INTERNAL', { message: '连接配置不完整', next: '编辑连接，补全主机与用户名', detail: record.id });
@@ -72,6 +89,8 @@ async function resolveSshTarget(
     host: record.host,
     port: record.port ?? 22,
     username: record.username,
+    keepaliveInterval: keepalive?.intervalMs,
+    keepaliveCountMax: keepalive?.countMax,
   };
 
   const fingerprint = await deps.knownHosts.get(target.host, target.port);
@@ -102,7 +121,7 @@ async function resolveSshTarget(
         detail: record.jumpConnectionId,
       });
     }
-    target.jump = await resolveSshTarget(jumpRecord, deps, [...chain, record.id]);
+    target.jump = await resolveSshTarget(jumpRecord, deps, [...chain, record.id], keepalive);
   }
 
   switch (record.auth) {

@@ -20,6 +20,9 @@ interface SessionTreeProps {
   onDelete(connection: ConnectionRecord): void;
   onAddGroup(name: string): void;
   onReorder(orderedIds: string[]): void;
+  canPanelMoveUp?: boolean;
+  canPanelMoveDown?: boolean;
+  onPanelReorder?(delta: -1 | 1): void;
 }
 
 export function SessionTree({
@@ -37,6 +40,9 @@ export function SessionTree({
   onDelete,
   onAddGroup,
   onReorder,
+  canPanelMoveUp,
+  canPanelMoveDown,
+  onPanelReorder,
 }: SessionTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [addingGroup, setAddingGroup] = useState(false);
@@ -103,6 +109,9 @@ export function SessionTree({
       title="会话"
       dock={dock}
       onMove={onMove}
+      canMoveUp={canPanelMoveUp}
+      canMoveDown={canPanelMoveDown}
+      onReorder={onPanelReorder}
       actions={
         <>
           <button className="icon-button" type="button" title="新建连接" aria-label="新建连接" onClick={onNew}>

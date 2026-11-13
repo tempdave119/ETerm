@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
+import type { RightClickAction } from '../../shared/ipc.ts';
 import type { LayoutNode, SplitNode } from '../layout.ts';
 import { TerminalView, type TerminalTheme } from './TerminalView.tsx';
 
@@ -10,6 +11,8 @@ interface PaneLayoutProps {
   showHeaders: boolean;
   fontSize: number;
   theme: TerminalTheme;
+  rightClick: RightClickAction;
+  rightClickCopySelection: boolean;
   onActivate(paneId: string): void;
   onClose(paneId: string): void;
   onResize(splitId: string, ratio: number): void;
@@ -23,6 +26,8 @@ export function PaneLayout({
   showHeaders,
   fontSize,
   theme,
+  rightClick,
+  rightClickCopySelection,
   onActivate,
   onClose,
   onResize,
@@ -56,7 +61,14 @@ export function PaneLayout({
           </header>
         ) : null}
         <div className="pane-node__body">
-          <TerminalView sessionId={node.sessionId} active={active && tabActive} fontSize={fontSize} theme={theme} />
+          <TerminalView
+            sessionId={node.sessionId}
+            active={active && tabActive}
+            fontSize={fontSize}
+            theme={theme}
+            rightClick={rightClick}
+            rightClickCopySelection={rightClickCopySelection}
+          />
         </div>
       </section>
     );
@@ -102,6 +114,8 @@ export function PaneLayout({
           showHeaders={showHeaders}
           fontSize={fontSize}
           theme={theme}
+          rightClick={rightClick}
+          rightClickCopySelection={rightClickCopySelection}
           onActivate={onActivate}
           onClose={onClose}
           onResize={onResize}
@@ -123,6 +137,8 @@ export function PaneLayout({
           showHeaders={showHeaders}
           fontSize={fontSize}
           theme={theme}
+          rightClick={rightClick}
+          rightClickCopySelection={rightClickCopySelection}
           onActivate={onActivate}
           onClose={onClose}
           onResize={onResize}
