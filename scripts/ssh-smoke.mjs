@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import http from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve, sep } from 'node:path';
@@ -338,6 +339,21 @@ const jumpServer = new Server(
 );
 await new Promise((resolve) => jumpServer.listen(0, '127.0.0.1', resolve));
 const jumpPort = jumpServer.address().port;
+
+// HTTP CONNECT 代理：把隧道接到主服务器端口。
+const proxyServer = http.createServer();
+proxyServer.on('connect', (request, clientSocket, head) => {
+  const [host, portText] = (request.url ?? '').split(':');
+  const upstream = net.connect(Number(portText), host, () => {
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    if (head.length > 0) upstream.write(head);
+    upstream.pipe(clientSocket);
+    clientSocket.pipe(upstream);
+  });
+  upstream.on('error', () => clientSocket.destroy());
+});
+await new Promise((resolve) => proxyServer.listen(0, '127.0.0.1', resolve));
+const proxyPort = proxyServer.address().port;
 
 // 无 SFTP 的对照服务器：只接认证与 shell，用来验证「能力降级」而不是报错阻塞终端。
 const noSftpConnections = new Set();
@@ -759,6 +775,48 @@ try {
   );
   await shotOf('tmp/ssh-smoke-jump.png');
 
+  // 代理：HTTP CONNECT 直连目标；目标指纹已在前面确认，不再弹窗。
+  await clickOn('.session-tree__header button[title="新建连接"]');
+  await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '代理连接表单');
+  await evaluate(setInputScript('#connection-name', 'mock-via-proxy'));
+  await evaluate(setInputScript('#connection-host', '127.0.0.1'));
+  await evaluate(setInputScript('#connection-port', String(port)));
+  await evaluate(setInputScript('#connection-user', 'tester'));
+  await evaluate(setSelectScript('#connection-auth', 'key'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-key') !== null`), 5_000, '代理目标私钥');
+  await evaluate(setInputScript('#connection-key', keyPath));
+  await evaluate(setSelectScript('#connection-proxy-type', 'http'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-proxy-host') !== null`), 5_000, '代理字段');
+  await evaluate(setInputScript('#connection-proxy-host', '127.0.0.1'));
+  await evaluate(setInputScript('#connection-proxy-port', String(proxyPort)));
+  await clickOn('[data-testid="connection-save-connect"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="mock-via-proxy"]') !== null`),
+    15_000,
+    '代理标签',
+  );
+  const proxySession = await waitFor(
+    () => evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+    10_000,
+    '代理会话',
+  );
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(proxySession)})`)).trim().length > 0,
+    10_000,
+    '代理 prompt',
+  );
+  const proxyTyped = await evaluate(`window.__etermDebug.type(${JSON.stringify(proxySession)}, "echo proxy-ok\\r")`);
+  if (!proxyTyped) throw new Error('代理会话已关闭，无法输入');
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(proxySession)})`));
+      return (text.match(/proxy-ok/g) ?? []).length === 2;
+    },
+    10_000,
+    '代理命令回显',
+  );
+  await shotOf('tmp/ssh-smoke-proxy.png');
+
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
   await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
   await waitErrorTitle('连不上主机', '错主机错误文案');
@@ -915,6 +973,13 @@ try {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     jumpServer.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    proxyServer.close(() => {
       clearTimeout(timer);
       resolve();
     });

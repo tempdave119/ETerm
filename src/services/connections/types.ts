@@ -1,5 +1,12 @@
 export type ConnectionProtocol = 'ssh' | 'local';
 export type AuthMethod = 'password' | 'key' | 'agent' | 'none';
+export type ProxyType = 'http' | 'socks5';
+
+export interface ConnectionProxy {
+  type: ProxyType;
+  host: string;
+  port: number;
+}
 
 export interface ConnectionRecord {
   id: string;
@@ -13,6 +20,8 @@ export interface ConnectionRecord {
   keyPath?: string;
   /** 跳板机：引用另一个已保存的 ssh 连接，复用它的凭据与指纹。 */
   jumpConnectionId?: string;
+  /** 直连代理；走跳板时忽略。 */
+  proxy?: ConnectionProxy;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -40,6 +49,7 @@ export interface ConnectionInput {
   groupId?: string | null;
   keyPath?: string;
   jumpConnectionId?: string | null;
+  proxy?: ConnectionProxy | null;
 }
 
 export interface GroupInput {

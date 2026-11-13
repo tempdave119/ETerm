@@ -259,3 +259,37 @@ test('connections_delete_jump_clears_references', async () => {
   const snapshot = await reloaded.list();
   assert.equal(snapshot.connections.find((item) => item.id === target.id)?.jumpConnectionId, undefined);
 });
+
+test('connections_proxy_persists_and_is_validated', async () => {
+  const { dir, store } = await createStore();
+  const connection = await store.saveConnection({
+    name: 'web',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+    proxy: { type: 'socks5', host: '127.0.0.1', port: 1080 },
+  });
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  assert.deepEqual(snapshot.connections.find((item) => item.id === connection.id)?.proxy, {
+    type: 'socks5',
+    host: '127.0.0.1',
+    port: 1080,
+  });
+
+  await assert.rejects(
+    store.saveConnection({ name: 'local', protocol: 'local', proxy: { type: 'http', host: '127.0.0.1', port: 8080 } }),
+    /本地终端不能设置代理/,
+  );
+  await assert.rejects(
+    store.saveConnection({
+      name: 'bad',
+      protocol: 'ssh',
+      host: '10.0.0.1',
+      username: 'root',
+      proxy: { type: 'http', host: '127.0.0.1', port: 0 },
+    }),
+    /代理端口 必须是 1–65535 的整数/,
+  );
+});

@@ -3,6 +3,7 @@ import type { Client, ClientChannel } from 'ssh2';
 import type { Duplex } from 'node:stream';
 import { ProductError, normalizeError } from '../../core/errors.ts';
 import { fingerprintOf } from './fingerprint.ts';
+import { connectViaProxy } from './proxy.ts';
 import type { SshTarget } from './target.ts';
 
 const { Client: SshClient } = ssh2;
@@ -23,6 +24,7 @@ export async function connectSsh(target: SshTarget): Promise<SshConnection> {
   let sock: Duplex | undefined;
   try {
     if (jump) sock = await forwardOut(jump.client, target.host, target.port);
+    else if (target.proxy) sock = await connectViaProxy(target.proxy, target.host, target.port);
     const client = await openClient(target, sock);
 
     let jumpClosed = false;

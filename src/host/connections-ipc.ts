@@ -11,7 +11,7 @@ import {
   type GroupRecord,
   type IpcResult,
 } from '../shared/ipc.ts';
-import { readOptionalInteger, readOptionalString, readRecord, readString } from './validate.ts';
+import { readInteger, readOptionalInteger, readOptionalString, readRecord, readString } from './validate.ts';
 
 const ID_MAX = 64;
 const NAME_MAX = 120;
@@ -38,6 +38,17 @@ function readAuth(raw: unknown): ConnectionInput['auth'] {
   throw new Error('认证方式无效');
 }
 
+function readProxy(raw: unknown): ConnectionInput['proxy'] {
+  if (raw === undefined || raw === null) return raw;
+  const value = readRecord(raw, '代理参数');
+  if (value.type !== 'http' && value.type !== 'socks5') throw new Error('代理类型无效');
+  return {
+    type: value.type,
+    host: readString(value.host, '代理主机', HOST_MAX),
+    port: readInteger(value.port, '代理端口', 1, 65535),
+  };
+}
+
 function readConnectionInput(raw: unknown): ConnectionInput {
   const value = readRecord(raw, '连接参数');
   return {
@@ -52,6 +63,7 @@ function readConnectionInput(raw: unknown): ConnectionInput {
     keyPath: readOptionalString(value.keyPath, '私钥路径', PATH_MAX),
     jumpConnectionId:
       value.jumpConnectionId === null ? null : readOptionalString(value.jumpConnectionId, '跳板机', ID_MAX),
+    proxy: readProxy(value.proxy),
   };
 }
 

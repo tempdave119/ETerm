@@ -1,5 +1,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import net from 'node:net';
 import ssh2 from 'ssh2';
 import type { AddressInfo } from 'node:net';
@@ -108,6 +109,23 @@ await new Promise<void>((resolve) => {
 });
 const { port: jumpPort } = jumpServer.address() as AddressInfo;
 
+// HTTP CONNECT 代理：把 CONNECT 目标接到本机真实端口，验证代理通道注入。
+const proxyServer = http.createServer();
+proxyServer.on('connect', (request, clientSocket, head) => {
+  const [host, portText] = (request.url ?? '').split(':');
+  const upstream = net.connect(Number(portText), host, () => {
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    if (head.length > 0) upstream.write(head);
+    upstream.pipe(clientSocket);
+    clientSocket.pipe(upstream);
+  });
+  upstream.on('error', () => clientSocket.destroy());
+});
+await new Promise<void>((resolve) => {
+  proxyServer.listen(0, '127.0.0.1', resolve);
+});
+const { port: proxyPort } = proxyServer.address() as AddressInfo;
+
 after(async () => {
   // 失败用例（指纹 / 认证）会留下服务器侧半开连接，收尾时统一断开，避免测试进程挂住。
   for (const connection of connections) connection.end();
@@ -122,6 +140,13 @@ after(async () => {
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, 1000);
     jumpServer.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    proxyServer.close(() => {
       clearTimeout(timer);
       resolve();
     });
@@ -259,6 +284,19 @@ test('ssh_jump_forward_failure_is_reported', async () => {
     }),
     (error: unknown) => error instanceof ProductError && error.message === '跳板机无法连到目标主机',
   );
+});
+
+test('ssh_http_proxy_tunnels_to_target', async () => {
+  const handle = await openDirect({
+    proxy: { type: 'http', host: '127.0.0.1', port: proxyPort },
+  });
+  const chunks: string[] = [];
+  handle.session.onData((data) => chunks.push(data));
+
+  await waitFor(() => chunks.join('').includes('mock$ '));
+  handle.session.write('via-proxy\r');
+  await waitFor(() => chunks.join('').includes('via-proxy'));
+  handle.session.close();
 });
 
 test('ssh_session_streams_input_and_output', async () => {

@@ -37,6 +37,9 @@ export function ConnectionForm({
   const [groupId, setGroupId] = useState(editing?.groupId ?? '');
   const [keyPath, setKeyPath] = useState(editing?.keyPath ?? '');
   const [jumpConnectionId, setJumpConnectionId] = useState(editing?.jumpConnectionId ?? '');
+  const [proxyType, setProxyType] = useState<'none' | 'http' | 'socks5'>(editing?.proxy?.type ?? 'none');
+  const [proxyHost, setProxyHost] = useState(editing?.proxy?.host ?? '');
+  const [proxyPort, setProxyPort] = useState(String(editing?.proxy?.port ?? 1080));
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -65,6 +68,13 @@ export function ConnectionForm({
     if (auth === 'key' && !keyPath.trim()) {
       return setLocalError('请选择私钥文件路径');
     }
+    if (proxyType !== 'none') {
+      if (!proxyHost.trim()) return setLocalError('请填写代理地址');
+      const proxyPortNumber = Number(proxyPort);
+      if (!Number.isInteger(proxyPortNumber) || proxyPortNumber < 1 || proxyPortNumber > 65535) {
+        return setLocalError('代理端口必须是 1–65535 的整数');
+      }
+    }
 
     const input: ConnectionInput = {
       id: editing?.id,
@@ -77,6 +87,10 @@ export function ConnectionForm({
       groupId: groupId || null,
       keyPath: auth === 'key' ? keyPath.trim() : undefined,
       jumpConnectionId: jumpConnectionId || null,
+      proxy:
+        proxyType === 'none'
+          ? null
+          : { type: proxyType, host: proxyHost.trim(), port: Number(proxyPort) },
     };
 
     onSubmit(
@@ -206,6 +220,46 @@ export function ConnectionForm({
               ))}
           </select>
         </div>
+
+        <div className="form-row">
+          <label htmlFor="connection-proxy-type">代理</label>
+          <select
+            id="connection-proxy-type"
+            data-testid="connection-proxy-type"
+            value={proxyType}
+            onChange={(event) => setProxyType(event.target.value as 'none' | 'http' | 'socks5')}
+          >
+            <option value="none">不使用</option>
+            <option value="http">HTTP 代理</option>
+            <option value="socks5">SOCKS5 代理</option>
+          </select>
+        </div>
+
+        {proxyType !== 'none' ? (
+          <>
+            <div className="form-grid">
+              <div className="form-row">
+                <label htmlFor="connection-proxy-host">代理地址</label>
+                <input
+                  id="connection-proxy-host"
+                  value={proxyHost}
+                  placeholder="127.0.0.1"
+                  onChange={(event) => setProxyHost(event.target.value)}
+                />
+              </div>
+              <div className="form-row">
+                <label htmlFor="connection-proxy-port">端口</label>
+                <input
+                  id="connection-proxy-port"
+                  value={proxyPort}
+                  inputMode="numeric"
+                  onChange={(event) => setProxyPort(event.target.value)}
+                />
+              </div>
+            </div>
+            <p className="form-hint">代理只用于直连；已设置跳板机时忽略。首版不支持代理认证。</p>
+          </>
+        ) : null}
 
         <div className="form-row">
           <label htmlFor="connection-group">分组</label>

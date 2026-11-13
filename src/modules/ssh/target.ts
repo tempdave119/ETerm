@@ -1,3 +1,9 @@
+export interface ProxyConfig {
+  type: 'http' | 'socks5';
+  host: string;
+  port: number;
+}
+
 export interface SshTarget {
   host: string;
   port: number;
@@ -7,6 +13,8 @@ export interface SshTarget {
   privateKey?: string;
   passphrase?: string;
   agent?: string;
+  /** 直连时经代理开通道；已经走跳板时忽略（流量已经在跳板里）。 */
+  proxy?: ProxyConfig;
   /** 跳板链：先连上 jump，再从它开一条到本目标的 TCP 通道。 */
   jump?: SshTarget;
 }
@@ -44,7 +52,27 @@ export function parseSshTarget(raw: unknown, depth = 0): SshTarget {
   if (record.privateKey !== undefined) target.privateKey = readString(record.privateKey, 'privateKey', 65536);
   if (record.passphrase !== undefined) target.passphrase = readString(record.passphrase, 'passphrase', 4096);
   if (record.agent !== undefined) target.agent = readString(record.agent, 'agent', 4096);
+  if (record.proxy !== undefined) target.proxy = parseProxyConfig(record.proxy);
   if (record.jump !== undefined) target.jump = parseSshTarget(record.jump, depth + 1);
 
   return target;
+}
+
+function parseProxyConfig(raw: unknown): ProxyConfig {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('代理参数缺失');
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== 'http' && record.type !== 'socks5') {
+    throw new Error('代理类型必须是 http 或 socks5');
+  }
+  const rawPort = record.port;
+  if (typeof rawPort !== 'number' || !Number.isInteger(rawPort) || rawPort < 1 || rawPort > 65535) {
+    throw new Error('代理端口无效');
+  }
+  return {
+    type: record.type,
+    host: readString(record.host, 'proxy.host', 255),
+    port: rawPort,
+  };
 }

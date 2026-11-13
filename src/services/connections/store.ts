@@ -6,6 +6,7 @@ import {
   type AuthMethod,
   type ConnectionInput,
   type ConnectionProtocol,
+  type ConnectionProxy,
   type ConnectionRecord,
   type ConnectionsFile,
   type ConnectionsSnapshot,
@@ -266,8 +267,11 @@ function normalizeConnection(
 
   if (input.protocol === 'local') {
     if (input.jumpConnectionId) throw new Error('本地终端不能设置跳板机');
+    if (input.proxy) throw new Error('本地终端不能设置代理');
     return { id, name, protocol: 'local', auth, groupId };
   }
+
+  const proxy = input.proxy ? normalizeProxy(input.proxy) : undefined;
 
   const jumpConnectionId = optionalString(input.jumpConnectionId, '跳板机连接 id', 64);
   if (jumpConnectionId) {
@@ -288,6 +292,18 @@ function normalizeConnection(
     groupId,
     keyPath: optionalString(input.keyPath, '私钥路径', 4096),
     jumpConnectionId,
+    proxy,
+  };
+}
+
+function normalizeProxy(value: ConnectionProxy): ConnectionProxy {
+  if (value.type !== 'http' && value.type !== 'socks5') {
+    throw new Error('代理类型必须是 http 或 socks5');
+  }
+  return {
+    type: value.type,
+    host: requireString(value.host, '代理主机', 255),
+    port: requireInteger(value.port, '代理端口', 1, 65535),
   };
 }
 
@@ -362,6 +378,19 @@ function parseConnection(value: unknown): ConnectionRecord {
     username: requireString(record.username, '用户名', 255),
     keyPath: optionalString(record.keyPath, '私钥路径', 4096),
     jumpConnectionId: optionalString(record.jumpConnectionId, '跳板机连接 id', 64),
+    proxy: parseProxy(record.proxy),
+  };
+}
+
+function parseProxy(value: unknown): ConnectionProxy | undefined {
+  if (value === undefined) return undefined;
+  const record = asRecord(value, '代理');
+  const type = record.type === 'http' || record.type === 'socks5' ? record.type : null;
+  if (!type) throw new Error('代理类型无效');
+  return {
+    type,
+    host: requireString(record.host, '代理主机', 255),
+    port: requireInteger(record.port, '代理端口', 1, 65535),
   };
 }
 
