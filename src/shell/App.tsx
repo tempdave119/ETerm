@@ -24,6 +24,7 @@ import {
 } from './layout.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
+import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
@@ -461,18 +462,9 @@ export function App() {
           onReorder={(orderedIds) => void reorderConnections(orderedIds)}
         />
         <main className="workspace">
-          {error ? (
-            <div className="error-bar">
-              <div className="error-bar__body">
-                <strong>{error.message}</strong>
-                <span>{error.next}</span>
-                {error.detail ? (
-                  <details className="error-bar__detail">
-                    <summary>详情</summary>
-                    <pre>{error.detail}</pre>
-                  </details>
-                ) : null}
-              </div>
+          {error && tabs.length > 0 ? (
+            <div className="error-bar" data-testid="error-bar">
+              <ErrorMessage error={error} />
               <button className="icon-button" type="button" title="关闭" aria-label="关闭错误" onClick={() => setError(null)}>
                 <X size={14} strokeWidth={1.5} />
               </button>
@@ -480,7 +472,11 @@ export function App() {
           ) : null}
           <div className="workspace__content">
             {tabs.length === 0 ? (
-              <EmptyState onNewConnection={openNewForm} onNewTerminal={() => void openLocalTerminal()} />
+              <EmptyState
+                error={error}
+                onNewConnection={openNewForm}
+                onNewTerminal={() => void openLocalTerminal()}
+              />
             ) : (
               tabs.map((tab) => (
                 <section className="pane" key={tab.id} data-active={tab.id === activeTabId}>

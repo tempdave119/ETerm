@@ -1,9 +1,10 @@
 import { basename, posix } from 'node:path';
 import { BrowserWindow, dialog, ipcMain } from 'electron';
-import { ProductError, normalizeError } from '../core/errors.ts';
+import { normalizeError } from '../core/errors.ts';
 import type { SessionService } from '../core/session-service.ts';
 import type { TransferQueue, TransferView } from '../services/transfers/queue.ts';
 import { TRANSFERS_IPC, type IpcResult } from '../shared/ipc.ts';
+import { requireSessionPort } from './session-capability.ts';
 import { readRecord, readString } from './validate.ts';
 
 const SESSION_ID_MAX = 64;
@@ -17,10 +18,12 @@ function failure(error: unknown): IpcResult<never> {
   return { ok: false, error: normalizeError(error).toInfo() };
 }
 
-function requireTransferSession(sessions: Pick<SessionService, 'transferPort'>, sessionId: string): void {
-  if (!sessions.transferPort(sessionId)) {
-    throw new ProductError('UNSUPPORTED', { message: '当前会话不支持文件传输' });
-  }
+function requireTransferSession(sessions: Pick<SessionService, 'transferPort' | 'has'>, sessionId: string): void {
+  requireSessionPort(sessions.transferPort(sessionId), {
+    sessionId,
+    sessionAlive: sessions.has(sessionId),
+    capability: 'transfer',
+  });
 }
 
 async function pickUploadPath(window: BrowserWindow): Promise<string | null> {
@@ -42,7 +45,7 @@ async function pickDownloadPath(window: BrowserWindow, defaultName: string): Pro
 /** 本地路径只由主进程文件对话框给出，渲染层永远不传本地路径。 */
 export function registerTransfersIpc(
   queue: TransferQueue,
-  sessions: Pick<SessionService, 'transferPort'>,
+  sessions: Pick<SessionService, 'transferPort' | 'has'>,
   window: BrowserWindow,
 ): () => void {
   ipcMain.handle(TRANSFERS_IPC.list, (): IpcResult<TransferView[]> => success(queue.list()));

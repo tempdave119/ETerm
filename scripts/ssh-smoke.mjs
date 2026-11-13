@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join, resolve, sep } from 'node:path';
 import electronPath from 'electron';
@@ -58,6 +58,12 @@ function createClient(wsUrl) {
     socket.addEventListener('error', () => reject(new Error('CDP WebSocket 连接失败')));
   });
 
+  // CDP 断开后 send 会静默丢弃，pending 永远不结算；主动拒绝比无限等待好定位。
+  socket.addEventListener('close', () => {
+    for (const { reject } of pending.values()) reject(new Error('CDP WebSocket 已关闭'));
+    pending.clear();
+  });
+
   const send = (method, params = {}) =>
     new Promise((resolve, reject) => {
       const id = ++nextId;
@@ -97,7 +103,8 @@ const keyPair = utils.generateKeyPairSync('ed25519');
 const keyPath = join(dataDir, 'id_ed25519');
 writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
 const uploadFixture = join(dataDir, 'upload.txt');
-writeFileSync(uploadFixture, 'upload-from-smoke\n');
+// 8 MiB：既走真实流式上传，也给「取消传输」留出足够长的可点击窗口（mock 每块延迟 25ms）。
+writeFileSync(uploadFixture, `upload-from-smoke\n${'x'.repeat(8 * 1024 * 1024)}`);
 const downloadTarget = join(dataDir, 'downloaded.txt');
 
 // SFTP 沙盒：文件面板从这里列目录、打开文件。
@@ -139,7 +146,9 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
   connection.on('close', () => console.log('[mock] connection closed'));
   connection.on('error', (error) => console.log('[mock] connection error', error.message));
   connection.on('authentication', (context) => {
-    if (context.method === 'publickey') {
+    // denied 用户用于错误矩阵：模拟服务器拒绝密钥，覆盖 AUTH_FAILED 归一分支
+    // （不走密码存储，避免开发版调用 safeStorage 时弹系统钥匙串授权）。
+    if (context.method === 'publickey' && context.username !== 'denied') {
       context.accept();
       return;
     }
@@ -235,9 +244,12 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
           }
         });
 
-        sftp.on('WRITE', (reqid, handle, offset, data) => {
+        sftp.on('WRITE', async (reqid, handle, offset, data) => {
           const state = stateOf(handle);
           if (!state || state.type !== 'file-write') return sftp.status(reqid, STATUS.FAILURE);
+          // 每块延迟 25ms：让上传在队列里停留几秒，取消按钮才有可点击的窗口。
+          await delay(25);
+          if (!stateOf(handle)) return;
           state.chunks.push({ offset, data: Buffer.from(data) });
           return sftp.status(reqid, STATUS.OK);
         });
@@ -294,6 +306,57 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
 
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
+
+// 无 SFTP 的对照服务器：只接认证与 shell，用来验证「能力降级」而不是报错阻塞终端。
+const noSftpConnections = new Set();
+const noSftpServer = new Server(
+  { hostKeys: [utils.generateKeyPairSync('ed25519').private] },
+  (connection) => {
+    noSftpConnections.add(connection);
+    connection.on('close', () => noSftpConnections.delete(connection));
+    connection.on('error', () => {});
+    connection.on('authentication', (context) => {
+      if (context.method === 'publickey' || context.method === 'password') context.accept();
+      else context.reject(['publickey', 'password']);
+    });
+    connection.on('ready', () => {
+      connection.on('session', (accept) => {
+        const session = accept();
+        let shellProcess = null;
+        let ptyInfo = null;
+
+        session.on('pty', (acceptPty, _reject, info) => {
+          ptyInfo = info;
+          acceptPty();
+        });
+        session.on('window-change', (_accept, _reject, info) => {
+          shellProcess?.resize(info.cols, info.rows);
+        });
+        session.on('shell', (acceptShell) => {
+          const stream = acceptShell();
+          const proc = pty.spawn('/bin/zsh', ['-l'], {
+            name: 'xterm-256color',
+            cols: ptyInfo?.cols ?? 80,
+            rows: ptyInfo?.rows ?? 24,
+            cwd: remoteRoot,
+            env: { ...process.env, TERM: 'xterm-256color' },
+          });
+          shellProcess = proc;
+          stream.on('data', (data) => proc.write(data.toString()));
+          proc.onData((data) => stream.write(data));
+          stream.on('close', () => proc.kill());
+          proc.onExit(({ exitCode }) => {
+            shellProcess = null;
+            stream.exit(exitCode);
+            stream.end();
+          });
+        });
+      });
+    });
+  },
+);
+await new Promise((resolve) => noSftpServer.listen(0, '127.0.0.1', resolve));
+const noSftpPort = noSftpServer.address().port;
 
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: 'inherit',
@@ -552,6 +615,159 @@ try {
     '第二个连接保存',
   );
 
+  // ---- F-13.4 错误矩阵：错主机 / 错密码 / 文件不存在 / 取消传输 / 无 SFTP 降级 / 错指纹 ----
+  const clickOn = (selector) =>
+    evaluate(`(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!element) return false;
+      element.click();
+      return true;
+    })()`);
+
+  const textOf = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? ''`);
+
+  const shotOf = async (file) => {
+    mkdirSync('tmp', { recursive: true });
+    const result = await client.send('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(file, Buffer.from(result.data, 'base64'));
+  };
+
+  const saveAndConnect = async (options) => {
+    await clickOn('.session-tree__header button[title="新建连接"]');
+    await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, `${options.name} 表单`);
+    await evaluate(setInputScript('#connection-name', options.name));
+    await evaluate(setInputScript('#connection-host', options.host));
+    await evaluate(setInputScript('#connection-port', String(options.port)));
+    await evaluate(setInputScript('#connection-user', options.username));
+    await evaluate(setSelectScript('#connection-auth', options.auth));
+    await waitFor(() => evaluate(`document.querySelector('#connection-key') !== null`), 5_000, '私钥字段');
+    await evaluate(setInputScript('#connection-key', keyPath));
+    await clickOn('[data-testid="connection-save-connect"]');
+  };
+
+  const waitErrorTitle = (expected, label) =>
+    waitFor(
+      async () => {
+        // 表单报错说明连接根本没发出去，直接报出来比等超时更好定位。
+        const formError = String(await textOf('.form-error'));
+        if (formError) throw new Error(`表单报错「${formError}」`);
+        const title = String(await textOf('.error-message__title'));
+        return title.includes(expected) ? title : '';
+      },
+      15_000,
+      label,
+    );
+
+  // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
+  await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
+  await waitErrorTitle('连不上主机', '错主机错误文案');
+  await shotOf('tmp/error-host.png');
+
+  // 认证失败：mock 拒绝 denied 用户的密钥 → AUTH_FAILED（与错误密码同一条归一分支）。
+  await saveAndConnect({
+    name: 'error-auth',
+    host: '127.0.0.1',
+    port,
+    username: 'denied',
+    auth: 'key',
+  });
+  await waitErrorTitle('认证失败', '认证失败错误文案');
+  await shotOf('tmp/error-auth.png');
+
+  // 文件不存在：列表里看到的文件在打开前被删掉 → FILE_NOT_FOUND 落在预览弹窗。
+  writeFileSync(join(remoteRoot, 'gone.txt'), 'gone\n');
+  await clickOn('button[title="刷新"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-gone.txt"]') !== null`),
+    5_000,
+    '临时文件出现',
+  );
+  await unlink(join(remoteRoot, 'gone.txt'));
+  await clickOn('[data-testid="file-row-gone.txt"]');
+  await waitFor(() => evaluate(`document.querySelector('[data-testid="file-preview"]') !== null`), 10_000, '预览错误弹窗');
+  const fileError = String(await textOf('[data-testid="file-preview"] .error-message__title'));
+  if (!fileError.includes('文件不存在')) throw new Error(`文件不存在文案异常：${fileError}`);
+  await shotOf('tmp/error-file.png');
+  await clickOn('[data-testid="file-preview"] .button--primary');
+
+  // 取消传输：8 MiB 上传在 mock 每块 25ms 下会停留数秒，足以点取消。
+  await clickOn('[data-testid="file-upload"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.transfer-row[data-status="running"]') !== null`),
+    15_000,
+    '上传开跑',
+  );
+  await clickOn('.transfer-row[data-status="running"] button[title="取消传输"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.transfer-row[data-status="canceled"]') !== null`),
+    10_000,
+    '取消传输',
+  );
+  const canceledHasError = await evaluate(
+    `document.querySelector('.transfer-row[data-status="canceled"]')?.closest('.transfer-item')?.querySelector('.error-message') != null`,
+  );
+  if (canceledHasError) throw new Error('取消传输不应显示错误块');
+  await shotOf('tmp/error-cancel.png');
+
+  // 无 SFTP 降级：终端可用、文件面板不出现，文件通道给出明确原因。
+  await saveAndConnect({ name: 'error-nosftp', host: '127.0.0.1', port: noSftpPort, username: 'tester', auth: 'key' });
+  // 新服务器首次连接仍需确认指纹，信任后才会真正开会话。
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="hostkey-trust"]') !== null`),
+    15_000,
+    '无 SFTP 指纹确认',
+  );
+  await clickOn('[data-testid="hostkey-trust"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="error-nosftp"]') !== null`),
+    15_000,
+    '无 SFTP 标签',
+  );
+  const noSftpSession = await waitFor(
+    () => evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+    15_000,
+    '无 SFTP 会话',
+  );
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(noSftpSession)})`)).trim().length > 0,
+    10_000,
+    '无 SFTP prompt',
+  );
+  if (await evaluate(`document.querySelector('[data-testid="file-panel"]') !== null`)) {
+    throw new Error('无 SFTP 主机不应显示文件面板');
+  }
+  const noSftpMessage = String(
+    await evaluate(
+      `window.eterm.listFiles(${JSON.stringify(noSftpSession)}, '/').then((result) => (result.ok ? 'ok' : result.error.message))`,
+    ),
+  );
+  if (!noSftpMessage.includes('没有开启 SFTP')) throw new Error(`无 SFTP 文案异常：${noSftpMessage}`);
+  await shotOf('tmp/error-nosftp.png');
+  await evaluate(`(() => {
+    const label = document.querySelector('.tab__label[title="error-nosftp"]');
+    label?.closest('.tab')?.querySelector('.tab__close')?.click();
+    return true;
+  })()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="error-nosftp"]') === null`),
+    5_000,
+    '关闭无 SFTP 标签',
+  );
+
+  // 错指纹：先写入错误指纹，再连同一主机 → 弹出「主机指纹已变化」。
+  await evaluate(`window.eterm.rememberHostKey('127.0.0.1', ${port}, 'SHA256:${'A'.repeat(43)}')`);
+  await saveAndConnect({ name: 'error-hostkey', host: '127.0.0.1', port, username: 'tester', auth: 'key' });
+  await waitFor(
+    () => evaluate(`document.querySelector('.modal__title')?.textContent?.includes('主机指纹已变化') ?? false`),
+    15_000,
+    '指纹变化弹窗',
+  );
+  await shotOf('tmp/error-hostkey.png');
+  await clickOn('.modal .modal__actions .button:not(.button--primary)');
+  await waitFor(() => evaluate(`document.querySelector('.modal__title') === null`), 5_000, '关闭指纹弹窗');
+  const restored = await evaluate(`window.eterm.rememberHostKey('127.0.0.1', ${port}, ${JSON.stringify(fingerprint)})`);
+  if (!restored?.ok) throw new Error('恢复正确指纹失败');
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));
@@ -560,6 +776,17 @@ try {
   console.log(`SSH 冒烟通过：指纹 ${fingerprint}，终端输出「${tail}」，截图 ${SCREENSHOT}`);
   process.exitCode = 0;
 } catch (error) {
+  if (client) {
+    // 失败现场截图：CDP 可能已断，最多等 3 秒，不能让收尾再挂住。
+    const shot = await Promise.race([
+      client.send('Page.captureScreenshot', { format: 'png' }).catch(() => null),
+      delay(3000).then(() => null),
+    ]);
+    if (shot?.data) {
+      mkdirSync('tmp', { recursive: true });
+      writeFileSync('tmp/ssh-smoke-failure.png', Buffer.from(shot.data, 'base64'));
+    }
+  }
   console.error(`SSH 冒烟失败：${error.message}`);
   process.exitCode = 1;
 } finally {
@@ -568,9 +795,17 @@ try {
   await delay(500);
   if (app.exitCode === null) app.kill('SIGKILL');
   for (const connection of connections) connection.end();
+  for (const connection of noSftpConnections) connection.end();
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    noSftpServer.close(() => {
       clearTimeout(timer);
       resolve();
     });

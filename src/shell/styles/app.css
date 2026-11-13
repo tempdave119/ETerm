@@ -181,6 +181,11 @@ button {
   font-size: var(--font-aux);
 }
 
+.empty__error {
+  max-width: 560px;
+  text-align: left;
+}
+
 .empty__detail pre {
   margin: var(--space-base) 0 0;
   white-space: pre-wrap;
@@ -449,7 +454,7 @@ button {
   text-align: center;
 }
 
-/* 错误条：一句人话 + 下一步 + 折叠详情 */
+/* 错误条：三段式内容 + 关闭按钮 */
 .error-bar {
   display: flex;
   align-items: flex-start;
@@ -462,7 +467,8 @@ button {
   font-size: var(--font-aux);
 }
 
-.error-bar__body {
+/* 三段式错误：人话 → 下一步 → 折叠详情；原始错误只进 details */
+.error-message {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -470,13 +476,17 @@ button {
   min-width: 0;
 }
 
-.error-bar__body strong {
+.error-message__title {
   color: var(--text-primary);
   font-size: var(--font-body);
   font-weight: 600;
 }
 
-.error-bar__detail pre {
+.error-message__next {
+  color: var(--text-secondary);
+}
+
+.error-message__detail pre {
   margin: var(--space-tight) 0 0;
   color: var(--text-tertiary);
   white-space: pre-wrap;
@@ -670,8 +680,8 @@ button {
   text-align: center;
 }
 
-.file-panel__hint--error {
-  color: var(--status-danger);
+.file-panel__error {
+  padding: var(--space-container) var(--space-block);
 }
 
 .file-row {
@@ -791,6 +801,14 @@ button {
   min-height: 0;
   overflow-y: auto;
   padding-bottom: var(--space-tight);
+}
+
+.transfer-item + .transfer-item {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.transfer-error {
+  padding: 0 var(--space-container) var(--space-base);
 }
 
 .transfer-row {

@@ -34,7 +34,7 @@ export async function resolveOpenOptions(
 ): Promise<SessionOpenOptions> {
   const record = await deps.connections.getConnection(options.connectionId);
   if (!record) {
-    throw new ProductError('INTERNAL', { message: '连接不存在', detail: options.connectionId });
+    throw new ProductError('INTERNAL', { message: '连接不存在', next: '刷新会话树后重试', detail: options.connectionId });
   }
 
   if (record.protocol === 'local') {
@@ -51,7 +51,7 @@ export async function resolveOpenOptions(
 
 async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): Promise<SshTarget> {
   if (!record.host || !record.username) {
-    throw new ProductError('INTERNAL', { message: '连接配置不完整', detail: record.id });
+    throw new ProductError('INTERNAL', { message: '连接配置不完整', next: '编辑连接，补全主机与用户名', detail: record.id });
   }
 
   const target: SshTarget = {
@@ -69,6 +69,7 @@ async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): P
       if (!password) {
         throw new ProductError('AUTH_FAILED', {
           message: '这个连接还没有保存密码',
+          next: '编辑连接，补上密码后再连',
           detail: '在连接设置里补全密码后重试',
         });
       }
@@ -80,6 +81,7 @@ async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): P
       if (!record.keyPath) {
         throw new ProductError('AUTH_FAILED', {
           message: '这个连接还没有选择私钥',
+          next: '编辑连接，选择私钥文件后再连',
           detail: '在连接设置里选择私钥文件后重试',
         });
       }
@@ -94,6 +96,7 @@ async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): P
       if (!agent) {
         throw new ProductError('AUTH_FAILED', {
           message: '没有可用的 SSH agent',
+          next: '启动 ssh-agent，或改用密码 / 私钥',
           detail: '启动 ssh-agent，或改用密码 / 私钥',
         });
       }
@@ -104,6 +107,7 @@ async function resolveSshTarget(record: ConnectionRecord, deps: ResolverDeps): P
     default:
       throw new ProductError('AUTH_FAILED', {
         message: 'SSH 连接需要认证方式',
+        next: '编辑连接，选择密码、私钥或 agent',
         detail: '在连接设置里选择密码、私钥或 agent',
       });
   }
@@ -114,6 +118,7 @@ async function readPrivateKey(keyPath: string, deps: ResolverDeps): Promise<stri
   if (!isAbsolute(resolved)) {
     throw new ProductError('AUTH_FAILED', {
       message: '私钥路径必须是绝对路径',
+      next: '改成以 / 开头的绝对路径',
       detail: resolved,
     });
   }
@@ -125,6 +130,7 @@ async function readPrivateKey(keyPath: string, deps: ResolverDeps): Promise<stri
     const detail = error instanceof Error ? error.message : String(error);
     throw new ProductError('AUTH_FAILED', {
       message: '私钥文件读取失败',
+      next: '确认文件路径与权限后重试',
       detail: `${resolved}: ${detail}`,
     });
   }

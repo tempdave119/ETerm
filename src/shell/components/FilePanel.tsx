@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload, X } from 'lucide-react';
-import type { FileEntry, FilePreview } from '../../shared/ipc.ts';
+import type { FileEntry, FilePreview, ProductErrorInfo } from '../../shared/ipc.ts';
+import { ErrorMessage } from './ErrorMessage.tsx';
 
 interface FilePanelProps {
   sessionId: string;
@@ -11,9 +12,9 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ProductErrorInfo | null>(null);
   const [preview, setPreview] = useState<FilePreview | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<ProductErrorInfo | null>(null);
 
   const load = useCallback(
     async (target: string): Promise<void> => {
@@ -22,7 +23,7 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
       try {
         const result = await window.eterm.listFiles(sessionId, target);
         if (!result.ok) {
-          setError(result.error.message);
+          setError(result.error);
           return;
         }
         setEntries([...result.value].sort(compareEntries));
@@ -48,7 +49,7 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
       setPreviewError(null);
       const result = await window.eterm.readFilePreview(sessionId, entry.path);
       if (!result.ok) {
-        setPreviewError(result.error.message);
+        setPreviewError(result.error);
         return;
       }
       setPreview(result.value);
@@ -59,14 +60,14 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
   const upload = useCallback(async (): Promise<void> => {
     setError(null);
     const result = await window.eterm.pickUpload(sessionId, path);
-    if (!result.ok) setError(result.error.message);
+    if (!result.ok) setError(result.error);
   }, [path, sessionId]);
 
   const download = useCallback(
     async (remotePath: string): Promise<void> => {
       setError(null);
       const result = await window.eterm.pickDownload(sessionId, remotePath);
-      if (!result.ok) setError(result.error.message);
+      if (!result.ok) setError(result.error);
     },
     [sessionId],
   );
@@ -117,7 +118,9 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
         {loading ? (
           <div className="file-panel__hint">正在读取…</div>
         ) : error ? (
-          <div className="file-panel__hint file-panel__hint--error">{error}</div>
+          <div className="file-panel__error">
+            <ErrorMessage error={error} />
+          </div>
         ) : entries.length === 0 ? (
           <div className="file-panel__hint">此目录为空</div>
         ) : (
@@ -158,7 +161,7 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
         <div className="modal-backdrop" role="presentation">
           <div className="modal modal--wide" role="dialog" aria-modal="true" data-testid="file-preview">
             <h2 className="modal__title">{preview ? baseName(preview.path) : '无法预览'}</h2>
-            {previewError ? <p className="form-error">{previewError}</p> : null}
+            {previewError ? <ErrorMessage error={previewError} /> : null}
             {preview ? (
               <>
                 <div className="file-preview__meta">

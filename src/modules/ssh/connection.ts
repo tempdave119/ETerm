@@ -51,13 +51,15 @@ export async function connectSsh(target: SshTarget): Promise<SshConnection> {
     });
   } catch (error) {
     client.end();
-    if (!expected) {
+    // 只有握手阶段真的拿到指纹才能说是「首次确认」或「指纹变化」；
+    // 端口拒绝、DNS 失败这类错误根本没走到 hostVerifier，照实归一。
+    if (observedFingerprint && !expected) {
       throw new ProductError('HOST_KEY_CHANGED', {
         message: '首次连接需要确认主机指纹',
-        detail: observedFingerprint ? `观察到的主机指纹 ${observedFingerprint}` : undefined,
+        detail: `观察到的主机指纹 ${observedFingerprint}`,
       });
     }
-    if (fingerprintMismatch) {
+    if (observedFingerprint && fingerprintMismatch) {
       throw new ProductError('HOST_KEY_CHANGED', { detail: `主机指纹已变化：${observedFingerprint}` });
     }
     throw normalizeError(error);

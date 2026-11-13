@@ -89,6 +89,11 @@ export class SessionService {
     return this.#sessions.get(sessionId)?.handle.file ?? null;
   }
 
+  // 能力缺失时界面要区分「会话没了」与「模块没这个能力」，两者的下一步不同。
+  has(sessionId: string): boolean {
+    return this.#sessions.has(sessionId);
+  }
+
   transferPort(sessionId: string): TransferPort | null {
     return this.#sessions.get(sessionId)?.handle.transfer ?? null;
   }

@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron';
-import { ProductError, normalizeError } from '../core/errors.ts';
+import { normalizeError } from '../core/errors.ts';
 import type { SessionService } from '../core/session-service.ts';
 import { FILES_IPC, type FileEntry, type FilePreview, type IpcResult } from '../shared/ipc.ts';
+import { requireSessionPort } from './session-capability.ts';
 import { readRecord, readString } from './validate.ts';
 
 const SESSION_ID_MAX = 64;
@@ -22,11 +23,11 @@ function readRequest(raw: unknown): { sessionId: string; path: string } {
 }
 
 function requireFilePort(sessions: SessionService, sessionId: string) {
-  const port = sessions.filePort(sessionId);
-  if (!port) {
-    throw new ProductError('UNSUPPORTED', { message: '当前会话不支持文件操作' });
-  }
-  return port;
+  return requireSessionPort(sessions.filePort(sessionId), {
+    sessionId,
+    sessionAlive: sessions.has(sessionId),
+    capability: 'file',
+  });
 }
 
 /** 文件面板只做浏览与只读预览；上传下载属于 F-11 传输队列。 */

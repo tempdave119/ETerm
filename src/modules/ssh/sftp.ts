@@ -1,4 +1,4 @@
-import { ProductError, normalizeError } from '../../core/errors.ts';
+import { ProductError, normalizeError, sftpStatusToCode } from '../../core/errors.ts';
 import type { FileEntry, FileEntryType, FilePort } from '../../core/ports.ts';
 import { baseName, joinRemote } from './path.ts';
 
@@ -40,14 +40,14 @@ function call<T>(path: string, run: (callback: NodeCallback<T>) => void): Promis
   });
 }
 
-// SFTP 状态码比文案稳定：2 = 不存在，3 = 权限不足，其余交给通用归一。
+// SFTP 状态码比文案稳定，统一走 core 的映射表，保证文件操作与传输两条路径归一一致。
 function mapSftpError(error: Error, path: string): ProductError {
   const record = error as { code?: unknown; message?: unknown };
   const code = typeof record.code === 'number' ? record.code : undefined;
   const message = typeof record.message === 'string' ? record.message : String(error);
 
-  if (code === 2) return new ProductError('FILE_NOT_FOUND', { detail: `${path}: ${message}` });
-  if (code === 3) return new ProductError('PERMISSION_DENIED', { detail: `${path}: ${message}` });
+  const mapped = code === undefined ? undefined : sftpStatusToCode(code);
+  if (mapped) return new ProductError(mapped, { detail: `${path}: ${message}` });
   return normalizeError(error);
 }
 

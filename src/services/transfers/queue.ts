@@ -1,3 +1,4 @@
+import { ProductError, normalizeError, type ProductErrorInfo } from '../../core/errors.ts';
 import type { TransferPort } from '../../core/ports.ts';
 
 export type TransferDirection = 'upload' | 'download';
@@ -21,7 +22,7 @@ export interface TransferView {
   status: TransferStatus;
   transferred: number;
   total: number;
-  error?: string;
+  error?: ProductErrorInfo;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,7 +150,10 @@ export class TransferQueue {
 
     const port = this.#options.getPort(job.view.sessionId);
     if (!port) {
-      job.view.error = '会话已关闭，无法继续传输';
+      job.view.error = new ProductError('UNSUPPORTED', {
+        message: '会话已关闭，传输没有完成',
+        next: '重新打开连接后再传',
+      }).toInfo();
       this.#setStatus(job, 'failed');
       return;
     }
@@ -204,7 +208,8 @@ export class TransferQueue {
 
   #fail(job: Job, error: unknown): void {
     if (job.view.status !== 'running') return;
-    job.view.error = error instanceof Error ? error.message : String(error);
+    // 端口抛出的原始错误（fs / sftp / 链路）一律在队列边界翻成产品错误。
+    job.view.error = normalizeError(error).toInfo();
     this.#setStatus(job, 'failed');
   }
 

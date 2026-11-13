@@ -5,9 +5,19 @@ import { ProductError, normalizeError } from '../../src/core/errors.ts';
 test('errors_product_error_uses_human_message_by_default', () => {
   const error = new ProductError('AUTH_FAILED');
 
-  assert.equal(error.message, '认证失败：用户名或密钥不匹配');
-  assert.equal(error.next, '检查用户名与密钥后重试');
+  assert.equal(error.message, '认证失败：用户名、密码或私钥不匹配');
+  assert.equal(error.next, '核对用户名与密码 / 私钥后重试');
   assert.equal(error.code, 'AUTH_FAILED');
+});
+
+test('errors_product_error_allows_scenario_specific_next', () => {
+  const error = new ProductError('UNSUPPORTED', {
+    message: '这台主机没有开启 SFTP，文件面板不可用',
+    next: '终端仍可正常使用；需要文件操作请换一台主机',
+  });
+
+  assert.equal(error.code, 'UNSUPPORTED');
+  assert.equal(error.next, '终端仍可正常使用；需要文件操作请换一台主机');
 });
 
 test('errors_product_error_keeps_code_when_message_overridden', () => {
@@ -24,6 +34,24 @@ test('errors_connection_refused_maps_to_host_unreachable', () => {
 
   assert.equal(error.code, 'HOST_UNREACHABLE');
   assert.equal(error.detail, 'connect ECONNREFUSED 127.0.0.1:22');
+});
+
+test('errors_connection_reset_and_dns_failure_map_to_host_unreachable', () => {
+  assert.equal(normalizeError(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })).code, 'HOST_UNREACHABLE');
+  assert.equal(normalizeError(Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' })).code, 'HOST_UNREACHABLE');
+});
+
+test('errors_sftp_status_codes_map_to_product_codes', () => {
+  assert.equal(normalizeError(Object.assign(new Error('failure'), { code: 4 })).code, 'INTERNAL');
+  assert.equal(normalizeError(Object.assign(new Error('no connection'), { code: 6 })).code, 'HOST_UNREACHABLE');
+  assert.equal(normalizeError(Object.assign(new Error('connection lost'), { code: 7 })).code, 'HOST_UNREACHABLE');
+  assert.equal(normalizeError(Object.assign(new Error('op unsupported'), { code: 8 })).code, 'UNSUPPORTED');
+});
+
+test('errors_message_rules_cover_sftp_text_without_code', () => {
+  assert.equal(normalizeError(new Error('No such file')).code, 'FILE_NOT_FOUND');
+  assert.equal(normalizeError(new Error('Permission denied')).code, 'PERMISSION_DENIED');
+  assert.equal(normalizeError(new Error('Connection lost before transfer')).code, 'HOST_UNREACHABLE');
 });
 
 test('errors_timeout_maps_to_timeout', () => {
@@ -71,7 +99,7 @@ test('errors_info_contains_folded_detail', () => {
 
   assert.deepEqual(info, {
     code: 'PERMISSION_DENIED',
-    message: '权限不足：远端拒绝了这次操作',
+    message: '权限不足：这个操作被拒绝',
     next: '换有权限的账号，或调整目标文件权限',
     detail: 'EACCES: permission denied',
   });

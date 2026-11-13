@@ -34,6 +34,14 @@ function createFakeSftp() {
         callback(Object.assign(new Error('Permission denied'), { code: 3 }), makeStats());
         return;
       }
+      if (path.endsWith('.lost')) {
+        callback(Object.assign(new Error('Connection lost'), { code: 6 }), makeStats());
+        return;
+      }
+      if (path.endsWith('.unsupported')) {
+        callback(Object.assign(new Error('Operation unsupported'), { code: 8 }), makeStats());
+        return;
+      }
       callback(null, makeStats({ dir: path.endsWith('/dir') }));
     },
     mkdir(path, callback) {
@@ -142,5 +150,25 @@ test('sftp_permission_error_maps_to_permission_denied', async () => {
   await assert.rejects(
     port.stat('/srv/.denied'),
     (error: unknown) => error instanceof ProductError && error.code === 'PERMISSION_DENIED',
+  );
+});
+
+test('sftp_connection_lost_maps_to_host_unreachable', async () => {
+  const { sftp } = createFakeSftp();
+  const port = createFilePort(sftp);
+
+  await assert.rejects(
+    port.stat('/srv/.lost'),
+    (error: unknown) => error instanceof ProductError && error.code === 'HOST_UNREACHABLE',
+  );
+});
+
+test('sftp_unsupported_operation_maps_to_unsupported', async () => {
+  const { sftp } = createFakeSftp();
+  const port = createFilePort(sftp);
+
+  await assert.rejects(
+    port.stat('/srv/.unsupported'),
+    (error: unknown) => error instanceof ProductError && error.code === 'UNSUPPORTED',
   );
 });

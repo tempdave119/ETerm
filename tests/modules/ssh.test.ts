@@ -157,6 +157,14 @@ test('ssh_bad_password_maps_to_auth_failed', async () => {
   );
 });
 
+test('ssh_refused_connection_maps_to_unreachable_not_fingerprint', async () => {
+  // 端口拒绝时握手没走到 hostVerifier，不能当成「首次确认指纹」请求用户信任。
+  await assert.rejects(
+    openDirect({ port: 1, hostKeyFingerprint: undefined }),
+    (error: unknown) => error instanceof ProductError && error.code === 'HOST_UNREACHABLE',
+  );
+});
+
 test('ssh_session_streams_input_and_output', async () => {
   const handle = await openDirect();
   const chunks: string[] = [];

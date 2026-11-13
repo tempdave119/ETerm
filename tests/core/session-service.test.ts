@@ -105,6 +105,16 @@ test('session_service_close_is_idempotent', async () => {
   assert.equal(session.closeCount, 1);
 });
 
+test('session_service_reports_open_and_closed_sessions', async () => {
+  const session = createFakeSession();
+  const { service } = setupService({ session });
+  const { sessionId } = await service.open({ protocol: 'fake', cols: 80, rows: 24 });
+
+  assert.equal(service.has(sessionId), true);
+  service.close(sessionId);
+  assert.equal(service.has(sessionId), false);
+});
+
 test('session_service_dispose_closes_every_session', async () => {
   const first = createFakeSession();
   const second = createFakeSession();

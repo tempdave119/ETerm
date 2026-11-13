@@ -111,10 +111,13 @@ test('queue_failure_can_be_retried', async () => {
   await flush();
 
   assert.equal(queue.find(view.id)?.status, 'failed');
-  assert.equal(queue.find(view.id)?.error, '磁盘已满');
+  assert.equal(queue.find(view.id)?.error?.code, 'INTERNAL');
+  assert.equal(queue.find(view.id)?.error?.message, '操作没有完成');
+  assert.equal(queue.find(view.id)?.error?.detail, '磁盘已满');
 
   queue.retry(view.id);
   assert.equal(queue.find(view.id)?.status, 'running');
+  assert.equal(queue.find(view.id)?.error, undefined);
   assert.equal(port?.uploaded.length, 2);
 
   port?.finish('port-2');
@@ -155,13 +158,30 @@ test('queue_cancel_running_task_calls_port_cancel', async () => {
   assert.deepEqual(port?.canceled, ['port-1']);
 });
 
+test('queue_normalizes_transfer_failure_with_path_detail', async () => {
+  const { queue, port } = createQueue();
+  const view = queue.enqueue(request('missing.txt'));
+
+  const error = Object.assign(new Error('ENOENT: no such file or directory, open /local/missing.txt'), { code: 'ENOENT' });
+  port?.tasks.get('port-1')?.reject(error);
+  await flush();
+
+  assert.equal(queue.find(view.id)?.status, 'failed');
+  assert.equal(queue.find(view.id)?.error?.code, 'FILE_NOT_FOUND');
+  assert.equal(queue.find(view.id)?.error?.message, '文件不存在');
+  assert.equal(queue.find(view.id)?.error?.next, '刷新目录后重新选择');
+  assert.ok(queue.find(view.id)?.error?.detail?.includes('/local/missing.txt'));
+});
+
 test('queue_without_session_port_fails', async () => {
   const { queue } = createQueue(1, null);
   const view = queue.enqueue(request('d.txt'));
   await flush();
 
   assert.equal(queue.find(view.id)?.status, 'failed');
-  assert.equal(queue.find(view.id)?.error, '会话已关闭，无法继续传输');
+  assert.equal(queue.find(view.id)?.error?.code, 'UNSUPPORTED');
+  assert.equal(queue.find(view.id)?.error?.message, '会话已关闭，传输没有完成');
+  assert.equal(queue.find(view.id)?.error?.next, '重新打开连接后再传');
 });
 
 test('queue_respects_max_concurrent', async () => {
