@@ -56,6 +56,7 @@ export const TRANSFERS_IPC = {
   retry: 'transfers:retry',
   pickUpload: 'transfers:pick-upload',
   pickDownload: 'transfers:pick-download',
+  pickDownloadDir: 'transfers:pick-download-dir',
   uploadDropped: 'transfers:upload-dropped',
   update: 'transfers:update',
 } as const;
@@ -168,6 +169,7 @@ export interface EtermApi {
   retryTransfer(id: string): Promise<IpcResult<null>>;
   pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView[] | null>>;
   pickDownload(sessionId: string, remotePath: string): Promise<IpcResult<TransferView | null>>;
+  pickDownloadDir(sessionId: string, remotePath: string): Promise<IpcResult<TransferView[] | null>>;
   registerDroppedFiles(files: File[]): Promise<IpcResult<string[]>>;
   uploadDropped(
     sessionId: string,

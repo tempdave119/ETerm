@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -153,6 +153,12 @@ const uploadFixture2 = join(dataDir, 'upload2.txt');
 writeFileSync(uploadFixture2, 'upload2-from-smoke\n');
 const dragFixture = join(dataDir, 'drag.txt');
 writeFileSync(dragFixture, 'drag-from-smoke\n');
+const dropDir = join(dataDir, 'dropdir');
+mkdirSync(join(dropDir, 'sub'), { recursive: true });
+writeFileSync(join(dropDir, 'a.txt'), 'folder-a\n');
+writeFileSync(join(dropDir, 'sub', 'b.txt'), 'folder-b\n');
+const downloadDir = join(dataDir, 'downloads');
+mkdirSync(downloadDir, { recursive: true });
 const downloadTarget = join(dataDir, 'downloaded.txt');
 
 // SFTP 沙盒：文件面板从这里列目录、打开文件。
@@ -266,6 +272,15 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
         };
         sftp.on('STAT', onStat);
         sftp.on('LSTAT', onStat);
+
+        sftp.on('MKDIR', async (reqid, path) => {
+          try {
+            await mkdir(resolveRemote(path), { recursive: true });
+            sftp.status(reqid, STATUS.OK);
+          } catch {
+            sftp.status(reqid, STATUS.FAILURE);
+          }
+        });
 
         sftp.on('OPENDIR', async (reqid, path) => {
           try {
@@ -479,6 +494,7 @@ const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], 
     ETERM_USER_DATA: dataDir,
     ETERM_SMOKE_UPLOAD: [uploadFixture, uploadFixture2].join(delimiter),
     ETERM_SMOKE_DOWNLOAD: downloadTarget,
+    ETERM_SMOKE_DOWNLOAD_DIR: downloadDir,
     ...(swapOnly ? { ETERM_SSH_ALT_PATH: resolve('tmp/ssh-alt.cjs') } : {}),
   },
 });
@@ -739,6 +755,25 @@ try {
   const dragged = await readFile(join(remoteRoot, 'drag.txt'), 'utf8');
   if (!dragged.includes('drag-from-smoke')) throw new Error('拖拽上传内容不正确');
 
+  // 目录拖拽：整个 dropdir 递归创建远端目录并上传文件。
+  const folderDragData = { items: [], files: [dropDir], dragOperationsMask: 1 };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) {
+    await client.send('Input.dispatchDragEvent', { type, x: dropPoint.x, y: dropPoint.y, data: folderDragData });
+  }
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.transfer-row[data-status="done"]')].filter((row) => /a\\.txt|b\\.txt/.test(row.textContent ?? '')).length === 2`,
+      ),
+    20_000,
+    '目录拖拽上传完成',
+  );
+  const folderA = await readFile(join(remoteRoot, 'dropdir', 'a.txt'), 'utf8');
+  const folderB = await readFile(join(remoteRoot, 'dropdir', 'sub', 'b.txt'), 'utf8');
+  if (!folderA.includes('folder-a') || !folderB.includes('folder-b')) {
+    throw new Error('目录拖拽上传内容不正确');
+  }
+
   // 下载：文件行下载按钮 → 队列 → 本地落盘。
   await evaluate(`document.querySelector('[data-testid="file-download-readme.txt"]').click()`);
   await waitFor(
@@ -751,6 +786,19 @@ try {
   );
   const downloaded = await readFile(downloadTarget, 'utf8');
   if (!downloaded.includes('hello-from-sftp')) throw new Error('下载内容不正确');
+
+  // 目录下载：docs 目录递归落到本地 downloads/docs/guide.md。
+  await evaluate(`document.querySelector('[data-testid="file-download-docs"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.transfer-row[data-status="done"]')].some((row) => (row.textContent ?? '').includes('guide.md'))`,
+      ),
+    20_000,
+    '目录下载完成',
+  );
+  const guide = await readFile(join(downloadDir, 'docs', 'guide.md'), 'utf8');
+  if (!guide.includes('# Guide')) throw new Error('目录下载内容不正确');
 
   const transferShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/ssh-smoke-transfer.png', Buffer.from(transferShot.data, 'base64'));

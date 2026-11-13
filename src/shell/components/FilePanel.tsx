@@ -103,6 +103,15 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
     [sessionId],
   );
 
+  const downloadDirectory = useCallback(
+    async (remotePath: string): Promise<void> => {
+      setError(null);
+      const result = await window.eterm.pickDownloadDir(sessionId, remotePath);
+      if (!result.ok) setError(result.error);
+    },
+    [sessionId],
+  );
+
   return (
     <PanelFrame
       panelId="files"
@@ -193,18 +202,18 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
                 <span className="file-row__name">{entry.name}</span>
                 <span className="file-row__meta">{entry.type === 'directory' ? '' : formatSize(entry.size)}</span>
               </button>
-              {entry.type !== 'directory' ? (
-                <button
-                  className="icon-button file-row__action"
-                  type="button"
-                  title={`下载 ${entry.name}`}
-                  aria-label={`下载 ${entry.name}`}
-                  data-testid={`file-download-${entry.name}`}
-                  onClick={() => void download(entry.path)}
-                >
-                  <Download size={14} strokeWidth={1.5} />
-                </button>
-              ) : null}
+              <button
+                className="icon-button file-row__action"
+                type="button"
+                title={`下载 ${entry.name}`}
+                aria-label={`下载 ${entry.name}`}
+                data-testid={`file-download-${entry.name}`}
+                onClick={() =>
+                  void (entry.type === 'directory' ? downloadDirectory(entry.path) : download(entry.path))
+                }
+              >
+                <Download size={14} strokeWidth={1.5} />
+              </button>
             </div>
           ))
         )}

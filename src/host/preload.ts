@@ -102,6 +102,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(TRANSFERS_IPC.pickDownload, { sessionId, remotePath }) as Promise<
       IpcResult<TransferView | null>
     >,
+  pickDownloadDir: (sessionId: string, remotePath: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.pickDownloadDir, { sessionId, remotePath }) as Promise<
+      IpcResult<TransferView[] | null>
+    >,
   registerDroppedFiles: (files: File[]) => {
     const paths: string[] = [];
     for (const file of files) {
