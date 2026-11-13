@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload, X } from 'lucide-react';
+import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload } from 'lucide-react';
+import type { DockId } from '../../shared/panels.ts';
 import type { FileEntry, FilePreview, ProductErrorInfo } from '../../shared/ipc.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
+import { PanelFrame } from './PanelFrame.tsx';
 
 interface FilePanelProps {
   sessionId: string;
-  onClose(): void;
+  dock: DockId | null;
+  onMove(target: DockId | null): void;
 }
 
-export function FilePanel({ sessionId, onClose }: FilePanelProps) {
+export function FilePanel({ sessionId, dock, onMove }: FilePanelProps) {
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,43 +76,45 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
   );
 
   return (
-    <aside className="file-panel" data-testid="file-panel">
-      <header className="file-panel__header">
-        <span className="file-panel__title">文件</span>
-        <button
-          className="icon-button"
-          type="button"
-          title="上一级"
-          aria-label="上一级"
-          disabled={path === '/'}
-          onClick={() => void load(parentOf(path))}
-        >
-          <ArrowUp size={16} strokeWidth={1.5} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          title="上传文件"
-          aria-label="上传文件"
-          data-testid="file-upload"
-          onClick={() => void upload()}
-        >
-          <Upload size={15} strokeWidth={1.5} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          title="刷新"
-          aria-label="刷新"
-          onClick={() => void load(path)}
-        >
-          <RefreshCw size={15} strokeWidth={1.5} />
-        </button>
-        <button className="icon-button" type="button" title="关闭文件面板" aria-label="关闭文件面板" onClick={onClose}>
-          <X size={14} strokeWidth={1.5} />
-        </button>
-      </header>
-
+    <PanelFrame
+      panelId="files"
+      title="文件"
+      dock={dock}
+      onMove={onMove}
+      actions={
+        <>
+          <button
+            className="icon-button"
+            type="button"
+            title="上一级"
+            aria-label="上一级"
+            disabled={path === '/'}
+            onClick={() => void load(parentOf(path))}
+          >
+            <ArrowUp size={15} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title="上传文件"
+            aria-label="上传文件"
+            data-testid="file-upload"
+            onClick={() => void upload()}
+          >
+            <Upload size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title="刷新"
+            aria-label="刷新"
+            onClick={() => void load(path)}
+          >
+            <RefreshCw size={14} strokeWidth={1.5} />
+          </button>
+        </>
+      }
+    >
       <div className="file-panel__path" title={path}>
         {path}
       </div>
@@ -190,7 +195,7 @@ export function FilePanel({ sessionId, onClose }: FilePanelProps) {
           </div>
         </div>
       ) : null}
-    </aside>
+    </PanelFrame>
   );
 }
 

@@ -1,9 +1,13 @@
 import { ArrowDown, ArrowUp, RotateCcw, X } from 'lucide-react';
+import type { DockId } from '../../shared/panels.ts';
 import type { TransferView } from '../../shared/ipc.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
+import { PanelFrame } from './PanelFrame.tsx';
 
 interface TransferPanelProps {
   tasks: TransferView[];
+  dock: DockId | null;
+  onMove(target: DockId | null): void;
   onCancel(id: string): void;
   onRetry(id: string): void;
 }
@@ -16,14 +20,17 @@ const STATUS_LABEL: Record<TransferView['status'], string> = {
   canceled: '已取消',
 };
 
-export function TransferPanel({ tasks, onCancel, onRetry }: TransferPanelProps) {
+export function TransferPanel({ tasks, dock, onMove, onCancel, onRetry }: TransferPanelProps) {
   return (
-    <section className="transfer-panel" data-testid="transfer-panel">
-      <header className="transfer-panel__header">
-        <span className="transfer-panel__title">传输队列</span>
-        <span className="transfer-panel__count">{tasks.length}</span>
-      </header>
+    <PanelFrame
+      panelId="transfers"
+      title="传输队列"
+      dock={dock}
+      onMove={onMove}
+      actions={<span className="transfer-panel__count">{tasks.length}</span>}
+    >
       <div className="transfer-panel__list">
+        {tasks.length === 0 ? <div className="panel-empty">暂无传输任务</div> : null}
         {tasks.map((task) => {
           const percent = task.total > 0 ? Math.min(100, Math.round((task.transferred / task.total) * 100)) : 0;
           return (
@@ -79,6 +86,6 @@ export function TransferPanel({ tasks, onCancel, onRetry }: TransferPanelProps) 
           );
         })}
       </div>
-    </section>
+    </PanelFrame>
   );
 }

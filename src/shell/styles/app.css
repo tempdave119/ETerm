@@ -282,26 +282,10 @@ button {
 
 .session-tree {
   display: flex;
-  flex-direction: column;
-  flex: 0 0 240px;
-  width: 240px;
-  min-height: 0;
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
-}
-
-.session-tree__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-tight);
-  height: var(--panel-header-height);
-  padding: 0 var(--space-base) 0 var(--space-container);
-}
-
-.session-tree__title {
   flex: 1;
-  font-size: var(--font-body);
-  font-weight: 600;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
 }
 
 .icon-button {
@@ -825,37 +809,141 @@ button {
 }
 
 /* 右侧文件面板：只读浏览与预览 */
-.file-panel {
+/* 停靠区：区内面板上下叠放，分隔条可拖动改比例 */
+.dock {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
+}
+
+.dock--left {
+  flex: 0 0 240px;
+  width: 240px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.dock--right {
+  flex: 0 0 300px;
+  width: 300px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.dock--bottom {
+  flex: 0 0 160px;
+  height: 160px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.dock__item {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dock__divider {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 1px;
+  background: var(--border-subtle);
+  cursor: row-resize;
+}
+
+/* 1px 的线太细，用不可见的伪元素把命中区域撑到 7px */
+.dock__divider::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.dock__divider:hover {
+  background: var(--border-strong);
+}
+
+/* 面板统一外壳：标题栏 + 齿轮菜单 + 内容区 */
+.panel-frame {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-panel);
 }
 
-/* 右侧停靠区：文件与系统资源共用一列 300px */
-.right-dock {
-  display: flex;
-  flex: 0 0 300px;
-  flex-direction: column;
-  width: 300px;
-  min-height: 0;
-  border-left: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
-}
-
-.file-panel__header {
+.panel-frame__header {
   display: flex;
   align-items: center;
   gap: var(--space-tight);
   height: var(--panel-header-height);
-  padding: 0 var(--space-base) 0 var(--space-container);
+  padding: 0 var(--space-tight) 0 var(--space-container);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.file-panel__title {
+.panel-frame__title {
   flex: 1;
+  overflow: hidden;
+  color: var(--text-primary);
   font-size: var(--font-body);
   font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel-frame__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.panel-frame__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 齿轮菜单：手写下拉，不引 UI 库 */
+.panel-menu {
+  position: absolute;
+  top: calc(var(--panel-header-height) - 4px);
+  right: var(--space-tight);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  padding: var(--space-tight);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.panel-menu__item {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-menu__item:hover:not(:disabled) {
+  background: var(--hover-overlay);
+}
+
+.panel-menu__item:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.panel-empty {
+  margin: 0;
+  padding: var(--space-container);
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
 }
 
 .file-panel__path {
@@ -892,29 +980,6 @@ button {
 }
 
 /* 系统资源面板：本机采样，每秒刷新 */
-.monitor-panel {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  /* 叠在文件面板下方时用上边框分区，单开时也只是一条分隔线。 */
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.monitor-panel__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-base);
-  height: var(--panel-header-height);
-  padding: 0 var(--space-base) 0 var(--space-container);
-}
-
-.monitor-panel__title {
-  flex: 1;
-  font-size: var(--font-body);
-  font-weight: 600;
-}
-
 .monitor-panel__body {
   display: flex;
   flex-direction: column;
@@ -1030,31 +1095,7 @@ button {
   word-break: break-word;
 }
 
-/* 底部传输队列：无任务时 App 不渲染，有任务时固定 160px */
-.transfer-panel {
-  display: flex;
-  flex: 0 0 160px;
-  flex-direction: column;
-  height: 160px;
-  min-height: 0;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
-}
-
-.transfer-panel__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-base);
-  height: var(--panel-header-height);
-  padding: 0 var(--space-container);
-}
-
-.transfer-panel__title {
-  flex: 1;
-  font-size: var(--font-body);
-  font-weight: 600;
-}
-
+/* 传输队列：面板高度由底部停靠区决定，内容行在窄栏下自适应 */
 .transfer-panel__count {
   color: var(--text-tertiary);
   font-size: var(--font-aux);

@@ -544,7 +544,7 @@ try {
   );
 
   await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="file-panel"]') !== null`),
+    () => evaluate(`document.querySelector('[data-testid="panel-frame-files"]') !== null`),
     10_000,
     '文件面板',
   );
@@ -690,7 +690,7 @@ try {
   writeFileSync('tmp/ssh-smoke-transfer.png', Buffer.from(transferShot.data, 'base64'));
 
   // 第二个连接只保存不连接，用来验证排序；避开 Keychain 授权。
-  await evaluate(`document.querySelector('.session-tree__header button[title="新建连接"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="panel-frame-sessions"] button[title="新建连接"]').click()`);
   await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '第二个连接表单');
   await evaluate(setInputScript('#connection-name', 'mock-second'));
   await evaluate(setInputScript('#connection-host', '127.0.0.1'));
@@ -724,7 +724,7 @@ try {
   };
 
   const saveAndConnect = async (options) => {
-    await clickOn('.session-tree__header button[title="新建连接"]');
+    await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
     await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, `${options.name} 表单`);
     await evaluate(setInputScript('#connection-name', options.name));
     await evaluate(setInputScript('#connection-host', options.host));
@@ -750,7 +750,7 @@ try {
     );
 
   // 跳板机：先保存一个只做转发的连接，再让目标连接经由它。
-  await clickOn('.session-tree__header button[title="新建连接"]');
+  await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
   await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '跳板连接表单');
   await evaluate(setInputScript('#connection-name', 'mock-jump'));
   await evaluate(setInputScript('#connection-host', '127.0.0.1'));
@@ -766,7 +766,7 @@ try {
     '跳板连接保存',
   );
 
-  await clickOn('.session-tree__header button[title="新建连接"]');
+  await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
   await waitFor(() => evaluate(`document.querySelector('#connection-jump') !== null`), 5_000, '跳板下拉');
   await evaluate(setInputScript('#connection-name', 'mock-via-jump'));
   await evaluate(setInputScript('#connection-host', '127.0.0.1'));
@@ -819,7 +819,7 @@ try {
   await shotOf('tmp/ssh-smoke-jump.png');
 
   // 代理：HTTP CONNECT 直连目标；目标指纹已在前面确认，不再弹窗。
-  await clickOn('.session-tree__header button[title="新建连接"]');
+  await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
   await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '代理连接表单');
   await evaluate(setInputScript('#connection-name', 'mock-via-proxy'));
   await evaluate(setInputScript('#connection-host', '127.0.0.1'));
@@ -916,7 +916,7 @@ try {
   );
 
   // 可选组件：串口协议由 userData/components 装载，新建连接里出现后直接开会话。
-  await clickOn('.session-tree__header button[title="新建连接"]');
+  await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
   await waitFor(() => evaluate(`document.querySelector('#connection-protocol') !== null`), 5_000, '协议选择');
   await evaluate(setSelectScript('#connection-protocol', 'serial'));
   await waitFor(
@@ -1040,8 +1040,14 @@ try {
     10_000,
     '无 SFTP prompt',
   );
-  if (await evaluate(`document.querySelector('[data-testid="file-panel"]') !== null`)) {
-    throw new Error('无 SFTP 主机不应显示文件面板');
+  // 面板常驻，无 SFTP 时文件面板显示不可用提示，而不是整个消失。
+  const noSftpHint = String(
+    await evaluate(
+      `document.querySelector('[data-testid="panel-frame-files"] .file-panel__error')?.textContent ?? ''`,
+    ),
+  );
+  if (!noSftpHint.includes('没有开启 SFTP')) {
+    throw new Error(`无 SFTP 主机的文件面板应显示不可用提示，实际：${noSftpHint}`);
   }
   const noSftpMessage = String(
     await evaluate(

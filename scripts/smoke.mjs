@@ -436,7 +436,7 @@ try {
     `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm', metaKey: true, shiftKey: true, bubbles: true }))`,
   );
   await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="monitor-panel"]') !== null`),
+    () => evaluate(`document.querySelector('[data-testid="panel-frame-monitor"]') !== null`),
     5_000,
     '系统资源面板',
   );
@@ -452,11 +452,80 @@ try {
   );
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/monitor-smoke.png', Buffer.from(monitorShot.data, 'base64'));
+
+  // 右侧两个面板：拖分隔改比例并落盘，再用齿轮菜单把系统资源移到左侧并改回。
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),
+    5_000,
+    '右侧两个面板',
+  );
+  const dockDivider = await evaluate(`(() => {
+    const element = document.querySelector('[data-testid="dock-divider-right-0"]');
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  })()`);
+  if (!dockDivider) throw new Error('没有右侧分隔条');
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: dockDivider.x,
+    y: dockDivider.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: dockDivider.x,
+    y: dockDivider.y - 120,
+    button: 'left',
+    buttons: 1,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: dockDivider.x,
+    y: dockDivider.y - 120,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
   await waitFor(
     async () => {
       try {
         const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
-        return parsed.panels?.monitor === true;
+        const ratio = parsed.panels?.dividers?.right?.[0];
+        return typeof ratio === 'number' && ratio < 0.45;
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '停靠区分隔比例落盘',
+  );
+
+  await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
+  await evaluate(
+    `document.querySelector('[data-testid="panel-menu-list-monitor"] .panel-menu__item:nth-child(1)').click()`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-left"] .dock__item').length === 2`),
+    5_000,
+    '系统资源移到左侧',
+  );
+  await evaluate(`document.querySelector('[data-testid="panel-menu-monitor"]').click()`);
+  await evaluate(
+    `document.querySelector('[data-testid="panel-menu-list-monitor"] .panel-menu__item:nth-child(2)').click()`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),
+    5_000,
+    '系统资源移回右侧',
+  );
+  await waitFor(
+    async () => {
+      try {
+        const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
+        return parsed.panels?.docks?.right?.includes('monitor') === true;
       } catch {
         return false;
       }
@@ -464,9 +533,9 @@ try {
     5_000,
     '面板开关落盘',
   );
-  await evaluate(`document.querySelector('.monitor-panel button[title="关闭系统资源"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="panel-close-monitor"]').click()`);
   await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="monitor-panel"]') === null`),
+    () => evaluate(`document.querySelector('[data-testid="panel-frame-monitor"]') === null`),
     5_000,
     '关闭系统资源',
   );

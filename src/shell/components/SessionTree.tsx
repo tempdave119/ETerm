@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Folder, FolderPlus, Pencil, Plus, Search, Server, Trash2 } from 'lucide-react';
+import type { DockId } from '../../shared/panels.ts';
 import type { ConnectionRecord, GroupRecord } from '../../shared/ipc.ts';
+import { PanelFrame } from './PanelFrame.tsx';
 
 interface SessionTreeProps {
   groups: GroupRecord[];
@@ -8,6 +10,8 @@ interface SessionTreeProps {
   activeConnectionId: string | null;
   /** 正在建立连接的连接 id；写入期间该行禁点，避免重复点出多个标签。 */
   connectingId: string | null;
+  dock: DockId | null;
+  onMove(target: DockId | null): void;
   query: string;
   onQueryChange(value: string): void;
   onConnect(connection: ConnectionRecord): void;
@@ -23,6 +27,8 @@ export function SessionTree({
   connections,
   activeConnectionId,
   connectingId,
+  dock,
+  onMove,
   query,
   onQueryChange,
   onConnect,
@@ -92,23 +98,28 @@ export function SessionTree({
   };
 
   return (
-    <aside className="session-tree">
-      <div className="session-tree__header">
-        <span className="session-tree__title">会话</span>
-        <button className="icon-button" type="button" title="新建连接" aria-label="新建连接" onClick={onNew}>
-          <Plus size={16} strokeWidth={1.5} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          title="新建分组"
-          aria-label="新建分组"
-          onClick={() => setAddingGroup((value) => !value)}
-        >
-          <FolderPlus size={16} strokeWidth={1.5} />
-        </button>
-      </div>
-
+    <PanelFrame
+      panelId="sessions"
+      title="会话"
+      dock={dock}
+      onMove={onMove}
+      actions={
+        <>
+          <button className="icon-button" type="button" title="新建连接" aria-label="新建连接" onClick={onNew}>
+            <Plus size={15} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title="新建分组"
+            aria-label="新建分组"
+            onClick={() => setAddingGroup((value) => !value)}
+          >
+            <FolderPlus size={15} strokeWidth={1.5} />
+          </button>
+        </>
+      }
+    >
       <div className="session-tree__search">
         <Search className="search-icon" size={14} strokeWidth={1.5} />
         <input
@@ -210,7 +221,7 @@ export function SessionTree({
           </>
         )}
       </div>
-    </aside>
+    </PanelFrame>
   );
 }
 

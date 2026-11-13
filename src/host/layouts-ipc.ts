@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron';
 import { normalizeError } from '../core/errors.ts';
 import type { LayoutStore } from '../services/layouts/store.ts';
-import { LAYOUTS_IPC, type IpcResult, type LayoutTemplate, type PanelState } from '../shared/ipc.ts';
-import { parsePanelState } from '../shared/panels.ts';
+import { LAYOUTS_IPC, type IpcResult, type LayoutTemplate, type PanelLayout } from '../shared/ipc.ts';
+import { parsePanelLayout } from '../shared/panels.ts';
 import { readRecord, readString } from './validate.ts';
 
 function failure(error: unknown): IpcResult<never> {
@@ -29,7 +29,7 @@ export function registerLayoutsIpc(store: Pick<LayoutStore, 'get' | 'save' | 'ge
     }
   });
 
-  ipcMain.handle(LAYOUTS_IPC.panelsGet, async (): Promise<IpcResult<PanelState>> => {
+  ipcMain.handle(LAYOUTS_IPC.panelsGet, async (): Promise<IpcResult<PanelLayout>> => {
     try {
       return { ok: true, value: await store.getPanels() };
     } catch (error) {
@@ -39,7 +39,7 @@ export function registerLayoutsIpc(store: Pick<LayoutStore, 'get' | 'save' | 'ge
 
   ipcMain.handle(LAYOUTS_IPC.panelsSave, async (_event, raw): Promise<IpcResult<null>> => {
     try {
-      await store.savePanels(parsePanelState(readRecord(raw, '面板状态')));
+      await store.savePanels(parsePanelLayout(readRecord(raw, '面板状态')));
       return { ok: true, value: null };
     } catch (error) {
       return failure(error);

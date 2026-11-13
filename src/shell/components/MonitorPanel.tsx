@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import type { DockId } from '../../shared/panels.ts';
 import type { SystemStats } from '../../shared/ipc.ts';
+import { PanelFrame } from './PanelFrame.tsx';
 
 interface MonitorPanelProps {
-  onClose(): void;
+  dock: DockId | null;
+  onMove(target: DockId | null): void;
 }
 
 const POLL_INTERVAL = 1000;
 
 /** 本机资源面板：每秒拉一次 system:stats；第一次采样只建立 CPU 基线。 */
-export function MonitorPanel({ onClose }: MonitorPanelProps) {
+export function MonitorPanel({ dock, onMove }: MonitorPanelProps) {
   const [stats, setStats] = useState<SystemStats | null>(null);
 
   useEffect(() => {
@@ -33,14 +35,7 @@ export function MonitorPanel({ onClose }: MonitorPanelProps) {
   const memoryPercent = stats && stats.memTotal > 0 ? Math.round((stats.memUsed / stats.memTotal) * 100) : 0;
 
   return (
-    <aside className="monitor-panel" data-testid="monitor-panel">
-      <header className="monitor-panel__header">
-        <span className="monitor-panel__title">系统资源</span>
-        <button className="icon-button" type="button" title="关闭系统资源" aria-label="关闭系统资源" onClick={onClose}>
-          <X size={14} strokeWidth={1.5} />
-        </button>
-      </header>
-
+    <PanelFrame panelId="monitor" title="系统资源" dock={dock} onMove={onMove}>
       <div className="monitor-panel__body">
         <div className="monitor-row">
           <span>CPU</span>
@@ -74,7 +69,7 @@ export function MonitorPanel({ onClose }: MonitorPanelProps) {
           <span className="monitor-row__value">{stats?.cpus ?? '—'}</span>
         </div>
       </div>
-    </aside>
+    </PanelFrame>
   );
 }
 

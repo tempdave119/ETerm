@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type {
   AppConfig,
@@ -11,7 +11,7 @@ import type {
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
-import { defaultPanelState, type PanelState } from '../shared/panels.ts';
+import { defaultPanelLayout, isPanelOpen, movePanel, panelDockOf, setDivider, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
 import {
   clampRatio,
   collectLeaves,
@@ -28,7 +28,7 @@ import {
   type SplitDirection,
 } from './layout.ts';
 import { findCommandByShortcut, type CommandId } from './commands/registry.ts';
-import { panelsInDock } from './panels/registry.ts';
+import { panelById, panelsInDock } from './panels/registry.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
@@ -40,6 +40,8 @@ import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { SettingsPanel } from './components/SettingsPanel.tsx';
+import { DockColumn } from './components/DockColumn.tsx';
+import { PanelFrame } from './components/PanelFrame.tsx';
 import { TabBar } from './components/TabBar.tsx';
 import { TransferPanel } from './components/TransferPanel.tsx';
 
@@ -77,7 +79,9 @@ export function App() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   // state 更新要等下一次渲染，同一帧内连点拦不住，所以用 ref 做互斥锁。
   const connectingRef = useRef<string | null>(null);
-  const [panels, setPanels] = useState<PanelState>(defaultPanelState);
+  const [panelLayout, setPanelLayout] = useState<PanelLayout>(defaultPanelLayout);
+  // 拖动分隔时用 ref 拿最新布局，避开闭包里的旧值。
+  const panelLayoutRef = useRef<PanelLayout>(defaultPanelLayout());
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [components, setComponents] = useState<ComponentDescriptor[]>([]);
@@ -112,8 +116,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void window.eterm.getPanelState().then((result) => {
-      if (result.ok) setPanels(result.value);
+    void window.eterm.getPanelLayout().then((result) => {
+      if (!result.ok) return;
+      panelLayoutRef.current = result.value;
+      setPanelLayout(result.value);
     });
   }, []);
 
@@ -174,19 +180,59 @@ export function App() {
     setSettingsOpen(true);
   }, []);
 
-  const updatePanels = useCallback((next: PanelState): void => {
-    setPanels(next);
-    void window.eterm.savePanelState(next).then((result) => {
+  const applyPanelLayout = useCallback((next: PanelLayout, persist: boolean): void => {
+    panelLayoutRef.current = next;
+    setPanelLayout(next);
+    if (!persist) return;
+    void window.eterm.savePanelLayout(next).then((result) => {
       if (!result.ok) console.warn(`[panels] 保存面板状态失败：${result.error.message}`);
     });
   }, []);
 
   const togglePanel = useCallback(
-    (id: keyof PanelState): void => {
-      updatePanels({ ...panels, [id]: !panels[id] });
+    (id: PanelId): void => {
+      const current = panelLayoutRef.current;
+      if (panelDockOf(current, id)) {
+        applyPanelLayout(movePanel(current, id, null), true);
+        return;
+      }
+      const defaultDock = panelById(id)?.defaultDock;
+      applyPanelLayout(movePanel(current, id, defaultDock && defaultDock !== 'overlay' ? defaultDock : 'right'), true);
     },
-    [panels, updatePanels],
+    [applyPanelLayout],
   );
+
+  const movePanelTo = useCallback(
+    (id: PanelId, target: DockId | null): void => {
+      applyPanelLayout(movePanel(panelLayoutRef.current, id, target), true);
+    },
+    [applyPanelLayout],
+  );
+
+  const resizePanelDivider = useCallback(
+    (dock: DockId, index: number, ratio: number): void => {
+      applyPanelLayout(setDivider(panelLayoutRef.current, dock, index, ratio), false);
+    },
+    [applyPanelLayout],
+  );
+
+  const finishPanelDivider = useCallback(
+    (dock: DockId, index: number, ratio: number): void => {
+      applyPanelLayout(setDivider(panelLayoutRef.current, dock, index, ratio), true);
+    },
+    [applyPanelLayout],
+  );
+
+  /** 打开连接后按配置展开/收起文件面板；用户改过的停靠位置保持不变。 */
+  const applyFilesDefault = useCallback((): void => {
+    const open = config?.files.openByDefault ?? true;
+    const current = panelLayoutRef.current;
+    if (open) {
+      if (!panelDockOf(current, 'files')) applyPanelLayout(movePanel(current, 'files', 'right'), true);
+      return;
+    }
+    if (panelDockOf(current, 'files')) applyPanelLayout(movePanel(current, 'files', null), true);
+  }, [applyPanelLayout, config?.files.openByDefault]);
 
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
@@ -194,7 +240,8 @@ export function App() {
   const activeConnectionId = activePane?.connectionId ?? null;
   const filesAvailable = activePane?.capabilities.includes('file') === true;
   const forwardAvailable = activePane?.capabilities.includes('forward') === true;
-  const filesOpen = panels.files;
+  const filesOpen = isPanelOpen(panelLayout, 'files');
+  const monitorOpen = isPanelOpen(panelLayout, 'monitor');
 
   const addTab = useCallback((tab: Tab): void => {
     setTabs((current) => [...current, tab]);
@@ -302,14 +349,14 @@ export function App() {
           layout,
           activePaneId: firstLeaf(layout).paneId,
         });
-        updatePanels({ ...panels, files: config?.files.openByDefault ?? true });
+        applyFilesDefault();
       } finally {
         connectingRef.current = null;
         setConnectingId(null);
         setBusy(false);
       }
     },
-    [addTab, config, loadLayout, panels, updatePanels],
+    [addTab, applyFilesDefault, loadLayout],
   );
 
   const confirmHostKey = useCallback(async (): Promise<void> => {
@@ -454,9 +501,9 @@ export function App() {
         ),
       );
       void persistLayout(tab.connectionId ?? 'local', layout);
-      updatePanels({ ...panels, files: config?.files.openByDefault ?? true });
+      applyFilesDefault();
     },
-    [activeTab, config, panels, persistLayout, updatePanels],
+    [activeTab, applyFilesDefault, persistLayout],
   );
 
   const resizePane = useCallback((tabId: string, splitId: string, ratio: number): void => {
@@ -606,10 +653,63 @@ export function App() {
   }, [runCommand]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
-  const rightPanels = panelsInDock('right', {
-    files: filesOpen && filesAvailable && activePane !== null,
-    monitor: panels.monitor,
-  });
+
+  const renderPanel = (id: PanelId, dock: DockId): ReactNode => {
+    switch (id) {
+      case 'sessions':
+        return (
+          <SessionTree
+            groups={groups}
+            connections={connections}
+            activeConnectionId={activeConnectionId}
+            connectingId={connectingId}
+            dock={dock}
+            onMove={(target) => movePanelTo('sessions', target)}
+            query={query}
+            onQueryChange={setQuery}
+            onConnect={(connection) => void openConnection(connection)}
+            onNew={openNewForm}
+            onEdit={(connection) => void openEditForm(connection)}
+            onDelete={(connection) => void removeConnection(connection)}
+            onAddGroup={(name) => void addGroup(name)}
+            onReorder={(orderedIds) => void reorderConnections(orderedIds)}
+          />
+        );
+      case 'files':
+        return activePane ? (
+          <FilePanel
+            sessionId={activePane.sessionId}
+            dock={dock}
+            onMove={(target) => movePanelTo('files', target)}
+          />
+        ) : (
+          <PanelFrame panelId="files" title="文件" dock={dock} onMove={(target) => movePanelTo('files', target)}>
+            <p className="panel-empty">打开一个 SSH 连接后可以浏览远端文件</p>
+          </PanelFrame>
+        );
+      case 'monitor':
+        return <MonitorPanel dock={dock} onMove={(target) => movePanelTo('monitor', target)} />;
+      case 'transfers':
+        return (
+          <TransferPanel
+            tasks={transfers}
+            dock={dock}
+            onMove={(target) => movePanelTo('transfers', target)}
+            onCancel={(id) => void cancelTransfer(id)}
+            onRetry={(id) => void retryTransfer(id)}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const dockPanels = (dock: DockId): { definition: ReturnType<typeof panelsInDock>[number]; node: ReactNode }[] =>
+    panelsInDock(panelLayout, dock).map((definition) => ({ definition, node: renderPanel(definition.id, dock) }));
+
+  const leftPanels = dockPanels('left');
+  const rightPanels = dockPanels('right');
+  const bottomPanels = dockPanels('bottom');
   const fontSize = config?.terminal.fontSize ?? 13;
   const density = config?.ui.density ?? 'comfortable';
   const themePreference = config?.ui.theme ?? 'system';
@@ -627,7 +727,7 @@ export function App() {
         activeId={activeTabId}
         filesAvailable={filesAvailable}
         filesOpen={filesOpen}
-        monitorOpen={panels.monitor}
+        monitorOpen={monitorOpen}
         forwardAvailable={forwardAvailable}
         canSplit={canSplit}
         onSelect={setActiveId}
@@ -640,19 +740,12 @@ export function App() {
         onOpenSettings={openSettings}
       />
       <div className="app__body">
-        <SessionTree
-          groups={groups}
-          connections={connections}
-          activeConnectionId={activeConnectionId}
-          connectingId={connectingId}
-          query={query}
-          onQueryChange={setQuery}
-          onConnect={(connection) => void openConnection(connection)}
-          onNew={openNewForm}
-          onEdit={(connection) => void openEditForm(connection)}
-          onDelete={(connection) => void removeConnection(connection)}
-          onAddGroup={(name) => void addGroup(name)}
-          onReorder={(orderedIds) => void reorderConnections(orderedIds)}
+        <DockColumn
+          dock="left"
+          panels={leftPanels}
+          dividers={panelLayout.dividers.left}
+          onResize={(index, ratio) => resizePanelDivider('left', index, ratio)}
+          onResizeEnd={(index, ratio) => finishPanelDivider('left', index, ratio)}
         />
         <main className="workspace">
           {error && tabs.length > 0 ? (
@@ -689,33 +782,21 @@ export function App() {
               ))
             )}
           </div>
-          {transfers.length > 0 ? (
-            <TransferPanel
-              tasks={transfers}
-              onCancel={(id) => void cancelTransfer(id)}
-              onRetry={(id) => void retryTransfer(id)}
-            />
-          ) : null}
+          <DockColumn
+            dock="bottom"
+            panels={bottomPanels}
+            dividers={panelLayout.dividers.bottom}
+            onResize={(index, ratio) => resizePanelDivider('bottom', index, ratio)}
+            onResizeEnd={(index, ratio) => finishPanelDivider('bottom', index, ratio)}
+          />
         </main>
-        {rightPanels.length > 0 ? (
-          <div className="right-dock">
-            {rightPanels.map((panel) => {
-              if (panel.id === 'files' && activePane) {
-                return (
-                  <FilePanel
-                    key={panel.id}
-                    sessionId={activePane.sessionId}
-                    onClose={() => togglePanel('files')}
-                  />
-                );
-              }
-              if (panel.id === 'monitor') {
-                return <MonitorPanel key={panel.id} onClose={() => togglePanel('monitor')} />;
-              }
-              return null;
-            })}
-          </div>
-        ) : null}
+        <DockColumn
+          dock="right"
+          panels={rightPanels}
+          dividers={panelLayout.dividers.right}
+          onResize={(index, ratio) => resizePanelDivider('right', index, ratio)}
+          onResizeEnd={(index, ratio) => finishPanelDivider('right', index, ratio)}
+        />
       </div>
 
       {form ? (
@@ -741,7 +822,12 @@ export function App() {
         <SettingsPanel
           config={config}
           error={settingsError}
+          panelLayout={panelLayout}
           onChange={(next) => void saveConfig(next)}
+          onPanelDockChange={(id, dock) => {
+            if (panelDockOf(panelLayoutRef.current, id) === dock) return;
+            movePanelTo(id, dock);
+          }}
           onReset={() => void resetConfig()}
           onClose={() => setSettingsOpen(false)}
         />

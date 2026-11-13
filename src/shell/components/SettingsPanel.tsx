@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
+import { DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import type { AppConfig, ThemePreference, UiDensity } from '../../shared/ipc.ts';
+import { panelById } from '../panels/registry.ts';
 
 interface SettingsPanelProps {
   config: AppConfig;
   error: string | null;
+  panelLayout: PanelLayout;
   onChange(next: AppConfig): void;
+  onPanelDockChange(id: PanelId, dock: DockId | null): void;
   onReset(): void;
   onClose(): void;
 }
@@ -13,7 +17,7 @@ const FONT_SIZES = Array.from({ length: 10 }, (_, index) => 11 + index);
 const CONCURRENCY = [1, 2, 3, 4];
 
 /** 设置在主窗口内即时生效：每次改动直接提交，不做「保存」按钮。 */
-export function SettingsPanel({ config, error, onChange, onReset, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDockChange, onReset, onClose }: SettingsPanelProps) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose();
@@ -128,6 +132,29 @@ export function SettingsPanel({ config, error, onChange, onReset, onClose }: Set
             />
             连接时默认展开文件面板
           </label>
+        </section>
+
+        <section className="settings-group">
+          <h3 className="settings-group__title">面板布局</h3>
+          {DOCKABLE_PANEL_IDS.map((id) => (
+            <div className="form-row" key={id}>
+              <label htmlFor={`settings-dock-${id}`}>{panelById(id)?.title ?? id}</label>
+              <select
+                id={`settings-dock-${id}`}
+                data-testid={`settings-dock-${id}`}
+                value={panelDockOf(panelLayout, id) ?? 'closed'}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onPanelDockChange(id, value === 'closed' ? null : (value as DockId));
+                }}
+              >
+                <option value="left">左侧</option>
+                <option value="right">右侧</option>
+                <option value="bottom">底部</option>
+                <option value="closed">关闭</option>
+              </select>
+            </div>
+          ))}
         </section>
 
         {error ? <p className="form-error">{error}</p> : null}

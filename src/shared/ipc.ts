@@ -4,7 +4,7 @@ import type { SecretKind } from '../services/credentials/store.ts';
 import type { AppConfig, ThemePreference, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
-import type { PanelState } from './panels.ts';
+import type { PanelLayout } from './panels.ts';
 import type { ComponentDescriptor } from './components.ts';
 import type {
   ConnectionInput,
@@ -23,7 +23,7 @@ export type { AppConfig, ThemePreference, UiDensity };
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
-export type { PanelState };
+export type { PanelLayout };
 export type { ComponentDescriptor };
 export type { ComponentField } from './components.ts';
 
@@ -166,8 +166,8 @@ export interface EtermApi {
 
   getLayout(key: string): Promise<IpcResult<LayoutTemplate | null>>;
   saveLayout(key: string, template: LayoutTemplate): Promise<IpcResult<null>>;
-  getPanelState(): Promise<IpcResult<PanelState>>;
-  savePanelState(state: PanelState): Promise<IpcResult<null>>;
+  getPanelLayout(): Promise<IpcResult<PanelLayout>>;
+  savePanelLayout(state: PanelLayout): Promise<IpcResult<null>>;
 
   getSystemStats(): Promise<IpcResult<SystemStats>>;
 

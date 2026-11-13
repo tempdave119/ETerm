@@ -28,7 +28,7 @@ import {
   type LayoutTemplate,
   type OpenConnectionRequest,
   type OpenedSession,
-  type PanelState,
+  type PanelLayout,
   type SecretKind,
   type SystemStats,
   type TransferView,
@@ -117,8 +117,8 @@ const api: EtermApi = {
     ipcRenderer.invoke(LAYOUTS_IPC.get, key) as Promise<IpcResult<LayoutTemplate | null>>,
   saveLayout: (key: string, template: LayoutTemplate) =>
     ipcRenderer.invoke(LAYOUTS_IPC.save, { key, template }) as Promise<IpcResult<null>>,
-  getPanelState: () => ipcRenderer.invoke(LAYOUTS_IPC.panelsGet) as Promise<IpcResult<PanelState>>,
-  savePanelState: (state: PanelState) =>
+  getPanelLayout: () => ipcRenderer.invoke(LAYOUTS_IPC.panelsGet) as Promise<IpcResult<PanelLayout>>,
+  savePanelLayout: (state: PanelLayout) =>
     ipcRenderer.invoke(LAYOUTS_IPC.panelsSave, state) as Promise<IpcResult<null>>,
 
   getSystemStats: () => ipcRenderer.invoke(SYSTEM_IPC.stats) as Promise<IpcResult<SystemStats>>,
