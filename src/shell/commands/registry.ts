@@ -14,6 +14,7 @@ export type CommandId =
   | 'pane.split-row'
   | 'pane.split-column'
   | 'files.toggle'
+  | 'panel.monitor'
   | 'settings.open'
   | 'palette.open';
 
@@ -102,6 +103,13 @@ export const COMMANDS: readonly CommandDefinition[] = [
     group: '面板',
     keywords: ['files', 'panel', '文件', '面板'],
     shortcut: { code: 'KeyF', shift: true },
+  },
+  {
+    id: 'panel.monitor',
+    title: '切换系统资源面板',
+    group: '面板',
+    keywords: ['monitor', 'system', 'cpu', 'memory', '监控', '资源'],
+    shortcut: { code: 'KeyM', shift: true },
   },
   {
     id: 'settings.open',

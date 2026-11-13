@@ -4,6 +4,7 @@ import {
   parseLayoutTemplate,
   type LayoutTemplate,
 } from '../../shared/layout-template.ts';
+import { defaultPanelState, parsePanelState, type PanelState } from '../../shared/panels.ts';
 import { JsonFile } from '../storage/json-file.ts';
 
 const VERSION = 1;
@@ -11,6 +12,7 @@ const VERSION = 1;
 interface LayoutFile {
   version: number;
   splits: Record<string, LayoutTemplate>;
+  panels: PanelState;
 }
 
 /** 按连接记忆分屏结构：只存树形与比例，不存 sessionId。 */
@@ -41,6 +43,16 @@ export class LayoutStore {
       else file.splits[key] = structuredClone(parsed);
     });
   }
+
+  async getPanels(): Promise<PanelState> {
+    return structuredClone((await this.#file.read()).panels);
+  }
+
+  async savePanels(state: PanelState): Promise<void> {
+    await this.#file.update((file) => {
+      file.panels = parsePanelState(state);
+    });
+  }
 }
 
 function assertKey(key: string): void {
@@ -48,7 +60,7 @@ function assertKey(key: string): void {
 }
 
 function emptyFile(): LayoutFile {
-  return { version: VERSION, splits: {} };
+  return { version: VERSION, splits: {}, panels: defaultPanelState() };
 }
 
 function parseFile(value: unknown): LayoutFile {
@@ -66,5 +78,5 @@ function parseFile(value: unknown): LayoutFile {
     assertKey(key);
     splits[key] = parseLayoutTemplate(template);
   }
-  return { version: VERSION, splits };
+  return { version: VERSION, splits, panels: parsePanelState(record.panels) };
 }

@@ -4,6 +4,7 @@ import type { SecretKind } from '../services/credentials/store.ts';
 import type { AppConfig, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
+import type { PanelState } from './panels.ts';
 import type {
   ConnectionInput,
   ConnectionRecord,
@@ -20,6 +21,7 @@ export type { AppConfig, UiDensity };
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
+export type { PanelState };
 
 export const IPC = {
   open: 'session:open',
@@ -56,6 +58,12 @@ export const TRANSFERS_IPC = {
 export const LAYOUTS_IPC = {
   get: 'layouts:get',
   save: 'layouts:save',
+  panelsGet: 'layouts:panels-get',
+  panelsSave: 'layouts:panels-save',
+} as const;
+
+export const SYSTEM_IPC = {
+  stats: 'system:stats',
 } as const;
 
 export const CONFIG_IPC = {
@@ -70,6 +78,15 @@ export interface FilePreview {
   content: string;
   truncated: boolean;
   binary: boolean;
+}
+
+export interface SystemStats {
+  cpuPercent: number;
+  memUsed: number;
+  memTotal: number;
+  load: [number, number, number];
+  uptime: number;
+  cpus: number;
 }
 
 export const CONNECTION_IPC = {
@@ -131,6 +148,10 @@ export interface EtermApi {
 
   getLayout(key: string): Promise<IpcResult<LayoutTemplate | null>>;
   saveLayout(key: string, template: LayoutTemplate): Promise<IpcResult<null>>;
+  getPanelState(): Promise<IpcResult<PanelState>>;
+  savePanelState(state: PanelState): Promise<IpcResult<null>>;
+
+  getSystemStats(): Promise<IpcResult<SystemStats>>;
 
   getConfig(): Promise<IpcResult<AppConfig>>;
   saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;

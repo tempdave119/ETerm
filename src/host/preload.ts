@@ -8,6 +8,7 @@ import {
   IPC,
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
+  SYSTEM_IPC,
   TRANSFERS_IPC,
   type AppConfig,
   type ConnectionInput,
@@ -22,7 +23,9 @@ import {
   type LayoutTemplate,
   type OpenConnectionRequest,
   type OpenedSession,
+  type PanelState,
   type SecretKind,
+  type SystemStats,
   type TransferView,
 } from '../shared/ipc.ts';
 import type { ExitInfo } from '../core/ports.ts';
@@ -102,6 +105,11 @@ const api: EtermApi = {
     ipcRenderer.invoke(LAYOUTS_IPC.get, key) as Promise<IpcResult<LayoutTemplate | null>>,
   saveLayout: (key: string, template: LayoutTemplate) =>
     ipcRenderer.invoke(LAYOUTS_IPC.save, { key, template }) as Promise<IpcResult<null>>,
+  getPanelState: () => ipcRenderer.invoke(LAYOUTS_IPC.panelsGet) as Promise<IpcResult<PanelState>>,
+  savePanelState: (state: PanelState) =>
+    ipcRenderer.invoke(LAYOUTS_IPC.panelsSave, state) as Promise<IpcResult<null>>,
+
+  getSystemStats: () => ipcRenderer.invoke(SYSTEM_IPC.stats) as Promise<IpcResult<SystemStats>>,
 
   getConfig: () => ipcRenderer.invoke(CONFIG_IPC.get) as Promise<IpcResult<AppConfig>>,
   saveConfig: (config: AppConfig) =>

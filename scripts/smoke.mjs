@@ -419,6 +419,46 @@ try {
     '拖拽比例落盘',
   );
 
+  // 系统资源面板：⌘⇧M 打开，采样出数值，开关状态写入 layout.json。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-panel"]') !== null`),
+    5_000,
+    '系统资源面板',
+  );
+  await waitFor(
+    () => evaluate(`/\\d+%/.test(document.querySelector('[data-testid="monitor-cpu"]')?.textContent ?? '')`),
+    5_000,
+    '系统资源采样',
+  );
+  await waitFor(
+    () => evaluate(`(document.querySelector('[data-testid="monitor-memory"]')?.textContent ?? '').includes('/')`),
+    5_000,
+    '内存采样',
+  );
+  const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/monitor-smoke.png', Buffer.from(monitorShot.data, 'base64'));
+  await waitFor(
+    async () => {
+      try {
+        const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
+        return parsed.panels?.monitor === true;
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '面板开关落盘',
+  );
+  await evaluate(`document.querySelector('.monitor-panel button[title="关闭系统资源"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-panel"]') === null`),
+    5_000,
+    '关闭系统资源',
+  );
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));

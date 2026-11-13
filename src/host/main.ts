@@ -20,6 +20,7 @@ import { registerSessionIpc } from './ipc.ts';
 import { registerKnownHostsIpc } from './known-hosts-ipc.ts';
 import { registerLayoutsIpc } from './layouts-ipc.ts';
 import { createSafeStorageCodec } from './secret-codec.ts';
+import { registerSystemIpc } from './system-ipc.ts';
 import { registerTransfersIpc } from './transfers-ipc.ts';
 
 interface AppServices {
@@ -46,6 +47,7 @@ let disposeTransfersIpc: (() => void) | null = null;
 let transferQueue: TransferQueue | null = null;
 let disposeKnownHostsIpc: (() => void) | null = null;
 let disposeLayoutsIpc: (() => void) | null = null;
+let disposeSystemIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
 let appServices: AppServices | null = null;
@@ -83,6 +85,7 @@ function createWindow(): void {
     disposeConnectionOpenIpc = registerConnectionOpenIpc(service, appServices);
   }
   disposeFilesIpc = registerFilesIpc(service);
+  disposeSystemIpc = registerSystemIpc();
   transferQueue = new TransferQueue({
     getPort: (sessionId) => service.transferPort(sessionId),
     onChange: (task) => {
@@ -106,6 +109,8 @@ function createWindow(): void {
     disposeConnectionOpenIpc = null;
     disposeFilesIpc?.();
     disposeFilesIpc = null;
+    disposeSystemIpc?.();
+    disposeSystemIpc = null;
     disposeTransfersIpc?.();
     disposeTransfersIpc = null;
     disposeConfigIpc?.();
@@ -167,6 +172,8 @@ app.on('will-quit', () => {
   disposeKnownHostsIpc = null;
   disposeLayoutsIpc?.();
   disposeLayoutsIpc = null;
+  disposeSystemIpc?.();
+  disposeSystemIpc = null;
   disposeCredentialsIpc?.();
   disposeCredentialsIpc = null;
   sessions?.dispose();

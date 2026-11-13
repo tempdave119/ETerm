@@ -772,6 +772,15 @@ button {
 /* 右侧文件面板：只读浏览与预览 */
 .file-panel {
   display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
+}
+
+/* 右侧停靠区：文件与系统资源共用一列 300px */
+.right-dock {
+  display: flex;
   flex: 0 0 300px;
   flex-direction: column;
   width: 300px;
@@ -825,6 +834,61 @@ button {
 
 .file-panel__error {
   padding: var(--space-container) var(--space-block);
+}
+
+/* 系统资源面板：本机采样，每秒刷新 */
+.monitor-panel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.monitor-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  height: var(--panel-header-height);
+  padding: 0 var(--space-base) 0 var(--space-container);
+}
+
+.monitor-panel__title {
+  flex: 1;
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+
+.monitor-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  padding: 0 var(--space-container) var(--space-container);
+}
+
+.monitor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: var(--font-aux);
+}
+
+.monitor-row__value {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-meter {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-canvas);
+}
+
+.monitor-meter__fill {
+  display: block;
+  height: 100%;
+  background: var(--status-info);
 }
 
 .file-row {

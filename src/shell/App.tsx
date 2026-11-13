@@ -10,6 +10,7 @@ import type {
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
+import { defaultPanelState, type PanelState } from '../shared/panels.ts';
 import {
   clampRatio,
   collectLeaves,
@@ -26,12 +27,14 @@ import {
   type SplitDirection,
 } from './layout.ts';
 import { findCommandByShortcut, type CommandId } from './commands/registry.ts';
+import { panelsInDock } from './panels/registry.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
 import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
+import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { SettingsPanel } from './components/SettingsPanel.tsx';
@@ -69,7 +72,7 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [hostKey, setHostKey] = useState<HostKeyPrompt | null>(null);
   const [busy, setBusy] = useState(false);
-  const [filesOpen, setFilesOpen] = useState(true);
+  const [panels, setPanels] = useState<PanelState>(defaultPanelState);
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -96,6 +99,12 @@ export function App() {
       else setError(result.error);
     });
     return window.eterm.onConfigChange(setConfig);
+  }, []);
+
+  useEffect(() => {
+    void window.eterm.getPanelState().then((result) => {
+      if (result.ok) setPanels(result.value);
+    });
   }, []);
 
   useEffect(() => {
@@ -142,11 +151,26 @@ export function App() {
     setSettingsOpen(true);
   }, []);
 
+  const updatePanels = useCallback((next: PanelState): void => {
+    setPanels(next);
+    void window.eterm.savePanelState(next).then((result) => {
+      if (!result.ok) console.warn(`[panels] 保存面板状态失败：${result.error.message}`);
+    });
+  }, []);
+
+  const togglePanel = useCallback(
+    (id: keyof PanelState): void => {
+      updatePanels({ ...panels, [id]: !panels[id] });
+    },
+    [panels, updatePanels],
+  );
+
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const activePane = activeTab ? (findLeaf(activeTab.layout, activeTab.activePaneId) ?? firstLeaf(activeTab.layout)) : null;
   const activeConnectionId = activePane?.connectionId ?? null;
   const filesAvailable = activePane?.capabilities.includes('file') === true;
+  const filesOpen = panels.files;
 
   const addTab = useCallback((tab: Tab): void => {
     setTabs((current) => [...current, tab]);
@@ -249,12 +273,12 @@ export function App() {
           layout,
           activePaneId: firstLeaf(layout).paneId,
         });
-        setFilesOpen(config?.files.openByDefault ?? true);
+        updatePanels({ ...panels, files: config?.files.openByDefault ?? true });
       } finally {
         setBusy(false);
       }
     },
-    [addTab, config, loadLayout],
+    [addTab, config, loadLayout, panels, updatePanels],
   );
 
   const confirmHostKey = useCallback(async (): Promise<void> => {
@@ -399,9 +423,9 @@ export function App() {
         ),
       );
       void persistLayout(tab.connectionId ?? 'local', layout);
-      setFilesOpen(config?.files.openByDefault ?? true);
+      updatePanels({ ...panels, files: config?.files.openByDefault ?? true });
     },
-    [activeTab, config, persistLayout],
+    [activeTab, config, panels, persistLayout, updatePanels],
   );
 
   const resizePane = useCallback((tabId: string, splitId: string, ratio: number): void => {
@@ -506,7 +530,10 @@ export function App() {
           void splitActivePane('column');
           break;
         case 'files.toggle':
-          if (filesAvailable) setFilesOpen((value) => !value);
+          if (filesAvailable) togglePanel('files');
+          break;
+        case 'panel.monitor':
+          togglePanel('monitor');
           break;
         case 'settings.open':
           openSettings();
@@ -528,6 +555,7 @@ export function App() {
       openNewForm,
       openSettings,
       splitActivePane,
+      togglePanel,
     ],
   );
 
@@ -543,6 +571,10 @@ export function App() {
   }, [runCommand]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
+  const rightPanels = panelsInDock('right', {
+    files: filesOpen && filesAvailable && activePane !== null,
+    monitor: panels.monitor,
+  });
   const fontSize = config?.terminal.fontSize ?? 13;
   const density = config?.ui.density ?? 'comfortable';
 
@@ -553,11 +585,13 @@ export function App() {
         activeId={activeTabId}
         filesAvailable={filesAvailable}
         filesOpen={filesOpen}
+        monitorOpen={panels.monitor}
         canSplit={canSplit}
         onSelect={setActiveId}
         onClose={closeTab}
         onNew={() => void openLocalTerminal()}
-        onToggleFiles={() => setFilesOpen((value) => !value)}
+        onToggleFiles={() => togglePanel('files')}
+        onToggleMonitor={() => togglePanel('monitor')}
         onSplit={(direction) => void splitActivePane(direction)}
         onOpenSettings={openSettings}
       />
@@ -617,8 +651,24 @@ export function App() {
             />
           ) : null}
         </main>
-        {filesAvailable && filesOpen && activePane ? (
-          <FilePanel sessionId={activePane.sessionId} onClose={() => setFilesOpen(false)} />
+        {rightPanels.length > 0 ? (
+          <div className="right-dock">
+            {rightPanels.map((panel) => {
+              if (panel.id === 'files' && activePane) {
+                return (
+                  <FilePanel
+                    key={panel.id}
+                    sessionId={activePane.sessionId}
+                    onClose={() => togglePanel('files')}
+                  />
+                );
+              }
+              if (panel.id === 'monitor') {
+                return <MonitorPanel key={panel.id} onClose={() => togglePanel('monitor')} />;
+              }
+              return null;
+            })}
+          </div>
         ) : null}
       </div>
 

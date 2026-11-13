@@ -1,4 +1,4 @@
-import { Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
+import { Activity, Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
 
 interface TabInfo {
   id: string;
@@ -10,11 +10,13 @@ interface TabBarProps {
   activeId: string | null;
   filesAvailable: boolean;
   filesOpen: boolean;
+  monitorOpen: boolean;
   canSplit: boolean;
   onSelect(id: string): void;
   onClose(id: string): void;
   onNew(): void;
   onToggleFiles(): void;
+  onToggleMonitor(): void;
   onSplit(direction: 'row' | 'column'): void;
   onOpenSettings(): void;
 }
@@ -24,11 +26,13 @@ export function TabBar({
   activeId,
   filesAvailable,
   filesOpen,
+  monitorOpen,
   canSplit,
   onSelect,
   onClose,
   onNew,
   onToggleFiles,
+  onToggleMonitor,
   onSplit,
   onOpenSettings,
 }: TabBarProps) {
@@ -87,6 +91,17 @@ export function TabBar({
           <FolderOpen size={16} strokeWidth={1.5} />
         </button>
       ) : null}
+      <button
+        className="tabbar__action"
+        type="button"
+        data-active={monitorOpen}
+        title="系统资源（⌘⇧M）"
+        aria-label="系统资源"
+        data-testid="toggle-monitor"
+        onClick={onToggleMonitor}
+      >
+        <Activity size={16} strokeWidth={1.5} />
+      </button>
       <button
         className="tabbar__action"
         type="button"
