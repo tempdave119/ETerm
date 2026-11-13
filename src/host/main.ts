@@ -104,7 +104,7 @@ function createWindow(): void {
   }
   disposeFilesIpc = registerFilesIpc(service);
   disposeForwardsIpc = registerForwardsIpc(service);
-  disposeSystemIpc = registerSystemIpc();
+  disposeSystemIpc = registerSystemIpc(service);
   disposeClipboardIpc = registerClipboardIpc();
   transferQueue = new TransferQueue({
     getPort: (sessionId) => service.transferPort(sessionId),

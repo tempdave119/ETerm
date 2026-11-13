@@ -371,9 +371,15 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
         });
       });
 
-      session.on('exec', (acceptExec) => {
+      session.on('exec', (acceptExec, _rejectExec, info) => {
         const stream = acceptExec();
-        stream.write('ok\n');
+        if (String(info?.command ?? '').includes('MemTotal')) {
+          stream.write(
+            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\n',
+          );
+        } else {
+          stream.write('ok\n');
+        }
         stream.exit(0);
         stream.end();
       });
@@ -658,6 +664,27 @@ try {
     () => evaluate(`document.querySelector('[data-testid="reconnect-bar"]') === null`),
     10_000,
     '重连提示消失',
+  );
+
+  // 远端资源：监控面板跟随活动 SSH 会话，显示远端 CPU / 内存。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-source"]')?.textContent === '远端'`),
+    5_000,
+    '远端资源来源',
+  );
+  await waitFor(
+    () => evaluate(`/\\d+%/.test(document.querySelector('[data-testid="monitor-cpu"]')?.textContent ?? '')`),
+    10_000,
+    '远端 CPU',
+  );
+  await waitFor(
+    () =>
+      evaluate(`(document.querySelector('[data-testid="monitor-memory"]')?.textContent ?? '').includes('/')`),
+    10_000,
+    '远端内存',
   );
 
   // 关闭预览与标签，再次点击连接：指纹已保存，不应再弹确认。

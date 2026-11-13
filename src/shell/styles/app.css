@@ -1110,6 +1110,17 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.monitor-source {
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
+.monitor-error {
+  margin: 0;
+  color: var(--status-danger);
+  font-size: var(--font-aux);
+}
+
 .monitor-meter {
   height: 4px;
   overflow: hidden;

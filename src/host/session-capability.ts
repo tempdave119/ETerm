@@ -6,7 +6,7 @@ import { ProductError } from '../core/errors.ts';
  */
 export function requireSessionPort<T>(
   port: T | null,
-  context: { sessionId: string; sessionAlive: boolean; capability: 'file' | 'transfer' | 'forward' },
+  context: { sessionId: string; sessionAlive: boolean; capability: 'file' | 'transfer' | 'forward' | 'exec' },
 ): T {
   if (port) return port;
 
@@ -18,13 +18,19 @@ export function requireSessionPort<T>(
     });
   }
 
-  throw new ProductError('UNSUPPORTED', {
-    message:
-      context.capability === 'file'
-        ? '这台主机没有开启 SFTP，文件面板不可用'
-        : context.capability === 'transfer'
-          ? '这台主机没有开启 SFTP，无法传文件'
-          : '这台主机不支持端口转发',
-    next: '终端仍可正常使用；需要文件操作请换一台主机',
-  });
+  const message =
+    context.capability === 'file'
+      ? '这台主机没有开启 SFTP，文件面板不可用'
+      : context.capability === 'transfer'
+        ? '这台主机没有开启 SFTP，无法传文件'
+        : context.capability === 'exec'
+          ? '当前会话不支持远端执行，无法采集远端资源'
+          : '这台主机不支持端口转发';
+  const next =
+    context.capability === 'file' || context.capability === 'transfer'
+      ? '终端仍可正常使用；需要文件操作请换一台主机'
+      : context.capability === 'exec'
+        ? '终端仍可正常使用；需要远端监控请换一台主机'
+        : '终端仍可正常使用；需要端口转发请换一台主机';
+  throw new ProductError('UNSUPPORTED', { message, next });
 }

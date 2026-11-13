@@ -1,6 +1,6 @@
 import { ProductError, normalizeError } from './errors.ts';
 import type { SessionHandle } from './manifest.ts';
-import type { Capability, ExitInfo, FilePort, SessionOpenOptions, TransferPort, ForwardPort } from './ports.ts';
+import type { Capability, ExecPort, ExitInfo, FilePort, SessionOpenOptions, TransferPort, ForwardPort } from './ports.ts';
 import type { ModuleRegistry } from './registry.ts';
 
 export interface SessionEvents {
@@ -87,6 +87,10 @@ export class SessionService {
 
   filePort(sessionId: string): FilePort | null {
     return this.#sessions.get(sessionId)?.handle.file ?? null;
+  }
+
+  execPort(sessionId: string): ExecPort | null {
+    return this.#sessions.get(sessionId)?.handle.exec ?? null;
   }
 
   // 能力缺失时界面要区分「会话没了」与「模块没这个能力」，两者的下一步不同。

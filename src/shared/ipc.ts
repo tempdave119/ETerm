@@ -80,6 +80,7 @@ export const LAYOUTS_IPC = {
 
 export const SYSTEM_IPC = {
   stats: 'system:stats',
+  remoteStats: 'system:remote-stats',
 } as const;
 
 export const CLIPBOARD_IPC = {
@@ -188,6 +189,7 @@ export interface EtermApi {
   savePanelLayout(state: PanelLayout): Promise<IpcResult<null>>;
 
   getSystemStats(): Promise<IpcResult<SystemStats>>;
+  getRemoteStats(sessionId: string): Promise<IpcResult<SystemStats>>;
 
   readClipboard(): Promise<IpcResult<string>>;
   writeClipboard(text: string): Promise<IpcResult<null>>;

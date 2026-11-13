@@ -858,6 +858,9 @@ export function App() {
       case 'monitor':
         return (
           <MonitorPanel
+            sessionId={
+              activeTab?.connectionId && activePane?.capabilities.includes('exec') ? activePane.sessionId : null
+            }
             dock={dock}
             onMove={(target) => movePanelTo('monitor', target)}
             {...panelChrome('monitor', dock)}

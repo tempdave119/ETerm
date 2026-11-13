@@ -144,6 +144,8 @@ const api: EtermApi = {
     ipcRenderer.invoke(LAYOUTS_IPC.panelsSave, state) as Promise<IpcResult<null>>,
 
   getSystemStats: () => ipcRenderer.invoke(SYSTEM_IPC.stats) as Promise<IpcResult<SystemStats>>,
+  getRemoteStats: (sessionId: string) =>
+    ipcRenderer.invoke(SYSTEM_IPC.remoteStats, { sessionId }) as Promise<IpcResult<SystemStats>>,
 
   readClipboard: () => ipcRenderer.invoke(CLIPBOARD_IPC.read) as Promise<IpcResult<string>>,
   writeClipboard: (text: string) =>

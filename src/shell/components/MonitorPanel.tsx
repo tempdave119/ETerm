@@ -4,6 +4,8 @@ import type { SystemStats } from '../../shared/ipc.ts';
 import { PanelFrame } from './PanelFrame.tsx';
 
 interface MonitorPanelProps {
+  /** 有值且会话具备 exec 能力时采样远端；null 时采样本机。 */
+  sessionId: string | null;
   dock: DockId | null;
   onMove(target: DockId | null): void;
   canPanelMoveUp?: boolean;
@@ -12,20 +14,39 @@ interface MonitorPanelProps {
 }
 
 const POLL_INTERVAL = 1000;
+const REMOTE_POLL_INTERVAL = 2000;
 
-/** 本机资源面板：每秒拉一次 system:stats；第一次采样只建立 CPU 基线。 */
-export function MonitorPanel({ dock, onMove, canPanelMoveUp, canPanelMoveDown, onPanelReorder }: MonitorPanelProps) {
+/** 本机 / 远端资源面板：本地 1 秒、远端 2 秒采样一次。 */
+export function MonitorPanel({
+  sessionId,
+  dock,
+  onMove,
+  canPanelMoveUp,
+  canPanelMoveDown,
+  onPanelReorder,
+}: MonitorPanelProps) {
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
+    setStats(null);
+    setError(null);
 
     const tick = async (): Promise<void> => {
-      const result = await window.eterm.getSystemStats();
+      const result = sessionId
+        ? await window.eterm.getRemoteStats(sessionId)
+        : await window.eterm.getSystemStats();
       if (cancelled) return;
-      if (result.ok) setStats(result.value);
-      timer = window.setTimeout(() => void tick(), POLL_INTERVAL);
+      if (result.ok) {
+        setStats(result.value);
+        setError(null);
+      } else {
+        setStats(null);
+        setError(result.error.message);
+      }
+      timer = window.setTimeout(() => void tick(), sessionId ? REMOTE_POLL_INTERVAL : POLL_INTERVAL);
     };
 
     void tick();
@@ -33,7 +54,7 @@ export function MonitorPanel({ dock, onMove, canPanelMoveUp, canPanelMoveDown, o
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, []);
+  }, [sessionId]);
 
   const memoryPercent = stats && stats.memTotal > 0 ? Math.round((stats.memUsed / stats.memTotal) * 100) : 0;
 
@@ -46,6 +67,11 @@ export function MonitorPanel({ dock, onMove, canPanelMoveUp, canPanelMoveDown, o
       canMoveUp={canPanelMoveUp}
       canMoveDown={canPanelMoveDown}
       onReorder={onPanelReorder}
+      actions={
+        <span className="monitor-source" data-testid="monitor-source">
+          {sessionId ? '远端' : '本机'}
+        </span>
+      }
     >
       <div className="monitor-panel__body">
         <div className="monitor-row">
@@ -79,6 +105,11 @@ export function MonitorPanel({ dock, onMove, canPanelMoveUp, canPanelMoveDown, o
           <span>CPU 核数</span>
           <span className="monitor-row__value">{stats?.cpus ?? '—'}</span>
         </div>
+        {error ? (
+          <p className="monitor-error" data-testid="monitor-error">
+            {error}
+          </p>
+        ) : null}
       </div>
     </PanelFrame>
   );
