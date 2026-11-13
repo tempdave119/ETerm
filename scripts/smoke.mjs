@@ -184,11 +184,15 @@ try {
   // 第二个标签：新建、切换、关闭都要动到真实会话。
   await evaluate(`document.querySelector('.tabbar__new').click()`);
   const sessionIds = await waitFor(
-    () => evaluate(`[...document.querySelectorAll('.terminal-host')].map((element) => element.dataset.sessionId)`),
+    async () => {
+      const ids = await evaluate(
+        `[...document.querySelectorAll('.terminal-host')].map((element) => element.dataset.sessionId)`,
+      );
+      return ids.length >= 2 ? ids : null;
+    },
     8_000,
     '第二个终端',
   );
-  if (sessionIds.length < 2) throw new Error('没有创建第二个终端');
   const secondId = sessionIds[1];
   await waitFor(
     async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(secondId)})`)).trim().length > 0,

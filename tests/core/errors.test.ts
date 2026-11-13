@@ -46,6 +46,26 @@ test('errors_product_error_passes_through_unchanged', () => {
   assert.equal(normalizeError(original), original);
 });
 
+test('errors_ssh_auth_level_maps_to_auth_failed', () => {
+  const error = normalizeError(
+    Object.assign(new Error('All configured authentication methods failed'), { level: 'client-authentication' }),
+  );
+
+  assert.equal(error.code, 'AUTH_FAILED');
+});
+
+test('errors_ssh_timeout_level_maps_to_timeout', () => {
+  const error = normalizeError(Object.assign(new Error('Timed out while waiting for handshake'), { level: 'client-timeout' }));
+
+  assert.equal(error.code, 'TIMEOUT');
+});
+
+test('errors_ssh_message_without_level_maps_to_auth_failed', () => {
+  const error = normalizeError(new Error('All configured authentication methods failed'));
+
+  assert.equal(error.code, 'AUTH_FAILED');
+});
+
 test('errors_info_contains_folded_detail', () => {
   const info = new ProductError('PERMISSION_DENIED', { detail: 'EACCES: permission denied' }).toInfo();
 

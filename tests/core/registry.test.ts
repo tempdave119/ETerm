@@ -102,3 +102,29 @@ test('registry_missing_service_throws_with_name', () => {
 
   assert.throws(() => registry.getService('vault'), /服务未提供：vault/);
 });
+
+test('registry_host_provided_service_is_visible_to_modules', () => {
+  const registry = new ModuleRegistry();
+  registry.provide('connections', { ready: true });
+  let seen: unknown;
+
+  registry.register(
+    makeModule({
+      id: 'core-fake',
+      setup: (ctx) => {
+        seen = ctx.get('connections');
+        return { dispose: () => {} };
+      },
+    }),
+  );
+  registry.setupAll();
+
+  assert.deepEqual(seen, { ready: true });
+});
+
+test('registry_duplicate_host_service_is_rejected', () => {
+  const registry = new ModuleRegistry();
+  registry.provide('connections', {});
+
+  assert.throws(() => registry.provide('connections', {}), /服务名重复/);
+});

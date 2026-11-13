@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { IPC, type EtermApi, type IpcResult, type OpenedSession } from '../shared/ipc.ts';
+import {
+  CONNECTIONS_IPC,
+  IPC,
+  type ConnectionInput,
+  type ConnectionRecord,
+  type ConnectionsSnapshot,
+  type EtermApi,
+  type GroupInput,
+  type GroupRecord,
+  type IpcResult,
+  type OpenedSession,
+} from '../shared/ipc.ts';
 import type { ExitInfo } from '../core/ports.ts';
 
 const api: EtermApi = {
@@ -25,6 +36,17 @@ const api: EtermApi = {
     ipcRenderer.on(IPC.exit, listener);
     return () => ipcRenderer.removeListener(IPC.exit, listener);
   },
+
+  listConnections: () =>
+    ipcRenderer.invoke(CONNECTIONS_IPC.list) as Promise<IpcResult<ConnectionsSnapshot>>,
+  saveConnection: (input: ConnectionInput) =>
+    ipcRenderer.invoke(CONNECTIONS_IPC.saveConnection, input) as Promise<IpcResult<ConnectionRecord>>,
+  deleteConnection: (id: string) =>
+    ipcRenderer.invoke(CONNECTIONS_IPC.deleteConnection, id) as Promise<IpcResult<null>>,
+  saveGroup: (input: GroupInput) =>
+    ipcRenderer.invoke(CONNECTIONS_IPC.saveGroup, input) as Promise<IpcResult<GroupRecord>>,
+  deleteGroup: (id: string) =>
+    ipcRenderer.invoke(CONNECTIONS_IPC.deleteGroup, id) as Promise<IpcResult<null>>,
 };
 
 contextBridge.exposeInMainWorld('eterm', api);

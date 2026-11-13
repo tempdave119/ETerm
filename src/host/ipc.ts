@@ -3,6 +3,7 @@ import { normalizeError } from '../core/errors.ts';
 import type { SessionOpenOptions } from '../core/ports.ts';
 import type { SessionService } from '../core/session-service.ts';
 import { IPC, type IpcResult, type OpenedSession } from '../shared/ipc.ts';
+import { readInteger, readRecord, readString } from './validate.ts';
 
 const SESSION_ID_MAX = 64;
 const PROTOCOL_MAX = 32;
@@ -17,27 +18,6 @@ function success<T>(value: T): IpcResult<T> {
 
 function failure(error: unknown): IpcResult<never> {
   return { ok: false, error: normalizeError(error).toInfo() };
-}
-
-function readRecord(raw: unknown, label: string): Record<string, unknown> {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`${label} 必须是对象`);
-  }
-  return raw as Record<string, unknown>;
-}
-
-function readString(raw: unknown, label: string, maxLength: number): string {
-  if (typeof raw !== 'string' || raw.length === 0 || raw.length > maxLength) {
-    throw new Error(`${label} 必须是 1–${maxLength} 字符的字符串`);
-  }
-  return raw;
-}
-
-function readInteger(raw: unknown, label: string, min: number, max: number): number {
-  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < min || raw > max) {
-    throw new Error(`${label} 必须是 ${min}–${max} 的整数`);
-  }
-  return raw;
 }
 
 function readOpenOptions(raw: unknown): SessionOpenOptions {

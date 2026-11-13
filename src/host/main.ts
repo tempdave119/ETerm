@@ -3,16 +3,21 @@ import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
 import { SessionService } from '../core/session-service.ts';
 import { localTerminalModule } from '../modules/local-terminal/index.ts';
+import { sshModule } from '../modules/ssh/index.ts';
+import { ConnectionStore } from '../services/connections/store.ts';
 import { IPC } from '../shared/ipc.ts';
+import { registerConnectionsIpc } from './connections-ipc.ts';
 import { registerSessionIpc } from './ipc.ts';
 
 app.setName('ETerm');
 
 const registry = new ModuleRegistry();
 registry.register(localTerminalModule);
+registry.register(sshModule);
 registry.setupAll();
 
 let disposeIpc: (() => void) | null = null;
+let disposeConnectionsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
 
 function createWindow(): void {
@@ -65,6 +70,10 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  const connections = new ConnectionStore({ baseDir: app.getPath('userData') });
+  registry.provide('connections', connections);
+  disposeConnectionsIpc = registerConnectionsIpc(connections);
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -76,6 +85,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  disposeConnectionsIpc?.();
+  disposeConnectionsIpc = null;
   sessions?.dispose();
   registry.dispose();
 });

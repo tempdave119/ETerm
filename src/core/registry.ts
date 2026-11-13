@@ -69,6 +69,12 @@ export class ModuleRegistry {
     return this.#services.get(name) as T;
   }
 
+  /** 宿主层提供的应用服务（存储 / 凭据等），先于模块 setup 注入。 */
+  provide(name: string, service: unknown): void {
+    if (this.#services.has(name)) throw new Error(`服务名重复：${name}`);
+    this.#services.set(name, service);
+  }
+
   moduleForProtocol(protocol: string): RegisteredModule {
     const id = this.#protocols.get(protocol);
     const slot = id ? this.#modules.get(id) : undefined;

@@ -76,13 +76,40 @@ const NODE_CODE_MAP: Record<string, ProductErrorCode> = {
   ENOENT: 'FILE_NOT_FOUND',
 };
 
+// ssh2 用 level 标记失败阶段，比错误文案稳定，优先按 level 归类。
+const SSH_LEVEL_MAP: Record<string, ProductErrorCode> = {
+  'client-authentication': 'AUTH_FAILED',
+  'client-timeout': 'TIMEOUT',
+  'client-connection': 'HOST_UNREACHABLE',
+  'client-socket': 'HOST_UNREACHABLE',
+};
+
+const MESSAGE_RULES: Array<[RegExp, ProductErrorCode]> = [
+  [/all (?:configured )?authentication methods failed|unable to authenticate|authentication failed/i, 'AUTH_FAILED'],
+  [/host key verification failed|host fingerprint/i, 'HOST_KEY_CHANGED'],
+  [/cannot parse privatekey|bad passphrase|no passphrase/i, 'AUTH_FAILED'],
+  [/timed out|timeout/i, 'TIMEOUT'],
+];
+
 export function normalizeError(raw: unknown): ProductError {
   if (raw instanceof ProductError) return raw;
 
-  const record = typeof raw === 'object' && raw !== null ? (raw as { code?: unknown; message?: unknown }) : {};
+  const record = typeof raw === 'object' && raw !== null ? (raw as { code?: unknown; level?: unknown; message?: unknown }) : {};
   const nodeCode = typeof record.code === 'string' ? record.code : undefined;
+  const level = typeof record.level === 'string' ? record.level : undefined;
   const detail =
     raw instanceof Error ? raw.message : typeof record.message === 'string' ? record.message : String(raw);
 
-  return new ProductError(nodeCode ? (NODE_CODE_MAP[nodeCode] ?? 'INTERNAL') : 'INTERNAL', { detail });
+  const mapped = level ? SSH_LEVEL_MAP[level] : undefined;
+  if (mapped) return new ProductError(mapped, { detail });
+
+  if (nodeCode && NODE_CODE_MAP[nodeCode]) {
+    return new ProductError(NODE_CODE_MAP[nodeCode], { detail });
+  }
+
+  for (const [pattern, code] of MESSAGE_RULES) {
+    if (pattern.test(detail)) return new ProductError(code, { detail });
+  }
+
+  return new ProductError('INTERNAL', { detail });
 }

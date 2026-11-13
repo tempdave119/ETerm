@@ -9,7 +9,7 @@ const common = {
   format: 'cjs',
   target: 'node22',
   // electron 与原生模块必须留给运行时 require，不能打进 bundle。
-  external: ['electron', 'node-pty'],
+  external: ['electron', 'node-pty', 'ssh2'],
   sourcemap: true,
   logLevel: 'info',
 };

@@ -11,6 +11,8 @@ export interface SessionOpenOptions {
   rows: number;
   cwd?: string;
   env?: Record<string, string>;
+  /** 协议私有连接参数，只由对应的能力模块解释；边界层不读里面的字段。 */
+  target?: unknown;
 }
 
 export interface ExitInfo {
