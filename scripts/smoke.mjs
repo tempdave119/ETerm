@@ -533,6 +533,51 @@ try {
     5_000,
     '面板开关落盘',
   );
+
+  // 设置面板入口：把系统资源改到左侧，再改回右侧。
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-dock-monitor"]') !== null`),
+    5_000,
+    '设置面板布局分区',
+  );
+  await evaluate(setSelectScript('[data-testid="settings-dock-monitor"]', 'left'));
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-left"] .dock__item').length === 2`),
+    5_000,
+    '设置里改到左侧',
+  );
+  await evaluate(setSelectScript('[data-testid="settings-dock-monitor"]', 'right'));
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),
+    5_000,
+    '设置里改回右侧',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+
+  // 重载页面：面板布局与分隔比例应从 layout.json 恢复（等价于重启应用）。
+  await Promise.resolve(evaluate(`location.reload()`)).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),
+    15_000,
+    '重载后布局恢复',
+  );
+  const persistedRatio = await (async () => {
+    const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
+    return parsed.panels?.dividers?.right?.[0];
+  })();
+  if (typeof persistedRatio !== 'number') throw new Error('layout.json 缺少右侧分隔比例');
+  await waitFor(
+    () =>
+      evaluate(`(() => {
+        const grow = Number(document.querySelector('[data-testid="dock-right"] .dock__item')?.style.flexGrow ?? NaN);
+        return Number.isFinite(grow) && Math.abs(grow - ${persistedRatio}) < 0.01;
+      })()`),
+    5_000,
+    '重载后分隔比例恢复',
+  );
+
   await evaluate(`document.querySelector('[data-testid="panel-close-monitor"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="panel-frame-monitor"]') === null`),
@@ -543,6 +588,16 @@ try {
   const shot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));
+
+  // 全部面板可关闭：停靠区不再渲染，工作区自己撑满。
+  for (const panelId of ['sessions', 'files', 'transfers']) {
+    await evaluate(`document.querySelector('[data-testid="panel-close-${panelId}"]')?.click()`);
+  }
+  await waitFor(() => evaluate(`document.querySelectorAll('.dock').length === 0`), 5_000, '关闭全部面板');
+  const workspaceWidth = await evaluate(
+    `document.querySelector('.workspace')?.getBoundingClientRect().width ?? 0`,
+  );
+  if (!(workspaceWidth > 900)) throw new Error(`关闭面板后工作区未撑满：${workspaceWidth}`);
 
   const tail = screen.split('\n').filter(Boolean).slice(-2).join(' | ');
   console.log(`冒烟通过：终端输出「${tail}」，截图 ${SCREENSHOT}`);

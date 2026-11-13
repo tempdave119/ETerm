@@ -223,15 +223,14 @@ export function App() {
     [applyPanelLayout],
   );
 
-  /** 打开连接后按配置展开/收起文件面板；用户改过的停靠位置保持不变。 */
+  /**
+   * 打开连接后按配置自动展开文件面板；关掉时只表示「不自动展开」，
+   * 不会强制关闭用户手动打开的面板（显隐以布局为准）。
+   */
   const applyFilesDefault = useCallback((): void => {
-    const open = config?.files.openByDefault ?? true;
+    if (!(config?.files.openByDefault ?? true)) return;
     const current = panelLayoutRef.current;
-    if (open) {
-      if (!panelDockOf(current, 'files')) applyPanelLayout(movePanel(current, 'files', 'right'), true);
-      return;
-    }
-    if (panelDockOf(current, 'files')) applyPanelLayout(movePanel(current, 'files', null), true);
+    if (!panelDockOf(current, 'files')) applyPanelLayout(movePanel(current, 'files', 'right'), true);
   }, [applyPanelLayout, config?.files.openByDefault]);
 
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
