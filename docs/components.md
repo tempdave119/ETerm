@@ -17,7 +17,7 @@ description: "F-19 交付物：组件目录、manifest 字段、入口契约与�
 
 - macOS 开发环境：`~/Library/Application Support/ETerm/components/`；冒烟用临时目录。
 - 启动时扫描一次；单个组件坏掉只记日志并跳过，不影响宿主启动。
-- 组件在内置模块之后装载，`setup()` 在宿主服务注入之后执行，可以通过 `ctx.get()` 取服务。
+- 组件在内置模块之后装载，`setup()` 在宿主服务注入之后执行；但宿主服务不对模块开放，`ctx.get()` 只能取其他模块导出的、且已在 `consumes` 里声明的服务。
 
 ## manifest.json
 
@@ -41,7 +41,7 @@ description: "F-19 交付物：组件目录、manifest 字段、入口契约与�
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 组件唯一 id，与模块导出的 `id` 一致 |
-| `kind` | 目前只接受 `capability` |
+| `kind` | 目前只接受 `capability`；`panel` / `theme` / `command` 为预留，未实现，写入即被拒绝 |
 | `apiVersion` | `^1.0.0` 形式，只校验主版本 |
 | `entry` | 相对组件目录的入口文件，必须在目录内 |
 | `activation.onProtocol` | 协议名（1–32 位小写），新建连接的下拉里出现 |
@@ -79,6 +79,13 @@ module.exports = {
 - `provides` 至少包含 `session`；需要文件 / 传输 / 转发时再声明对应端口。
 - 模块由宿主注册表校验：id 唯一、协议未被占用、apiVersion 主版本匹配。
 - 会话端口必须实现 `src/core/ports.ts` 的 `SessionPort`。
+
+## 服务权限
+
+- 组件拿不到宿主的 `connections` / `credentials` / `knownHosts` / `layouts`：`ctx.get()` 先看 `consumes` 声明，宿主服务一律拒绝。
+- 凭据由宿主在 `openSession` 前组装进 `target`，组件只收到本次连接的一份；读不到凭据库，也拿不到其他连接的凭据。
+- 组件之间要复用服务时，由提供方在 `exports.services` 导出，消费方在模块对象的 `consumes` 字段声明。
+- 安装即信任：组件在主进程内运行，无签名、无沙箱、无市场；不要装来路不明的组件。
 
 ## 串口样例
 

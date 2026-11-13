@@ -29,6 +29,7 @@ description: "可停靠面板的数据结构、组件职责、交互约定与扩
 - `docks[dock]` 是有序面板 id 列表，空数组表示该区不渲染。
 - `dividers[dock]` 是累计比例（0.15–0.85，相邻至少 0.1），长度 = 面板数 − 1；渲染时按相邻差值换算 flexGrow。
 - 同一面板只能出现在一个区；未知 id、弹层面板、重复 id 在解析时丢弃。
+- 示例里的 `monitor` 是用户后开的系统资源面板；出厂默认右栏只有 `files`（`defaultPanelLayout`），`monitor` 默认关闭。
 - 旧格式 `{ files: boolean, monitor: boolean }` 自动迁移：`files` 进右栏，`monitor` 追加到右栏，其余用默认布局。
 
 ## 组件职责

@@ -22,6 +22,8 @@ export class ModuleRegistry {
   #modules = new Map<string, ModuleSlot>();
   #protocols = new Map<string, string>();
   #services = new Map<string, unknown>();
+  /** 宿主注入的服务名；这些服务只归宿主，模块不能通过 ctx 取用。 */
+  #hostServices = new Set<string>();
   #setup = new Set<string>();
   #bus = new EventBus();
   #disposed = false;
@@ -50,7 +52,14 @@ export class ModuleRegistry {
       const ctx = createContext({
         moduleId: slot.manifest.id,
         bus: this.#bus,
-        getService: <T>(name: string) => this.getService<T>(name),
+        // 模块只能取自己 consumes 里声明过的服务；宿主服务（凭据 / 连接 / 指纹 / 布局）
+        // 只归宿主，避免组件通过 ctx 读到凭据库。
+        getService: <T,>(name: string): T => {
+          const declared = slot.manifest.consumes ?? [];
+          if (!declared.includes(name)) throw new Error(`模块 ${slot.manifest.id} 未声明服务 ${name}`);
+          if (this.#hostServices.has(name)) throw new Error(`宿主服务 ${name} 不对模块开放`);
+          return this.getService<T>(name);
+        },
       });
 
       const setup = slot.manifest.setup(ctx);
@@ -78,6 +87,7 @@ export class ModuleRegistry {
   provide(name: string, service: unknown): void {
     if (this.#services.has(name)) throw new Error(`服务名重复：${name}`);
     this.#services.set(name, service);
+    this.#hostServices.add(name);
   }
 
   moduleForProtocol(protocol: string): RegisteredModule {
@@ -102,12 +112,13 @@ export class ModuleRegistry {
       slot.dispose?.();
     }
     this.#services.clear();
+    this.#hostServices.clear();
     this.#bus.clear();
   }
 
   #assertManifest(module: CapabilityModule): void {
     if (module.kind !== 'capability') {
-      throw new Error(`模块 ${module.id} 的 kind 必须是 capability，当前为 ${module.kind}`);
+      throw new Error(`模块 ${module.id} 的 kind 必须是 capability（panel / theme / command 为预留，未实现）`);
     }
     if (!module.id.trim()) throw new Error('模块 id 不能为空');
     if (!isCompatibleApiVersion(module.apiVersion)) {

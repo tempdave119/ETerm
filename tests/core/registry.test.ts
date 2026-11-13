@@ -8,6 +8,7 @@ interface ModuleOptions {
   id: string;
   protocol?: string;
   apiVersion?: string;
+  consumes?: string[];
   setup?: CapabilityModule['setup'];
 }
 
@@ -18,6 +19,7 @@ function makeModule(options: ModuleOptions): CapabilityModule {
     builtin: true,
     apiVersion: options.apiVersion ?? '^1.0.0',
     provides: ['session'],
+    ...(options.consumes ? { consumes: options.consumes } : {}),
     activation: { onProtocol: options.protocol ?? options.id },
     setup: options.setup ?? (() => ({ dispose: () => {} })),
   };
@@ -100,6 +102,7 @@ test('registry_service_is_visible_to_later_modules_and_disposed_in_reverse', () 
     makeModule({
       id: 'core-second',
       protocol: 'second',
+      consumes: ['echo'],
       setup: (ctx) => {
         const echo = ctx.get<{ value: number }>('echo');
         calls.push(`second:${echo.value}`);
@@ -134,23 +137,44 @@ test('registry_missing_service_throws_with_name', () => {
   assert.throws(() => registry.getService('vault'), /服务未提供：vault/);
 });
 
-test('registry_host_provided_service_is_visible_to_modules', () => {
+test('registry_undeclared_service_is_rejected', () => {
   const registry = new ModuleRegistry();
-  registry.provide('connections', { ready: true });
-  let seen: unknown;
-
+  registry.provide('credentials', { get: () => 'secret' });
   registry.register(
     makeModule({
       id: 'core-fake',
       setup: (ctx) => {
-        seen = ctx.get('connections');
+        ctx.get('credentials');
         return { dispose: () => {} };
       },
     }),
   );
-  registry.setupAll();
 
-  assert.deepEqual(seen, { ready: true });
+  assert.throws(() => registry.setupAll(), /模块 core-fake 未声明服务 credentials/);
+});
+
+test('registry_declared_host_service_is_still_rejected', () => {
+  const registry = new ModuleRegistry();
+  registry.provide('connections', { ready: true });
+  registry.register(
+    makeModule({
+      id: 'core-fake',
+      consumes: ['connections'],
+      setup: (ctx) => {
+        ctx.get('connections');
+        return { dispose: () => {} };
+      },
+    }),
+  );
+
+  assert.throws(() => registry.setupAll(), /宿主服务 connections 不对模块开放/);
+});
+
+test('registry_non_capability_kind_is_rejected', () => {
+  const registry = new ModuleRegistry();
+  const panel = { ...makeModule({ id: 'core-panel' }), kind: 'panel' } as unknown as CapabilityModule;
+
+  assert.throws(() => registry.register(panel), /kind 必须是 capability/);
 });
 
 test('registry_duplicate_host_service_is_rejected', () => {

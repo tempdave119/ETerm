@@ -11,7 +11,8 @@ import type {
 
 export const API_VERSION = '1.0.0';
 
-export type ModuleKind = 'capability' | 'panel' | 'theme' | 'command';
+/** v1 只装载能力包；panel / theme / command 是处方里的预留扩展点，实现前不写入类型。 */
+export type ModuleKind = 'capability';
 
 export interface ModuleManifest {
   id: string;
@@ -19,6 +20,7 @@ export interface ModuleManifest {
   builtin?: boolean;
   apiVersion: string;
   provides: Capability[];
+  /** 声明要取用哪些服务；宿主的凭据 / 连接 / 指纹 / 布局服务永不对模块开放。 */
   consumes?: string[];
   activation?: { onProtocol?: string };
 }

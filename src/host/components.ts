@@ -86,7 +86,7 @@ function parseManifest(raw: unknown): ComponentManifest {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('manifest 必须是对象');
   const record = raw as Record<string, unknown>;
   if (typeof record.id !== 'string' || !record.id.trim() || record.id.length > 64) throw new Error('manifest.id 无效');
-  if (record.kind !== 'capability') throw new Error('manifest.kind 必须是 capability');
+  if (record.kind !== 'capability') throw new Error('manifest.kind 必须是 capability（panel / theme / command 为预留，未实现）');
   if (typeof record.apiVersion !== 'string' || !/^\^\d+\./.test(record.apiVersion)) {
     throw new Error('manifest.apiVersion 必须形如 ^1.0.0');
   }
