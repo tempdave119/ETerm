@@ -87,6 +87,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
+      # gh 靠 git remote 确认目标仓库，不 checkout 会直接报 not a git repository。
+      - name: 检出代码
+        uses: actions/checkout@v5
+
       - name: 汇总构建产物
         uses: actions/download-artifact@v5
         with:
@@ -97,8 +101,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls -la artifacts
+          set -o pipefail
+          ls -la artifacts | tee /tmp/release.log
           gh release create "$GITHUB_REF_NAME" \
             --title "ETerm ${GITHUB_REF_NAME#v}" \
             --generate-notes \
-            artifacts/*.dmg artifacts/*.dmg.blockmap
+            artifacts/*.dmg artifacts/*.dmg.blockmap 2>&1 | tee -a /tmp/release.log
+
+      - name: 发布失败诊断
+        if: failure()
+        run: |
+          KEY=$(tail -20 /tmp/release.log 2>/dev/null | tr '\n' ' ' | cut -c1-700)
+          echo "::error title=DIAG-publish::${KEY:-没有 release.log}"
