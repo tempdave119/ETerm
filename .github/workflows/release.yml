@@ -21,7 +21,7 @@ jobs:
         include:
           - runner: macos-15-intel
             arch: x64
-          - runner: macos-latest
+          - runner: macos-15
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
@@ -35,15 +35,19 @@ jobs:
           cache: npm
 
       - name: 安装依赖
-        run: npm ci
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee /tmp/build.log
 
       - name: 单元测试
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee -a /tmp/build.log
 
       - name: 构建主进程与渲染层
         run: |
           set -o pipefail
-          npm run build 2>&1 | tee /tmp/build.log
+          npm run build 2>&1 | tee -a /tmp/build.log
 
       # --publish never 必须显式给：electron-builder 看到 git tag 会自动尝试发布，
       # 缺 GH_TOKEN 直接失败；发布统一交给下面的 publish job。
@@ -52,9 +56,12 @@ jobs:
           set -o pipefail
           npx electron-builder --mac dmg --${{ matrix.arch }} --publish never 2>&1 | tee -a /tmp/build.log
 
+      # 失败时把关键错误写成 annotation（公开可读），完整日志进 job summary。
       - name: 失败诊断
         if: failure()
         run: |
+          KEY=$(tail -60 /tmp/build.log 2>/dev/null | grep -iE "error|⨯|failed|not found|cannot" | head -4 | tr '\n' ' ' | cut -c1-700)
+          echo "::error title=DIAG-${{ matrix.arch }}::${KEY:-没有匹配到错误行}"
           {
             echo "## 构建失败诊断（${{ matrix.arch }}）"
             echo ""
@@ -69,7 +76,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dmg-${{ matrix.arch }}
           path: |
@@ -83,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 汇总构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true
