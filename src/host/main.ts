@@ -5,9 +5,22 @@ import { SessionService } from '../core/session-service.ts';
 import { localTerminalModule } from '../modules/local-terminal/index.ts';
 import { sshModule } from '../modules/ssh/index.ts';
 import { ConnectionStore } from '../services/connections/store.ts';
+import { CredentialStore } from '../services/credentials/store.ts';
+import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { IPC } from '../shared/ipc.ts';
+import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
 import { registerConnectionsIpc } from './connections-ipc.ts';
+import { registerCredentialsIpc } from './credentials-ipc.ts';
+import { registerFilesIpc } from './files-ipc.ts';
 import { registerSessionIpc } from './ipc.ts';
+import { registerKnownHostsIpc } from './known-hosts-ipc.ts';
+import { createSafeStorageCodec } from './secret-codec.ts';
+
+interface AppServices {
+  connections: ConnectionStore;
+  credentials: CredentialStore;
+  knownHosts: KnownHostsStore;
+}
 
 app.setName('ETerm');
 
@@ -18,7 +31,12 @@ registry.setupAll();
 
 let disposeIpc: (() => void) | null = null;
 let disposeConnectionsIpc: (() => void) | null = null;
+let disposeConnectionOpenIpc: (() => void) | null = null;
+let disposeFilesIpc: (() => void) | null = null;
+let disposeKnownHostsIpc: (() => void) | null = null;
+let disposeCredentialsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
+let appServices: AppServices | null = null;
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -49,11 +67,19 @@ function createWindow(): void {
   });
   sessions = service;
   disposeIpc = registerSessionIpc(service);
+  if (appServices) {
+    disposeConnectionOpenIpc = registerConnectionOpenIpc(service, appServices);
+  }
+  disposeFilesIpc = registerFilesIpc(service);
 
   window.once('ready-to-show', () => window.show());
   window.on('closed', () => {
     disposeIpc?.();
     disposeIpc = null;
+    disposeConnectionOpenIpc?.();
+    disposeConnectionOpenIpc = null;
+    disposeFilesIpc?.();
+    disposeFilesIpc = null;
     sessions?.dispose();
     sessions = null;
   });
@@ -70,9 +96,21 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
-  const connections = new ConnectionStore({ baseDir: app.getPath('userData') });
-  registry.provide('connections', connections);
-  disposeConnectionsIpc = registerConnectionsIpc(connections);
+  // 冒烟可用 ETERM_USER_DATA 指向临时目录，避免污染真实配置与 known_hosts。
+  const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
+  const services: AppServices = {
+    connections: new ConnectionStore({ baseDir }),
+    credentials: new CredentialStore({ baseDir, codec: createSafeStorageCodec() }),
+    knownHosts: new KnownHostsStore({ baseDir }),
+  };
+  appServices = services;
+  registry.provide('connections', services.connections);
+  registry.provide('credentials', services.credentials);
+  registry.provide('knownHosts', services.knownHosts);
+
+  disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
+  disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);
+  disposeCredentialsIpc = registerCredentialsIpc(services.credentials);
 
   createWindow();
   app.on('activate', () => {
@@ -87,6 +125,10 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   disposeConnectionsIpc?.();
   disposeConnectionsIpc = null;
+  disposeKnownHostsIpc?.();
+  disposeKnownHostsIpc = null;
+  disposeCredentialsIpc?.();
+  disposeCredentialsIpc = null;
   sessions?.dispose();
   registry.dispose();
 });

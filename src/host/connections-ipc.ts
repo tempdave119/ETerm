@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { normalizeError } from '../core/errors.ts';
 import type { ConnectionStore } from '../services/connections/store.ts';
+import type { CredentialStore } from '../services/credentials/store.ts';
 import {
   CONNECTIONS_IPC,
   type ConnectionInput,
@@ -60,7 +61,10 @@ function readGroupInput(raw: unknown): GroupInput {
   };
 }
 
-export function registerConnectionsIpc(store: ConnectionStore): () => void {
+export function registerConnectionsIpc(
+  store: ConnectionStore,
+  credentials: Pick<CredentialStore, 'removeAll'>,
+): () => void {
   ipcMain.handle(CONNECTIONS_IPC.list, async (): Promise<IpcResult<ConnectionsSnapshot>> => {
     try {
       return success(await store.list());
@@ -82,7 +86,21 @@ export function registerConnectionsIpc(store: ConnectionStore): () => void {
 
   ipcMain.handle(CONNECTIONS_IPC.deleteConnection, async (_event, rawId): Promise<IpcResult<null>> => {
     try {
-      await store.deleteConnection(readString(rawId, '连接 id', ID_MAX));
+      const id = readString(rawId, '连接 id', ID_MAX);
+      await store.deleteConnection(id);
+      // 连接删掉后凭据一并清理，避免 Keychain 里留下孤儿密文。
+      await credentials.removeAll(id);
+      return success(null);
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(CONNECTIONS_IPC.reorder, async (_event, rawIds): Promise<IpcResult<null>> => {
+    try {
+      if (!Array.isArray(rawIds) || rawIds.length > 1000) throw new Error('排序参数必须是数组');
+      const ids = rawIds.map((id, index) => readString(id, `排序 id #${index + 1}`, ID_MAX));
+      await store.reorderConnections(ids);
       return success(null);
     } catch (error) {
       return failure(error);

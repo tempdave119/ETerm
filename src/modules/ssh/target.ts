@@ -6,6 +6,7 @@ export interface SshTarget {
   password?: string;
   privateKey?: string;
   passphrase?: string;
+  agent?: string;
 }
 
 function readString(value: unknown, field: string, maxLength: number): string {
@@ -39,6 +40,7 @@ export function parseSshTarget(raw: unknown): SshTarget {
   if (record.password !== undefined) target.password = readString(record.password, 'password', 4096);
   if (record.privateKey !== undefined) target.privateKey = readString(record.privateKey, 'privateKey', 65536);
   if (record.passphrase !== undefined) target.passphrase = readString(record.passphrase, 'passphrase', 4096);
+  if (record.agent !== undefined) target.agent = readString(record.agent, 'agent', 4096);
 
   return target;
 }

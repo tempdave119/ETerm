@@ -164,3 +164,26 @@ test('connections_list_is_sorted_by_order', async () => {
     ['first', 'second'],
   );
 });
+
+test('connections_reorder_updates_order_and_persists', async () => {
+  const { dir, store } = await createStore();
+  const first = await store.saveConnection({ name: 'first', protocol: 'ssh', host: '10.0.0.7', username: 'root' });
+  const second = await store.saveConnection({ name: 'second', protocol: 'ssh', host: '10.0.0.8', username: 'root' });
+
+  await store.reorderConnections([second.id, first.id]);
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+
+  assert.deepEqual(
+    snapshot.connections.map((item) => item.name),
+    ['second', 'first'],
+  );
+});
+
+test('connections_reorder_requires_all_ids', async () => {
+  const { store } = await createStore();
+  const first = await store.saveConnection({ name: 'first', protocol: 'ssh', host: '10.0.0.7', username: 'root' });
+
+  await assert.rejects(store.reorderConnections([]), /必须包含全部连接/);
+  await assert.rejects(store.reorderConnections([first.id, 'missing']), /必须包含全部连接/);
+});

@@ -35,6 +35,7 @@ export async function connectSsh(target: SshTarget): Promise<SshConnection> {
         password: target.password,
         privateKey: target.privateKey,
         passphrase: target.passphrase,
+        agent: target.agent,
         readyTimeout: 10_000,
         keepaliveInterval: 15_000,
         hostVerifier: (key: Buffer) => {

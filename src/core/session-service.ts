@@ -1,6 +1,6 @@
 import { ProductError, normalizeError } from './errors.ts';
 import type { SessionHandle } from './manifest.ts';
-import type { Capability, ExitInfo, SessionOpenOptions } from './ports.ts';
+import type { Capability, ExitInfo, FilePort, SessionOpenOptions } from './ports.ts';
 import type { ModuleRegistry } from './registry.ts';
 
 export interface SessionEvents {
@@ -83,6 +83,10 @@ export class SessionService {
     } finally {
       this.#teardown(sessionId);
     }
+  }
+
+  filePort(sessionId: string): FilePort | null {
+    return this.#sessions.get(sessionId)?.handle.file ?? null;
   }
 
   dispose(): void {

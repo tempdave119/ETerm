@@ -51,6 +51,11 @@ export class ConnectionStore {
     return { groups: snapshot.groups, connections: snapshot.connections };
   }
 
+  async getConnection(id: string): Promise<ConnectionRecord | null> {
+    const file = await this.#load();
+    return structuredClone(file.connections.find((item) => item.id === id) ?? null);
+  }
+
   async saveConnection(input: ConnectionInput): Promise<ConnectionRecord> {
     return this.#mutate((file) => {
       const normalized = normalizeConnection(input, file);
@@ -86,6 +91,25 @@ export class ConnectionStore {
       const index = file.connections.findIndex((item) => item.id === id);
       if (index < 0) throw new Error(`连接不存在：${id}`);
       file.connections.splice(index, 1);
+    });
+  }
+
+  async reorderConnections(orderedIds: string[]): Promise<void> {
+    await this.#mutate((file) => {
+      const known = new Set(file.connections.map((connection) => connection.id));
+      if (orderedIds.length !== known.size) throw new Error('排序列表必须包含全部连接');
+
+      const seen = new Set<string>();
+      for (const id of orderedIds) {
+        if (!known.has(id) || seen.has(id)) throw new Error(`排序列表无效：${id}`);
+        seen.add(id);
+      }
+
+      const byId = new Map(file.connections.map((connection) => [connection.id, connection]));
+      orderedIds.forEach((id, index) => {
+        const connection = byId.get(id);
+        if (connection) connection.order = index;
+      });
     });
   }
 

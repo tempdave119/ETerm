@@ -41,8 +41,8 @@ const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
       session.on('pty', (acceptPty) => {
         acceptPty();
       });
-      session.on('window-change', (acceptWindow) => {
-        acceptWindow();
+      session.on('window-change', () => {
+        // window-change 是通告型请求，没有 accept 回调。
       });
       session.on('sftp', (_acceptSftp, rejectSftp) => {
         rejectSftp();
