@@ -183,23 +183,30 @@ export function MonitorPanel({
               <section className="monitor-section" data-testid="monitor-processes" data-sort={processSort}>
                 <div className="monitor-section-head">
                   <div className="monitor-section-title">占用最高进程</div>
-                  <div className="monitor-sort" role="group" aria-label="进程排序">
-                    <button
-                      type="button"
-                      className={processSort === 'memory' ? 'is-active' : ''}
-                      data-testid="process-sort-memory"
-                      onClick={() => onProcessSortChange('memory')}
-                    >
-                      内存
-                    </button>
-                    <button
-                      type="button"
-                      className={processSort === 'cpu' ? 'is-active' : ''}
-                      data-testid="process-sort-cpu"
-                      onClick={() => onProcessSortChange('cpu')}
-                    >
-                      CPU
-                    </button>
+                  <div className="monitor-sort-wrap">
+                    <span className="monitor-sort__label">排序</span>
+                    <div className="monitor-sort" role="group" aria-label="进程排序">
+                      <button
+                        type="button"
+                        className={processSort === 'memory' ? 'is-active' : ''}
+                        data-testid="process-sort-memory"
+                        aria-pressed={processSort === 'memory'}
+                        title="按内存占用排序"
+                        onClick={() => onProcessSortChange('memory')}
+                      >
+                        内存
+                      </button>
+                      <button
+                        type="button"
+                        className={processSort === 'cpu' ? 'is-active' : ''}
+                        data-testid="process-sort-cpu"
+                        aria-pressed={processSort === 'cpu'}
+                        title="按 CPU 占用排序"
+                        onClick={() => onProcessSortChange('cpu')}
+                      >
+                        CPU
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="monitor-process-list">

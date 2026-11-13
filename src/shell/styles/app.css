@@ -1259,15 +1259,28 @@ button {
   font-size: var(--font-aux);
 }
 
+.monitor-sort-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-sort__label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
 .monitor-sort {
   display: inline-flex;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
 }
 
 .monitor-sort button {
-  height: 20px;
+  min-width: 34px;
+  height: 22px;
   padding: 0 var(--space-tight);
   border: 0;
   background: transparent;
@@ -1276,13 +1289,24 @@ button {
   cursor: pointer;
 }
 
+.monitor-sort button + button {
+  border-left: 1px solid var(--border-subtle);
+}
+
 .monitor-sort button:hover {
-  color: var(--text-secondary);
+  background: var(--bg-overlay);
+  color: var(--text-primary);
 }
 
 .monitor-sort button.is-active {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
+  background: var(--text-primary);
+  color: var(--bg-panel);
+  font-weight: 600;
+}
+
+.monitor-sort button.is-active:hover {
+  background: var(--text-primary);
+  color: var(--bg-panel);
 }
 
 .monitor-sort button:focus-visible {
