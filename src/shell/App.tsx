@@ -696,6 +696,9 @@ export function App() {
             onMove={(target) => movePanelTo('transfers', target)}
             onCancel={(id) => void cancelTransfer(id)}
             onRetry={(id) => void retryTransfer(id)}
+            onOpenFiles={() => {
+              if (!panelDockOf(panelLayoutRef.current, 'files')) togglePanel('files');
+            }}
           />
         );
       default:

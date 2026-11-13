@@ -10,6 +10,7 @@ interface TransferPanelProps {
   onMove(target: DockId | null): void;
   onCancel(id: string): void;
   onRetry(id: string): void;
+  onOpenFiles(): void;
 }
 
 const STATUS_LABEL: Record<TransferView['status'], string> = {
@@ -20,7 +21,7 @@ const STATUS_LABEL: Record<TransferView['status'], string> = {
   canceled: '已取消',
 };
 
-export function TransferPanel({ tasks, dock, onMove, onCancel, onRetry }: TransferPanelProps) {
+export function TransferPanel({ tasks, dock, onMove, onCancel, onRetry, onOpenFiles }: TransferPanelProps) {
   return (
     <PanelFrame
       panelId="transfers"
@@ -30,7 +31,20 @@ export function TransferPanel({ tasks, dock, onMove, onCancel, onRetry }: Transf
       actions={<span className="transfer-panel__count">{tasks.length}</span>}
     >
       <div className="transfer-panel__list">
-        {tasks.length === 0 ? <div className="panel-empty">暂无传输任务</div> : null}
+        {tasks.length === 0 ? (
+          <div className="panel-empty panel-empty--stacked" data-testid="transfer-empty">
+            <p className="panel-empty__title">还没有传输任务</p>
+            <button
+              className="button"
+              type="button"
+              data-testid="transfer-open-files"
+              onClick={onOpenFiles}
+            >
+              打开文件面板
+            </button>
+            <p className="panel-empty__hint">在文件面板选择上传或下载后，任务会出现在这里</p>
+          </div>
+        ) : null}
         {tasks.map((task) => {
           const percent = task.total > 0 ? Math.min(100, Math.round((task.transferred / task.total) * 100)) : 0;
           return (

@@ -585,6 +585,25 @@ try {
     '关闭系统资源',
   );
 
+  const transferEmpty = await evaluate(
+    `document.querySelector('[data-testid="transfer-empty"]')?.innerText ?? ''`,
+  );
+  if (!transferEmpty.includes('还没有传输任务') || !transferEmpty.includes('上传或下载')) {
+    throw new Error(`传输队列空态缺少说明或提示：${transferEmpty}`);
+  }
+  await evaluate(`document.querySelector('[data-testid="panel-close-files"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="panel-frame-files"]') === null`),
+    5_000,
+    '关闭文件面板',
+  );
+  await evaluate(`document.querySelector('[data-testid="transfer-open-files"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="panel-frame-files"]') !== null`),
+    5_000,
+    '空态动作打开文件面板',
+  );
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));

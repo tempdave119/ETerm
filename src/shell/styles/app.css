@@ -946,6 +946,25 @@ button {
   font-size: var(--font-aux);
 }
 
+.panel-empty--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-base);
+}
+
+.panel-empty__title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+}
+
+.panel-empty__hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
 .file-panel__path {
   height: var(--row-height);
   margin: 0 var(--space-base) var(--space-base);
