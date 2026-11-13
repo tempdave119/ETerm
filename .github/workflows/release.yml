@@ -1,13 +1,11 @@
 name: release
 
 # 打 tag 即出包：x64 / arm64 分别交给对应架构的 runner 构建，再统一发布到一个 Release。
-# branches 里的 ci-probe 是诊断用临时入口，定位完 CI 环境差异后移除。
+# arm64 不要用 macos-latest（当前指向 macOS 26，构建失败），固定用 macos-15。
 on:
   push:
     tags:
       - "v*"
-    branches:
-      - "ci-probe"
 
 permissions:
   contents: write
