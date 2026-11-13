@@ -76,7 +76,7 @@ export function MonitorPanel({
   return (
     <PanelFrame
       panelId="monitor"
-      title={sessionId ? '系统资源 · 远端' : '系统资源 · 本机'}
+      title="系统资源"
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
@@ -91,6 +91,9 @@ export function MonitorPanel({
           <span className="monitor-source__name" title={connectionName ?? targetLabel} data-testid="monitor-source-name">
             {connectionName ?? (sessionId ? '远端主机' : '这台 Mac')}
           </span>
+          <span className="monitor-source__host" data-testid="monitor-hostname">
+            {stats?.hostname ?? '—'}
+          </span>
           {sessionId ? (
             <span className="monitor-source__target" title={targetLabel}>
               {targetLabel}
@@ -98,119 +101,124 @@ export function MonitorPanel({
           ) : null}
         </div>
 
-        <div className="monitor-section-title">资源</div>
-
-        <div className="monitor-row">
-          <span>主机名</span>
-          <span className="monitor-row__value" data-testid="monitor-hostname">
-            {stats?.hostname ?? '—'}
-          </span>
-        </div>
-        <div className="monitor-row">
-          <span>CPU</span>
-          <span className="monitor-row__value" data-testid="monitor-cpu">
-            {stats ? `${stats.cpuPercent}%` : '—'}
-          </span>
-        </div>
-        <div className="monitor-meter">
-          <span className="monitor-meter__fill" style={{ width: `${stats?.cpuPercent ?? 0}%` }} />
-        </div>
-
-        <div className="monitor-row">
-          <span>内存</span>
-          <span className="monitor-row__value" data-testid="monitor-memory">
-            {stats ? `${formatBytes(stats.memUsed)} / ${formatBytes(stats.memTotal)} · ${memoryPercent}%` : '—'}
-          </span>
-        </div>
-        <div className="monitor-meter">
-          <span className="monitor-meter__fill" style={{ width: `${memoryPercent}%` }} />
-        </div>
-
-        <div className="monitor-row">
-          <span>负载</span>
-          <span className="monitor-row__value" data-testid="monitor-load">
-            {stats ? stats.load.map((value) => value.toFixed(2)).join(' / ') : '—'}
-          </span>
-        </div>
-
-        <div className="monitor-row">
-          <span>CPU 核数</span>
-          <span className="monitor-row__value">{stats?.cpus ?? '—'}</span>
-        </div>
-
-        <div className="monitor-row">
-          <span>运行时间</span>
-          <span className="monitor-row__value" data-testid="monitor-uptime">
-            {stats ? formatUptime(stats.uptime) : '—'}
-          </span>
-        </div>
-
-        {stats?.filesystems?.length ? (
-          <div className="monitor-filesystems" data-testid="monitor-filesystems">
-            <div className="monitor-section-title">文件系统</div>
-            {stats.filesystems.map((item) => {
-              const percent = item.total > 0 ? Math.min(100, Math.round((item.used / item.total) * 100)) : 0;
-              const tone = percent >= 90 ? 'danger' : percent >= 80 ? 'warning' : undefined;
-              return (
-                <div className="monitor-fs" key={item.path}>
-                  <div className="monitor-fs__head">
-                    <span className="monitor-fs__path" title={item.path}>
-                      {item.path}
-                    </span>
-                    <span className="monitor-row__value">
-                      {formatBytes(item.used)} / {formatBytes(item.total)} · {percent}%
-                    </span>
+        {error ? (
+          <div className="monitor-error" data-testid="monitor-error">
+            {error}
+          </div>
+        ) : !stats ? (
+          <div className="monitor-loading">正在采样…</div>
+        ) : (
+          <>
+            <section className="monitor-section">
+              <div className="monitor-metrics">
+                <div className="monitor-metric">
+                  <div className="monitor-metric__head">
+                    <span className="monitor-metric__label">CPU</span>
+                    <strong className="monitor-metric__value" data-testid="monitor-cpu">
+                      {stats.cpuPercent}%
+                    </strong>
                   </div>
-                  <div className="monitor-meter">
-                    <span className="monitor-meter__fill" data-tone={tone} style={{ width: `${percent}%` }} />
+                  <div className="monitor-meter monitor-meter--metric">
+                    <span className="monitor-meter__fill" style={{ width: `${stats.cpuPercent}%` }} />
+                  </div>
+                  <div className="monitor-metric__sub">
+                    <span>{stats.cpus} 核</span>
+                    <span data-testid="monitor-uptime">{formatUptime(stats.uptime)}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : null}
 
-        {processList.length ? (
-          <div className="monitor-processes" data-testid="monitor-processes" data-sort={processSort}>
-            <div className="monitor-section-head">
-              <div className="monitor-section-title">占用最高进程</div>
-              <div className="monitor-sort" role="group" aria-label="进程排序">
-                <button
-                  type="button"
-                  className={processSort === 'memory' ? 'is-active' : ''}
-                  data-testid="process-sort-memory"
-                  onClick={() => onProcessSortChange('memory')}
-                >
-                  内存
-                </button>
-                <button
-                  type="button"
-                  className={processSort === 'cpu' ? 'is-active' : ''}
-                  data-testid="process-sort-cpu"
-                  onClick={() => onProcessSortChange('cpu')}
-                >
-                  CPU
-                </button>
+                <div className="monitor-metric">
+                  <div className="monitor-metric__head">
+                    <span className="monitor-metric__label">内存</span>
+                    <strong className="monitor-metric__value" data-testid="monitor-memory-percent">
+                      {memoryPercent}%
+                    </strong>
+                  </div>
+                  <div className="monitor-meter monitor-meter--metric">
+                    <span className="monitor-meter__fill" style={{ width: `${memoryPercent}%` }} />
+                  </div>
+                  <div className="monitor-metric__sub">
+                    <span data-testid="monitor-memory">
+                      {formatBytes(stats.memUsed)} / {formatBytes(stats.memTotal)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            {processList.map((proc) => (
-              <div className="monitor-process" key={`${proc.pid}-${proc.name}`}>
-                <span className="monitor-process__name" title={proc.name}>
-                  {proc.name}
-                </span>
-                <span className="monitor-process__meta">
-                  {formatBytes(proc.rss)} · {proc.cpuPercent.toFixed(1)}%
+
+              <div className="monitor-fact-row">
+                <span>负载</span>
+                <span className="monitor-row__value" data-testid="monitor-load">
+                  {stats.load.map((value) => value.toFixed(2)).join(' / ')}
                 </span>
               </div>
-            ))}
-          </div>
-        ) : null}
+            </section>
 
-        {error ? (
-          <p className="monitor-error" data-testid="monitor-error">
-            {error}
-          </p>
-        ) : null}
+            {stats.filesystems?.length ? (
+              <section className="monitor-section" data-testid="monitor-filesystems">
+                <div className="monitor-section-title">文件系统</div>
+                {stats.filesystems.map((item) => {
+                  const percent = item.total > 0 ? Math.min(100, Math.round((item.used / item.total) * 100)) : 0;
+                  const tone = percent >= 90 ? 'danger' : percent >= 80 ? 'warning' : null;
+                  return (
+                    <div className="monitor-fs" key={item.path}>
+                      <div className="monitor-fs__head">
+                        <span className="monitor-fs__path" title={item.path}>
+                          {item.path}
+                        </span>
+                        <span className={`monitor-fs__percent${tone ? ` is-${tone}` : ''}`}>{percent}%</span>
+                      </div>
+                      <div className="monitor-fs__meta">
+                        {formatBytes(item.used)} / {formatBytes(item.total)}
+                      </div>
+                      <div className="monitor-meter">
+                        <span className="monitor-meter__fill" data-tone={tone ?? undefined} style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+            ) : null}
+
+            {processList.length ? (
+              <section className="monitor-section" data-testid="monitor-processes" data-sort={processSort}>
+                <div className="monitor-section-head">
+                  <div className="monitor-section-title">占用最高进程</div>
+                  <div className="monitor-sort" role="group" aria-label="进程排序">
+                    <button
+                      type="button"
+                      className={processSort === 'memory' ? 'is-active' : ''}
+                      data-testid="process-sort-memory"
+                      onClick={() => onProcessSortChange('memory')}
+                    >
+                      内存
+                    </button>
+                    <button
+                      type="button"
+                      className={processSort === 'cpu' ? 'is-active' : ''}
+                      data-testid="process-sort-cpu"
+                      onClick={() => onProcessSortChange('cpu')}
+                    >
+                      CPU
+                    </button>
+                  </div>
+                </div>
+                <div className="monitor-process-list">
+                  {processList.map((proc, index) => (
+                    <div className="monitor-process" key={`${proc.pid}-${proc.name}`}>
+                      <span className="monitor-process__rank">{index + 1}</span>
+                      <span className="monitor-process__name" title={proc.name}>
+                        {proc.name}
+                      </span>
+                      <span className="monitor-process__meta">
+                        {formatBytes(proc.rss)} · {proc.cpuPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </>
+        )}
       </div>
     </PanelFrame>
   );

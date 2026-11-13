@@ -1093,17 +1093,9 @@ button {
 .monitor-panel__body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-tight);
+  gap: var(--space-base);
   padding: 0 var(--space-container) var(--space-container);
   overflow-y: auto;
-}
-
-.monitor-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-secondary);
-  font-size: var(--font-aux);
 }
 
 .monitor-row__value {
@@ -1117,7 +1109,7 @@ button {
   column-gap: var(--space-tight);
   row-gap: 2px;
   align-items: center;
-  margin-bottom: var(--space-tight);
+  margin-bottom: 0;
   padding: var(--space-tight) var(--space-base);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1153,9 +1145,20 @@ button {
   text-overflow: ellipsis;
 }
 
-.monitor-source__target {
+.monitor-source__host {
   grid-column: 2;
   grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--font-aux);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.monitor-source__target {
+  grid-column: 2;
+  grid-row: 3;
   min-width: 0;
   overflow: hidden;
   font-family: var(--font-mono);
@@ -1163,8 +1166,19 @@ button {
   text-overflow: ellipsis;
 }
 
+.monitor-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.monitor-section + .monitor-section {
+  padding-top: var(--space-base);
+  border-top: 1px solid var(--border-subtle);
+}
+
 .monitor-section-title {
-  margin-top: var(--space-tight);
+  margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-aux);
   font-weight: 600;
@@ -1175,11 +1189,74 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-base);
-  margin-top: var(--space-tight);
+  margin: 0;
 }
 
-.monitor-section-head .monitor-section-title {
-  margin-top: 0;
+.monitor-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-tight);
+}
+
+.monitor-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--space-tight) var(--space-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+}
+
+.monitor-metric__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.monitor-metric__label {
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
+.monitor-metric__value {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.monitor-metric__sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.monitor-metric__sub span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monitor-meter--metric {
+  height: 6px;
+}
+
+.monitor-fact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
 }
 
 .monitor-sort {
@@ -1213,16 +1290,10 @@ button {
   outline-offset: -1px;
 }
 
-.monitor-filesystems {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-tight);
-}
-
 .monitor-fs {
   display: flex;
   flex-direction: column;
-  gap: var(--space-tight);
+  gap: 4px;
 }
 
 .monitor-fs__head {
@@ -1241,18 +1312,44 @@ button {
   text-overflow: ellipsis;
 }
 
-.monitor-processes {
+.monitor-fs__percent {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-fs__percent.is-warning {
+  color: var(--status-warning);
+}
+
+.monitor-fs__percent.is-danger {
+  color: var(--status-danger);
+}
+
+.monitor-fs__meta {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-process-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-tight);
+  gap: 2px;
 }
 
 .monitor-process {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-base);
+  gap: var(--space-tight);
   font-size: var(--font-aux);
+}
+
+.monitor-process__rank {
+  flex: 0 0 14px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .monitor-process__name {
@@ -1270,8 +1367,18 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.monitor-loading {
+  padding: var(--space-base) 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
 .monitor-error {
   margin: 0;
+  padding: var(--space-base);
+  border: 1px solid var(--status-danger);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
   color: var(--status-danger);
   font-size: var(--font-aux);
 }
