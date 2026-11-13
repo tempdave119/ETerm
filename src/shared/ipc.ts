@@ -56,7 +56,12 @@ export const TRANSFERS_IPC = {
   retry: 'transfers:retry',
   pickUpload: 'transfers:pick-upload',
   pickDownload: 'transfers:pick-download',
+  uploadDropped: 'transfers:upload-dropped',
   update: 'transfers:update',
+} as const;
+
+export const DROP_IPC = {
+  register: 'drop:register',
 } as const;
 
 export const FORWARDS_IPC = {
@@ -161,8 +166,14 @@ export interface EtermApi {
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;
   retryTransfer(id: string): Promise<IpcResult<null>>;
-  pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView | null>>;
+  pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView[] | null>>;
   pickDownload(sessionId: string, remotePath: string): Promise<IpcResult<TransferView | null>>;
+  registerDroppedFiles(files: File[]): Promise<IpcResult<string[]>>;
+  uploadDropped(
+    sessionId: string,
+    remoteDir: string,
+    tokens: string[],
+  ): Promise<IpcResult<TransferView[]>>;
   onTransferUpdate(handler: (task: TransferView) => void): () => void;
 
   listForwards(sessionId: string): Promise<IpcResult<ForwardView[]>>;

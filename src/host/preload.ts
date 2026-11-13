@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import {
   CLIPBOARD_IPC,
   COMPONENTS_IPC,
@@ -6,6 +6,7 @@ import {
   CONNECTIONS_IPC,
   CONNECTION_IPC,
   CREDENTIALS_IPC,
+  DROP_IPC,
   FILES_IPC,
   FORWARDS_IPC,
   IPC,
@@ -95,11 +96,27 @@ const api: EtermApi = {
     ipcRenderer.invoke(TRANSFERS_IPC.retry, id) as Promise<IpcResult<null>>,
   pickUpload: (sessionId: string, remoteDir: string) =>
     ipcRenderer.invoke(TRANSFERS_IPC.pickUpload, { sessionId, remoteDir }) as Promise<
-      IpcResult<TransferView | null>
+      IpcResult<TransferView[] | null>
     >,
   pickDownload: (sessionId: string, remotePath: string) =>
     ipcRenderer.invoke(TRANSFERS_IPC.pickDownload, { sessionId, remotePath }) as Promise<
       IpcResult<TransferView | null>
+    >,
+  registerDroppedFiles: (files: File[]) => {
+    const paths: string[] = [];
+    for (const file of files) {
+      try {
+        const path = webUtils.getPathForFile(file);
+        if (path) paths.push(path);
+      } catch {
+        // 合成 File 没有本地路径；跳过即可，由主进程返回空列表错误。
+      }
+    }
+    return ipcRenderer.invoke(DROP_IPC.register, paths) as Promise<IpcResult<string[]>>;
+  },
+  uploadDropped: (sessionId: string, remoteDir: string, tokens: string[]) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.uploadDropped, { sessionId, remoteDir, tokens }) as Promise<
+      IpcResult<TransferView[]>
     >,
   onTransferUpdate: (handler: (task: TransferView) => void) => {
     const listener = (_event: IpcRendererEvent, task: TransferView): void => handler(task);

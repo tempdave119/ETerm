@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { FileEntry, FilePreview, ProductErrorInfo } from '../../shared/ipc.ts';
@@ -21,6 +21,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   const [error, setError] = useState<ProductErrorInfo | null>(null);
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [previewError, setPreviewError] = useState<ProductErrorInfo | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const load = useCallback(
     async (target: string): Promise<void> => {
@@ -68,6 +69,30 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
     const result = await window.eterm.pickUpload(sessionId, path);
     if (!result.ok) setError(result.error);
   }, [path, sessionId]);
+
+  const dropFiles = useCallback(
+    async (event: DragEvent<HTMLDivElement>): Promise<void> => {
+      event.preventDefault();
+      setDragOver(false);
+      setError(null);
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length === 0) return;
+
+      const prepared = await window.eterm.registerDroppedFiles(files);
+      if (!prepared.ok) {
+        setError(prepared.error);
+        return;
+      }
+      if (prepared.value.length === 0) {
+        setError({ code: 'UNSUPPORTED', message: '没有读到本地文件', next: '从文件管理器拖入文件后重试' });
+        return;
+      }
+
+      const result = await window.eterm.uploadDropped(sessionId, path, prepared.value);
+      if (!result.ok) setError(result.error);
+    },
+    [path, sessionId],
+  );
 
   const download = useCallback(
     async (remotePath: string): Promise<void> => {
@@ -125,7 +150,24 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
         {path}
       </div>
 
-      <div className="file-panel__list">
+      <div
+        className="file-panel__list"
+        data-dragover={dragOver ? 'true' : undefined}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          setDragOver(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOver(false);
+        }}
+        onDrop={(event) => void dropFiles(event)}
+      >
+        {dragOver ? <div className="file-panel__drop-hint">松开上传到 {path}</div> : null}
         {loading ? (
           <div className="file-panel__hint">正在读取…</div>
         ) : error ? (

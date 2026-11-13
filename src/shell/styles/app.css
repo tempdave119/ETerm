@@ -1045,10 +1045,27 @@ button {
 }
 
 .file-panel__list {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-bottom: var(--space-base);
+}
+
+.file-panel__list[data-dragover="true"] {
+  outline: 1px dashed var(--status-info);
+  outline-offset: -4px;
+}
+
+.file-panel__drop-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--hover-overlay);
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  pointer-events: none;
 }
 
 .file-panel__hint {

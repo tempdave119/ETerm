@@ -5,7 +5,7 @@ import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promi
 import http from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
-import { join, resolve, sep } from 'node:path';
+import { join, delimiter, resolve, sep } from 'node:path';
 import electronPath from 'electron';
 import pty from 'node-pty';
 import ssh2 from 'ssh2';
@@ -149,6 +149,10 @@ writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
 const uploadFixture = join(dataDir, 'upload.txt');
 // 8 MiB：既走真实流式上传，也给「取消传输」留出足够长的可点击窗口（mock 每块延迟 25ms）。
 writeFileSync(uploadFixture, `upload-from-smoke\n${'x'.repeat(8 * 1024 * 1024)}`);
+const uploadFixture2 = join(dataDir, 'upload2.txt');
+writeFileSync(uploadFixture2, 'upload2-from-smoke\n');
+const dragFixture = join(dataDir, 'drag.txt');
+writeFileSync(dragFixture, 'drag-from-smoke\n');
 const downloadTarget = join(dataDir, 'downloaded.txt');
 
 // SFTP 沙盒：文件面板从这里列目录、打开文件。
@@ -473,7 +477,7 @@ const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], 
     ...process.env,
     ETERM_SMOKE: '1',
     ETERM_USER_DATA: dataDir,
-    ETERM_SMOKE_UPLOAD: uploadFixture,
+    ETERM_SMOKE_UPLOAD: [uploadFixture, uploadFixture2].join(delimiter),
     ETERM_SMOKE_DOWNLOAD: downloadTarget,
     ...(swapOnly ? { ETERM_SSH_ALT_PATH: resolve('tmp/ssh-alt.cjs') } : {}),
   },
@@ -685,15 +689,20 @@ try {
     '关闭分屏',
   );
 
-  // 上传：文件面板按钮 → 队列 → 远端落盘。
+  // 上传：文件面板按钮 → 多文件对话框 → 队列 → 远端落盘。
   await evaluate(`document.querySelector('[data-testid="file-upload"]').click()`);
   await waitFor(
-    () => evaluate(`document.querySelector('.transfer-row[data-status="done"]') !== null`),
-    20_000,
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.transfer-row[data-status="done"]')].filter((row) => /upload2?\\.txt/.test(row.textContent ?? '')).length === 2`,
+      ),
+    30_000,
     '上传完成',
   );
   const uploaded = await readFile(join(remoteRoot, 'upload.txt'), 'utf8');
   if (!uploaded.includes('upload-from-smoke')) throw new Error('上传内容不正确');
+  const uploaded2 = await readFile(join(remoteRoot, 'upload2.txt'), 'utf8');
+  if (!uploaded2.includes('upload2-from-smoke')) throw new Error('第二个上传内容不正确');
 
   await evaluate(`document.querySelector('button[title="刷新"]').click()`);
   await waitFor(
@@ -701,11 +710,42 @@ try {
     5_000,
     '上传文件出现在列表',
   );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-upload2.txt"]') !== null`),
+    5_000,
+    '第二个上传文件出现在列表',
+  );
+
+  // 拖拽上传：CDP 用真实本地文件路径模拟 drop，preload 用 webUtils 换一次性 token。
+  const dropPoint = await evaluate(`(() => {
+    const element = document.querySelector('.file-panel__list');
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  })()`);
+  if (!dropPoint) throw new Error('找不到文件面板拖拽区域');
+  const dragData = { items: [], files: [dragFixture], dragOperationsMask: 1 };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) {
+    await client.send('Input.dispatchDragEvent', { type, x: dropPoint.x, y: dropPoint.y, data: dragData });
+  }
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.transfer-row[data-status="done"]')].some((row) => (row.textContent ?? '').includes('drag.txt'))`,
+      ),
+    20_000,
+    '拖拽上传完成',
+  );
+  const dragged = await readFile(join(remoteRoot, 'drag.txt'), 'utf8');
+  if (!dragged.includes('drag-from-smoke')) throw new Error('拖拽上传内容不正确');
 
   // 下载：文件行下载按钮 → 队列 → 本地落盘。
   await evaluate(`document.querySelector('[data-testid="file-download-readme.txt"]').click()`);
   await waitFor(
-    () => evaluate(`document.querySelectorAll('.transfer-row[data-status="done"]').length >= 2`),
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.transfer-row[data-status="done"]')].some((row) => (row.textContent ?? '').includes('readme.txt'))`,
+      ),
     20_000,
     '下载完成',
   );
