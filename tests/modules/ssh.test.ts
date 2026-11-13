@@ -304,7 +304,8 @@ test('ssh_session_streams_input_and_output', async () => {
   const chunks: string[] = [];
   handle.session.onData((data) => chunks.push(data));
 
-  assert.match(chunks.join(''), /mock\$ /);
+  // 打开会话与首屏 prompt 到达是两个异步事件，断言前必须等，否则在慢机器上拿到空数组。
+  await waitFor(() => chunks.join('').includes('mock$ '));
   handle.session.write('hello\r');
   await waitFor(() => chunks.join('').includes('hello'));
 
