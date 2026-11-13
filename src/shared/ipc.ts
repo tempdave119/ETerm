@@ -1,7 +1,7 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, SessionOpenOptions } from '../core/ports.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
-import type { AppConfig, UiDensity } from '../services/config/schema.ts';
+import type { AppConfig, ThemePreference, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelState } from './panels.ts';
@@ -17,7 +17,7 @@ export type { ProductErrorInfo };
 export type { Capability };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
-export type { AppConfig, UiDensity };
+export type { AppConfig, ThemePreference, UiDensity };
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };

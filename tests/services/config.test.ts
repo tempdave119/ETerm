@@ -72,6 +72,7 @@ test('config_file_keeps_valid_fields_when_one_field_is_bad', () => {
   assert.equal(file.config.terminal.fontSize, 13);
   assert.equal(file.config.transfer.concurrency, 2);
   assert.equal(file.config.ui.density, 'comfortable');
+  assert.equal(file.config.ui.theme, 'system');
   assert.equal(file.config.files.openByDefault, false);
 });
 
@@ -91,6 +92,7 @@ test('config_input_rejects_out_of_range_values', () => {
   assert.throws(() => parseConfigInput({ ...base, transfer: { concurrency: 0 } }), /传输并发/);
   assert.throws(() => parseConfigInput({ ...base, transfer: { concurrency: 5 } }), /传输并发/);
   assert.throws(() => parseConfigInput({ ...base, ui: { density: 'wide' } }), /界面密度/);
+  assert.throws(() => parseConfigInput({ ...base, ui: { density: 'comfortable', theme: 'blue' } }), /外观主题/);
   assert.throws(() => parseConfigInput({ ...base, files: { openByDefault: 'yes' } }), /默认展开文件面板/);
   assert.throws(() => parseConfigInput(null), /配置必须是对象/);
 });
@@ -99,7 +101,7 @@ test('config_input_accepts_valid_full_config', () => {
   const input = {
     terminal: { fontSize: 11 },
     transfer: { concurrency: 4 },
-    ui: { density: 'compact' },
+    ui: { density: 'compact', theme: 'light' },
     files: { openByDefault: false },
   };
 

@@ -4,6 +4,7 @@
  */
 
 export type UiDensity = 'comfortable' | 'compact';
+export type ThemePreference = 'system' | 'dark' | 'light';
 
 export interface AppConfig {
   terminal: {
@@ -14,6 +15,7 @@ export interface AppConfig {
   };
   ui: {
     density: UiDensity;
+    theme: ThemePreference;
   };
   files: {
     openByDefault: boolean;
@@ -33,7 +35,7 @@ export function defaultConfig(): AppConfig {
   return {
     terminal: { fontSize: 13 },
     transfer: { concurrency: 1 },
-    ui: { density: 'comfortable' },
+    ui: { density: 'comfortable', theme: 'system' },
     files: { openByDefault: true },
   };
 }
@@ -73,6 +75,10 @@ export function sanitizeConfig(value: unknown): AppConfig {
     },
     ui: {
       density: ui.density === 'compact' || ui.density === 'comfortable' ? ui.density : defaults.ui.density,
+      theme:
+        ui.theme === 'system' || ui.theme === 'dark' || ui.theme === 'light'
+          ? ui.theme
+          : defaults.ui.theme,
     },
     files: {
       openByDefault:
@@ -95,7 +101,7 @@ export function parseConfigInput(value: unknown): AppConfig {
   return {
     terminal: { fontSize: requireInteger(terminal.fontSize, '终端字号', FONT_SIZE_RANGE) },
     transfer: { concurrency: requireInteger(transfer.concurrency, '传输并发', TRANSFER_CONCURRENCY_RANGE) },
-    ui: { density: requireDensity(ui.density) },
+    ui: { density: requireDensity(ui.density), theme: requireTheme(ui.theme) },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
   };
 }
@@ -126,6 +132,11 @@ function requireInteger(value: unknown, label: string, range: { min: number; max
 function requireDensity(value: unknown): UiDensity {
   if (value === 'compact' || value === 'comfortable') return value;
   throw new Error('界面密度只能是 comfortable 或 compact');
+}
+
+function requireTheme(value: unknown): ThemePreference {
+  if (value === 'system' || value === 'dark' || value === 'light') return value;
+  throw new Error('外观主题只能是 system、dark 或 light');
 }
 
 function requireBoolean(value: unknown, label: string): boolean {

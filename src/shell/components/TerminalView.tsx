@@ -1,33 +1,59 @@
 import { useEffect, useRef } from 'react';
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
 
-// 与 tokens.css 保持一致：xterm 只认具体值，不认 CSS 变量。
-const THEME = {
-  background: '#16181c',
-  foreground: '#e6e8eb',
-  cursor: '#7aa2f7',
-  selectionBackground: 'rgba(122, 162, 247, 0.28)',
-  black: '#1b1e24',
-  red: '#f7768e',
-  green: '#9ece6a',
-  yellow: '#e0af68',
-  blue: '#7aa2f7',
-  magenta: '#bb9af7',
-  cyan: '#7dcfff',
-  white: '#c0caf5',
-  brightBlack: '#414868',
-  brightRed: '#f7768e',
-  brightGreen: '#9ece6a',
-  brightYellow: '#e0af68',
-  brightBlue: '#7aa2f7',
-  brightMagenta: '#bb9af7',
-  brightCyan: '#7dcfff',
-  brightWhite: '#e6e8eb',
+// xterm 只认具体值，不认 CSS 变量；两套调色板与 tokens.css 的深浅色保持同值。
+export type TerminalTheme = 'dark' | 'light';
+
+const TERMINAL_THEMES: Record<TerminalTheme, ITheme> = {
+  dark: {
+    background: '#16181c',
+    foreground: '#e6e8eb',
+    cursor: '#7aa2f7',
+    selectionBackground: 'rgba(122, 162, 247, 0.28)',
+    black: '#1b1e24',
+    red: '#f7768e',
+    green: '#9ece6a',
+    yellow: '#e0af68',
+    blue: '#7aa2f7',
+    magenta: '#bb9af7',
+    cyan: '#7dcfff',
+    white: '#c0caf5',
+    brightBlack: '#414868',
+    brightRed: '#f7768e',
+    brightGreen: '#9ece6a',
+    brightYellow: '#e0af68',
+    brightBlue: '#7aa2f7',
+    brightMagenta: '#bb9af7',
+    brightCyan: '#7dcfff',
+    brightWhite: '#e6e8eb',
+  },
+  light: {
+    background: '#f5f6f8',
+    foreground: '#1c1f24',
+    cursor: '#2b6cb0',
+    selectionBackground: 'rgba(43, 108, 176, 0.2)',
+    black: '#1c1f24',
+    red: '#c93c52',
+    green: '#3f7d20',
+    yellow: '#9a6700',
+    blue: '#2b6cb0',
+    magenta: '#8b4aa0',
+    cyan: '#0e7490',
+    white: '#4d545d',
+    brightBlack: '#737b86',
+    brightRed: '#e05570',
+    brightGreen: '#4f9a2a',
+    brightYellow: '#b57d00',
+    brightBlue: '#3b82c4',
+    brightMagenta: '#a45cb8',
+    brightCyan: '#1490a8',
+    brightWhite: '#1c1f24',
+  },
 };
 
 const FONT_FAMILY = '"SFMono-Regular", Menlo, Monaco, "Courier New", monospace';
@@ -36,9 +62,10 @@ interface TerminalViewProps {
   sessionId: string;
   active: boolean;
   fontSize: number;
+  theme: TerminalTheme;
 }
 
-export function TerminalView({ sessionId, active, fontSize }: TerminalViewProps) {
+export function TerminalView({ sessionId, active, fontSize, theme }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -53,7 +80,7 @@ export function TerminalView({ sessionId, active, fontSize }: TerminalViewProps)
       lineHeight: 1.32,
       cursorBlink: true,
       allowProposedApi: true,
-      theme: THEME,
+      theme: TERMINAL_THEMES[theme],
     });
     termRef.current = term;
 
@@ -128,6 +155,13 @@ export function TerminalView({ sessionId, active, fontSize }: TerminalViewProps)
     fit.fit();
     void window.eterm.resizeSession(sessionId, term.cols, term.rows);
   }, [fontSize, sessionId]);
+
+  useEffect(() => {
+    // 主题切换不重建终端，直接换调色板。
+    const term = termRef.current;
+    if (!term) return;
+    term.options.theme = TERMINAL_THEMES[theme];
+  }, [theme]);
 
   return <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />;
 }

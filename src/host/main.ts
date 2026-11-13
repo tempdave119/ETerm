@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeTheme } from 'electron';
 import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
 import { SessionService } from '../core/session-service.ts';
@@ -60,7 +60,7 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     title: 'ETerm',
-    backgroundColor: '#16181c',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181c' : '#f5f6f8',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 14 },
     webPreferences: {

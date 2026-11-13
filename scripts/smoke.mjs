@@ -323,6 +323,18 @@ try {
     '密度即时生效',
   );
 
+  await evaluate(setSelectScript('#settings-theme', 'light'));
+  await waitFor(
+    () =>
+      evaluate(
+        `document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(245, 246, 248)'`,
+      ),
+    5_000,
+    '主题即时切换',
+  );
+  const themeShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/theme-light-smoke.png', Buffer.from(themeShot.data, 'base64'));
+
   await evaluate(`document.querySelector('[data-testid="settings-files-default"]').click()`);
   await waitFor(
     async () =>
@@ -348,7 +360,7 @@ try {
   await waitFor(
     () =>
       evaluate(
-        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact'`,
+        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact' && document.querySelector('#settings-theme')?.value === 'light'`,
       ),
     5_000,
     '设置重开后保持',
@@ -357,7 +369,7 @@ try {
   await waitFor(
     () =>
       evaluate(
-        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('.app')?.dataset.density === 'comfortable'`,
+        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('#settings-density')?.value === 'comfortable' && document.querySelector('.app')?.dataset.density === 'comfortable' && document.querySelector('#settings-theme')?.value === 'system'`,
       ),
     5_000,
     '恢复默认',

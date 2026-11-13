@@ -78,6 +78,9 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  );
 
   const refresh = useCallback(async (): Promise<void> => {
     const result = await window.eterm.listConnections();
@@ -105,6 +108,13 @@ export function App() {
     void window.eterm.getPanelState().then((result) => {
       if (result.ok) setPanels(result.value);
     });
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (event: MediaQueryListEvent): void => setSystemTheme(event.matches ? 'dark' : 'light');
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
   }, []);
 
   useEffect(() => {
@@ -577,6 +587,13 @@ export function App() {
   });
   const fontSize = config?.terminal.fontSize ?? 13;
   const density = config?.ui.density ?? 'comfortable';
+  const themePreference = config?.ui.theme ?? 'system';
+  const resolvedTheme = themePreference === 'system' ? systemTheme : themePreference;
+
+  useEffect(() => {
+    // 变量挂在 html 上，切换主题不重建任何面板。
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
 
   return (
     <div className="app" data-density={density}>
@@ -634,6 +651,7 @@ export function App() {
                     tabActive={tab.id === activeTabId}
                     showHeaders={countLeaves(tab.layout) > 1}
                     fontSize={fontSize}
+                    theme={resolvedTheme}
                     onActivate={(paneId) => setPaneActive(tab.id, paneId)}
                     onClose={(paneId) => closePane(tab.id, paneId)}
                     onResize={(splitId, ratio) => resizePane(tab.id, splitId, ratio)}

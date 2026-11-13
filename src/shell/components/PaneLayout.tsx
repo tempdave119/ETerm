@@ -1,7 +1,7 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 import type { LayoutNode, SplitNode } from '../layout.ts';
-import { TerminalView } from './TerminalView.tsx';
+import { TerminalView, type TerminalTheme } from './TerminalView.tsx';
 
 interface PaneLayoutProps {
   node: LayoutNode;
@@ -9,6 +9,7 @@ interface PaneLayoutProps {
   tabActive: boolean;
   showHeaders: boolean;
   fontSize: number;
+  theme: TerminalTheme;
   onActivate(paneId: string): void;
   onClose(paneId: string): void;
   onResize(splitId: string, ratio: number): void;
@@ -21,6 +22,7 @@ export function PaneLayout({
   tabActive,
   showHeaders,
   fontSize,
+  theme,
   onActivate,
   onClose,
   onResize,
@@ -54,7 +56,7 @@ export function PaneLayout({
           </header>
         ) : null}
         <div className="pane-node__body">
-          <TerminalView sessionId={node.sessionId} active={active && tabActive} fontSize={fontSize} />
+          <TerminalView sessionId={node.sessionId} active={active && tabActive} fontSize={fontSize} theme={theme} />
         </div>
       </section>
     );
@@ -99,6 +101,7 @@ export function PaneLayout({
           tabActive={tabActive}
           showHeaders={showHeaders}
           fontSize={fontSize}
+          theme={theme}
           onActivate={onActivate}
           onClose={onClose}
           onResize={onResize}
@@ -119,6 +122,7 @@ export function PaneLayout({
           tabActive={tabActive}
           showHeaders={showHeaders}
           fontSize={fontSize}
+          theme={theme}
           onActivate={onActivate}
           onClose={onClose}
           onResize={onResize}

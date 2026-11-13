@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { AppConfig, UiDensity } from '../../shared/ipc.ts';
+import type { AppConfig, ThemePreference, UiDensity } from '../../shared/ipc.ts';
 
 interface SettingsPanelProps {
   config: AppConfig;
@@ -82,6 +82,23 @@ export function SettingsPanel({ config, error, onChange, onReset, onClose }: Set
 
         <section className="settings-group">
           <h3 className="settings-group__title">界面</h3>
+          <div className="form-row">
+            <label htmlFor="settings-theme">主题</label>
+            <select
+              id="settings-theme"
+              data-testid="settings-theme"
+              value={config.ui.theme}
+              onChange={(event) =>
+                update((draft) => {
+                  draft.ui.theme = event.target.value as ThemePreference;
+                })
+              }
+            >
+              <option value="system">跟随系统</option>
+              <option value="dark">深色</option>
+              <option value="light">浅色</option>
+            </select>
+          </div>
           <div className="form-row">
             <label htmlFor="settings-density">密度</label>
             <select

@@ -19,6 +19,17 @@
   --status-danger: #f7768e;
   --status-info: #7aa2f7;
 
+  /* 交互遮罩与主按钮按主题成对出现 */
+  --hover-subtle: rgba(255, 255, 255, 0.04);
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --active-overlay: rgba(255, 255, 255, 0.1);
+  --backdrop: rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --primary-bg: #e6e8eb;
+  --primary-text: #101318;
+  --primary-hover: #d5d9de;
+  --primary-active: #c2c7cd;
+
   /* 字号只有四档：辅助 / 主体 / 区块标题 / 终端 */
   --font-aux: 12px;
   --font-body: 13px;
@@ -39,4 +50,36 @@
   --row-height: 28px;
   --control-height: 32px;
   --panel-header-height: 32px;
+}
+
+/* 浅色主题只覆盖颜色；字号 / 间距 / 圆角 / 尺寸保持不变 */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-canvas: #f5f6f8;
+  --bg-panel: #ffffff;
+  --bg-overlay: #ffffff;
+
+  --text-primary: #1c1f24;
+  --text-secondary: #4d545d;
+  --text-tertiary: #737b86;
+  --text-disabled: #a6adb8;
+
+  --border-subtle: #e3e6ea;
+  --border-strong: #c9cfd7;
+
+  --status-success: #3f7d20;
+  --status-warning: #9a6700;
+  --status-danger: #c93c52;
+  --status-info: #2b6cb0;
+
+  --hover-subtle: rgba(0, 0, 0, 0.04);
+  --hover-overlay: rgba(0, 0, 0, 0.06);
+  --active-overlay: rgba(0, 0, 0, 0.1);
+  --backdrop: rgba(15, 23, 42, 0.25);
+  --shadow-overlay: 0 16px 48px rgba(15, 23, 42, 0.18);
+  --primary-bg: #1c1f24;
+  --primary-text: #ffffff;
+  --primary-hover: #2a2f37;
+  --primary-active: #3a4352;
 }
