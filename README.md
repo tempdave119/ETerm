@@ -66,4 +66,5 @@ npm run dist   # 产物：release/ETerm-0.1.0.dmg（当前机器架构，x64）
 ```
 
 - 未签名（`identity: null`）：首次打开需右键 → 打开，或在「系统设置 → 隐私与安全性」里放行。
-- 应用图标暂用 Electron 默认图标；arm64 产物需在 Apple Silicon 机器上构建。
+- 图标：`assets/icon.svg` 按 macOS 网格（1024 画布 / 824 内容 / 185 圆角）设计，`npm run icon` 生成 `icon.png` 与 16–1024 全套 `icon.icns`；打包经 `mac.icon` 接入，dev 模式用 `app.dock.setIcon` 显示同一图标。
+- arm64 产物需在 Apple Silicon 机器上构建。

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, nativeTheme } from 'electron';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
 import { SessionService } from '../core/session-service.ts';
@@ -142,6 +143,11 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(async () => {
+  // 开发模式没有 bundle 图标，Dock 会显示 Electron 默认图标；换成 assets 下的正式图标。
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
+    if (existsSync(iconPath)) app.dock?.setIcon(iconPath);
+  }
   // 冒烟可用 ETERM_USER_DATA 指向临时目录，避免污染真实配置与 known_hosts。
   const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
   const services: AppServices = {

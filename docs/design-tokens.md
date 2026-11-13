@@ -19,7 +19,7 @@ description: "F-15 交付物：设计 token 清单、控件五态规则、密度
 | 弹层 | `--backdrop` / `--shadow-overlay` | `rgba(0,0,0,0.45)` / `0 16px 48px rgba(0,0,0,0.45)` |
 | 主按钮 | `--primary-bg` / `--primary-text` / `--primary-hover` / `--primary-active` | 浅底深字（深色主题） |
 | 字号 | `--font-aux` / `--font-body` / `--font-section` | 12 / 13 / 16 px |
-| 字体 | `--font-mono` | SFMono / Menlo / Monaco |
+| 字体 | `--font-mono` | SF Mono / Menlo / Monaco |
 | 间距 | `--space-tight` / `--space-base` / `--space-container` / `--space-block` / `--space-section` | 4 / 8 / 12 / 16 / 24 px |
 | 圆角 | `--radius-sm` / `--radius-md` / `--radius-lg` | 4 / 6 / 8 px |
 | 尺寸 | `--row-height` / `--control-height` / `--panel-header-height` | 28 / 32 / 32 px（紧凑模式 24 / 28 / 28） |

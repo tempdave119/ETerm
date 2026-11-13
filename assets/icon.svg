@@ -1,0 +1,30 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="512" y1="100" x2="512" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2c333d" />
+      <stop offset="0.52" stop-color="#171b21" />
+      <stop offset="1" stop-color="#0a0d11" />
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="150" r="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="accent" x1="320" y1="372" x2="712" y2="652" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b6d2ff" />
+      <stop offset="0.55" stop-color="#7ea4ff" />
+      <stop offset="1" stop-color="#5a79ee" />
+    </linearGradient>
+    <linearGradient id="cursor" x1="556" y1="640" x2="700" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8fb4ff" />
+      <stop offset="1" stop-color="#6b8cf0" />
+    </linearGradient>
+  </defs>
+
+  <!-- macOS 图标网格：1024 画布内 824 内容、圆角 185，与系统 App 视觉尺寸一致 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" />
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#glow)" />
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" stroke="rgba(255,255,255,0.10)" stroke-width="3" />
+
+  <path d="M330 380 L502 512 L330 644" stroke="url(#accent)" stroke-width="74" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M560 644 H700" stroke="url(#cursor)" stroke-width="74" stroke-linecap="round" />
+</svg>

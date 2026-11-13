@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
 
@@ -56,7 +55,9 @@ const TERMINAL_THEMES: Record<TerminalTheme, ITheme> = {
   },
 };
 
-const FONT_FAMILY = '"SFMono-Regular", Menlo, Monaco, "Courier New", monospace';
+// SFMono-Regular 不是 macOS 可解析的 family 名（系统私有字体为 .SF NS Mono，Chromium 拒绝访问），
+// 写进去只会被跳过；显式落到 Menlo，装了 SF Mono 的机器优先用它。
+const FONT_FAMILY = '"SF Mono", Menlo, Monaco, "Courier New", monospace';
 
 interface TerminalViewProps {
   sessionId: string;
@@ -77,7 +78,7 @@ export function TerminalView({ sessionId, active, fontSize, theme }: TerminalVie
     const term = new Terminal({
       fontFamily: FONT_FAMILY,
       fontSize,
-      lineHeight: 1.32,
+      lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
       theme: TERMINAL_THEMES[theme],
@@ -88,14 +89,8 @@ export function TerminalView({ sessionId, active, fontSize, theme }: TerminalVie
     fitRef.current = fit;
     term.loadAddon(fit);
 
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => webgl.dispose());
-      term.loadAddon(webgl);
-    } catch (error) {
-      // WebGL 不可用时 canvas 渲染器接管，功能不受影响。
-      console.warn('[terminal] WebGL 不可用，回退 canvas', error);
-    }
+    // 不加载 WebglAddon：xterm 6.0 的 WebGL 渲染器在本机把字形画成半透明细线，
+    // 笔画发灰发虚；canvas 渲染器同字号下笔画实心、边缘干净。
 
     term.loadAddon(new Unicode11Addon());
     term.unicode.activeVersion = '11';
