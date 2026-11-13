@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "macOS 优先的 SSH / SFTP 工作台",
+  "author": "Kevin",
   "type": "module",
   "main": "dist/main/main.cjs",
   "scripts": {
@@ -14,7 +15,34 @@
     "test": "node --test \"tests/**/*.test.ts\"",
     "smoke": "node scripts/smoke.mjs",
     "ssh-smoke": "node scripts/ssh-smoke.mjs",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --mac dmg",
     "postinstall": "node scripts/postinstall.mjs"
+  },
+  "build": {
+    "appId": "com.eterm.app",
+    "productName": "ETerm",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "category": "public.app-category.developer-tools"
+    },
+    "dmg": {
+      "title": "ETerm ${version}"
+    }
   },
   "dependencies": {
     "lucide-react": "^1.72.0",
@@ -32,6 +60,7 @@
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "electron": "^45.3.1",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

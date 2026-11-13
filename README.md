@@ -12,7 +12,7 @@ macOS 优先的 SSH / SFTP 工作台：连上机器、在终端里干活、顺�
 ## 目标
 
 - 日常七步（找机器、连接、看状态、传文件、开多个终端、调布局、改配置）全程不离开主窗口。
-- 当前进度：P4 收尾。P0–P3 已收口；跳板 / 代理 / 端口转发、可选组件（串口样例）已完成，只剩打包交付（F-20）。
+- 当前进度：P0–P4 全部收口。SSH / SFTP / 跳板 / 代理 / 端口转发、六面板与命令、主题、可选组件、dmg 均已交付；后续为日用验收与候选能力。
 
 ## 核心功能
 
@@ -53,6 +53,17 @@ npm run dev
 | `npm run build`     | 构建到 `dist/`                 |
 | `npm run smoke`     | 启动应用、用 CDP 验证终端可用  |
 | `npm run ssh-smoke` | 模拟 SSH 主机跑通连接与指纹确认 |
+| `npm run pack`      | 构建并打包成 `release/mac/ETerm.app`（不签名） |
+| `npm run dist`      | 构建并出 macOS dmg（`release/ETerm-0.1.0.dmg`） |
 | `npm run postinstall` | 手动补齐 node-pty spawn-helper 执行位 |
 
 架构与契约见 `_pm/plan/design.md`；分期与进度见 `_pm/track/`。
+
+## 打包
+
+```bash
+npm run dist   # 产物：release/ETerm-0.1.0.dmg（当前机器架构，x64）
+```
+
+- 未签名（`identity: null`）：首次打开需右键 → 打开，或在「系统设置 → 隐私与安全性」里放行。
+- 应用图标暂用 Electron 默认图标；arm64 产物需在 Apple Silicon 机器上构建。
