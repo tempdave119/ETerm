@@ -1,0 +1,20 @@
+{
+  "id": "serial",
+  "kind": "capability",
+  "apiVersion": "^1.0.0",
+  "entry": "index.cjs",
+  "activation": { "onProtocol": "serial" },
+  "ui": {
+    "label": "串口",
+    "fields": [
+      { "key": "path", "label": "设备路径", "placeholder": "/dev/tty.usbserial-0001", "required": true },
+      {
+        "key": "baudRate",
+        "label": "波特率",
+        "type": "select",
+        "options": ["9600", "19200", "38400", "57600", "115200"],
+        "default": "115200"
+      }
+    ]
+  }
+}

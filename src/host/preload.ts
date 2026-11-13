@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
+  COMPONENTS_IPC,
   CONFIG_IPC,
   CONNECTIONS_IPC,
   CONNECTION_IPC,
@@ -12,6 +13,7 @@ import {
   SYSTEM_IPC,
   TRANSFERS_IPC,
   type AppConfig,
+  type ComponentDescriptor,
   type ConnectionInput,
   type ConnectionRecord,
   type ConnectionsSnapshot,
@@ -130,6 +132,8 @@ const api: EtermApi = {
     ipcRenderer.on(CONFIG_IPC.changed, listener);
     return () => ipcRenderer.removeListener(CONFIG_IPC.changed, listener);
   },
+
+  listComponents: () => ipcRenderer.invoke(COMPONENTS_IPC.list) as Promise<IpcResult<ComponentDescriptor[]>>,
 };
 
 contextBridge.exposeInMainWorld('eterm', api);

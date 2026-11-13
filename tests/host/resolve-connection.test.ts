@@ -236,6 +236,23 @@ test('resolve_jump_connection_builds_chain_with_own_credentials', async () => {
   assert.equal(resolved.jump?.jump, undefined);
 });
 
+test('resolve_component_connection_passes_options_as_target', async () => {
+  const store = await createStore();
+  const connection = await store.saveConnection({
+    name: 'serial',
+    protocol: 'serial',
+    options: { path: '/dev/ttys001', baudRate: '115200' },
+  });
+
+  const options = await resolveOpenOptions(
+    { connectionId: connection.id, cols: 80, rows: 24 },
+    makeDeps({ connections: store }),
+  );
+
+  assert.equal(options.protocol, 'serial');
+  assert.deepEqual(options.target, { path: '/dev/ttys001', baudRate: '115200' });
+});
+
 test('resolve_proxy_is_forwarded_to_target', async () => {
   const store = await createStore();
   const connection = await store.saveConnection({

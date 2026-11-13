@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { lstat, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -101,6 +101,30 @@ await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 
 const dataDir = join(process.cwd(), 'tmp', 'ssh-smoke', randomUUID());
 mkdirSync(dataDir, { recursive: true });
+// 可选组件：把示例串口组件放进 userData，启动时由宿主装载。
+cpSync(join(process.cwd(), 'examples', 'components', 'serial'), join(dataDir, 'components', 'serial'), {
+  recursive: true,
+});
+
+// 用 PTY 模拟串口设备：子进程把 tty 名写出来，组件直接打开该设备读写。
+const ttyFile = join(dataDir, 'tty-name');
+const serialTty = pty.spawn('/bin/sh', ['-c', `tty > ${ttyFile}; exec sleep 60`], {
+  name: 'xterm-256color',
+  cols: 80,
+  rows: 24,
+});
+const serialDevice = await waitFor(
+  async () => {
+    try {
+      const name = (await readFile(ttyFile, 'utf8')).trim();
+      return name.startsWith('/dev/') ? name : null;
+    } catch {
+      return null;
+    }
+  },
+  5_000,
+  '串口模拟设备',
+);
 const keyPair = utils.generateKeyPairSync('ed25519');
 const keyPath = join(dataDir, 'id_ed25519');
 writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
@@ -891,6 +915,56 @@ try {
     '关闭端口转发',
   );
 
+  // 可选组件：串口协议由 userData/components 装载，新建连接里出现后直接开会话。
+  await clickOn('.session-tree__header button[title="新建连接"]');
+  await waitFor(() => evaluate(`document.querySelector('#connection-protocol') !== null`), 5_000, '协议选择');
+  await evaluate(setSelectScript('#connection-protocol', 'serial'));
+  await waitFor(
+    () => evaluate(`document.querySelector('#connection-option-path') !== null`),
+    5_000,
+    '串口字段',
+  );
+  await evaluate(setInputScript('#connection-name', 'mock-serial'));
+  await evaluate(setInputScript('#connection-option-path', serialDevice));
+  await evaluate(setSelectScript('#connection-option-baudRate', '115200'));
+  await clickOn('[data-testid="connection-save-connect"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="mock-serial"]') !== null`),
+    15_000,
+    '串口标签',
+  );
+  const serialSession = await waitFor(
+    () => evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+    10_000,
+    '串口会话',
+  );
+  serialTty.write('serial-hello\r');
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(serialSession)})`)).includes('serial-hello'),
+    10_000,
+    '串口下行数据',
+  );
+  let serialUp = '';
+  serialTty.onData((data) => {
+    serialUp += data;
+  });
+  const serialTyped = await evaluate(`window.__etermDebug.type(${JSON.stringify(serialSession)}, "serial-ping")`);
+  if (!serialTyped) throw new Error('串口会话已关闭，无法输入');
+  await waitFor(() => (serialUp.includes('serial-ping') ? true : null), 10_000, '串口上行数据');
+  await shotOf('tmp/ssh-smoke-serial.png');
+  // 关掉串口标签，回到 SSH 标签，后面的文件矩阵依赖文件面板。
+  await evaluate(`(() => {
+    const label = document.querySelector('.tab__label[title="mock-serial"]');
+    label?.closest('.tab')?.querySelector('.tab__close')?.click();
+    return true;
+  })()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.tab__label[title="mock-serial"]') === null`),
+    5_000,
+    '关闭串口标签',
+  );
+
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
   await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
   await waitErrorTitle('连不上主机', '错主机错误文案');
@@ -1025,6 +1099,7 @@ try {
 } finally {
   client?.close();
   app.kill('SIGTERM');
+  serialTty.kill();
   await delay(500);
   if (app.exitCode === null) app.kill('SIGKILL');
   for (const connection of connections) connection.end();

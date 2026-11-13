@@ -5,7 +5,6 @@ import {
   CONNECTIONS_FILE_VERSION,
   type AuthMethod,
   type ConnectionInput,
-  type ConnectionProtocol,
   type ConnectionProxy,
   type ConnectionRecord,
   type ConnectionsFile,
@@ -22,7 +21,6 @@ export interface ConnectionStoreOptions {
 }
 
 const AUTH_METHODS: AuthMethod[] = ['password', 'key', 'agent', 'none'];
-const PROTOCOLS: ConnectionProtocol[] = ['ssh', 'local'];
 
 /**
  * 连接与分组的唯一存储入口。
@@ -250,13 +248,12 @@ function normalizeConnection(
   const id = input.id ? requireString(input.id, '连接 id', 64) : randomUUID();
   const name = requireString(input.name, '连接名称', 120);
 
-  if (!PROTOCOLS.includes(input.protocol)) {
-    throw new Error(`连接协议必须是 ssh 或 local`);
-  }
-  const auth = input.auth ?? (input.protocol === 'ssh' ? 'password' : 'none');
+  const protocol = requireString(input.protocol, '连接协议', 32);
+  if (!/^[a-z][a-z0-9-]*$/.test(protocol)) throw new Error(`连接协议无效：${protocol}`);
+  const auth = input.auth ?? (protocol === 'ssh' ? 'password' : 'none');
   if (!AUTH_METHODS.includes(auth)) throw new Error(`认证方式无效：${String(auth)}`);
-  if (input.protocol === 'local' && auth !== 'none') {
-    throw new Error('本地终端不需要认证方式');
+  if (protocol !== 'ssh' && auth !== 'none') {
+    throw new Error('只有 SSH 连接需要认证方式');
   }
 
   const groupId = input.groupId ?? null;
@@ -265,10 +262,16 @@ function normalizeConnection(
     if (!group) throw new Error(`分组不存在：${groupId}`);
   }
 
-  if (input.protocol === 'local') {
+  if (protocol === 'local') {
     if (input.jumpConnectionId) throw new Error('本地终端不能设置跳板机');
     if (input.proxy) throw new Error('本地终端不能设置代理');
-    return { id, name, protocol: 'local', auth, groupId };
+    return { id, name, protocol, auth, groupId };
+  }
+
+  // 可选组件：宿主不解释字段内容，只做结构与长度校验。
+  if (protocol !== 'ssh') {
+    if (input.jumpConnectionId || input.proxy) throw new Error('可选组件连接不支持跳板或代理');
+    return { id, name, protocol, auth, groupId, options: normalizeOptions(input.options) };
   }
 
   const proxy = input.proxy ? normalizeProxy(input.proxy) : undefined;
@@ -294,6 +297,19 @@ function normalizeConnection(
     jumpConnectionId,
     proxy,
   };
+}
+
+function normalizeOptions(value: ConnectionInput['options']): Record<string, string> | undefined {
+  if (!value) return undefined;
+  const entries = Object.entries(value);
+  if (entries.length > 32) throw new Error('组件字段最多 32 项');
+  const result: Record<string, string> = {};
+  for (const [key, item] of entries) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(key)) throw new Error(`组件字段 key 无效：${key}`);
+    if (typeof item !== 'string' || item.length > 4096) throw new Error(`组件字段 ${key} 的值无效`);
+    result[key] = item;
+  }
+  return result;
 }
 
 function normalizeProxy(value: ConnectionProxy): ConnectionProxy {
@@ -347,7 +363,8 @@ function parseGroup(value: unknown): GroupRecord {
 
 function parseConnection(value: unknown): ConnectionRecord {
   const record = asRecord(value, '连接');
-  const protocol = record.protocol === 'ssh' || record.protocol === 'local' ? record.protocol : null;
+  const protocol =
+    typeof record.protocol === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(record.protocol) ? record.protocol : null;
   if (!protocol) throw new Error('连接协议无效');
 
   const auth = record.auth;
@@ -371,6 +388,10 @@ function parseConnection(value: unknown): ConnectionRecord {
 
   if (protocol === 'local') return base;
 
+  if (protocol !== 'ssh') {
+    return { ...base, options: parseOptions(record.options) };
+  }
+
   return {
     ...base,
     host: requireString(record.host, '主机', 255),
@@ -380,6 +401,20 @@ function parseConnection(value: unknown): ConnectionRecord {
     jumpConnectionId: optionalString(record.jumpConnectionId, '跳板机连接 id', 64),
     proxy: parseProxy(record.proxy),
   };
+}
+
+function parseOptions(value: unknown): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  const record = asRecord(value, '组件字段');
+  const entries = Object.entries(record);
+  if (entries.length > 32) throw new Error('组件字段最多 32 项');
+  const result: Record<string, string> = {};
+  for (const [key, item] of entries) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(key)) throw new Error(`组件字段 key 无效：${key}`);
+    if (typeof item !== 'string') throw new Error(`组件字段 ${key} 的值无效`);
+    result[key] = item;
+  }
+  return result;
 }
 
 function parseProxy(value: unknown): ConnectionProxy | undefined {

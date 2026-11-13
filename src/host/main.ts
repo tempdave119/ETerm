@@ -11,6 +11,9 @@ import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { LayoutStore } from '../services/layouts/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
 import { IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
+import type { ComponentDescriptor } from '../shared/components.ts';
+import { registerComponentsIpc } from './components-ipc.ts';
+import { loadComponents } from './components.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
 import { registerConfigIpc } from './config-ipc.ts';
 import { registerConnectionsIpc } from './connections-ipc.ts';
@@ -37,7 +40,6 @@ app.setName('ETerm');
 const registry = new ModuleRegistry();
 registry.register(localTerminalModule);
 registry.register(sshModule);
-registry.setupAll();
 
 let disposeIpc: (() => void) | null = null;
 let disposeConnectionsIpc: (() => void) | null = null;
@@ -48,6 +50,8 @@ let disposeForwardsIpc: (() => void) | null = null;
 let disposeTransfersIpc: (() => void) | null = null;
 let transferQueue: TransferQueue | null = null;
 let disposeKnownHostsIpc: (() => void) | null = null;
+let disposeComponentsIpc: (() => void) | null = null;
+let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
@@ -137,7 +141,7 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   // 冒烟可用 ETERM_USER_DATA 指向临时目录，避免污染真实配置与 known_hosts。
   const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
   const services: AppServices = {
@@ -152,6 +156,15 @@ void app.whenReady().then(() => {
   registry.provide('credentials', services.credentials);
   registry.provide('knownHosts', services.knownHosts);
   registry.provide('layouts', services.layouts);
+
+  // 服务注入后再装载组件并 setup，组件就能通过 ctx.get() 取宿主服务。
+  componentDescriptors = await loadComponents({
+    baseDir,
+    registry,
+    logger: (message, detail) => console.warn(`[components] ${message}`, detail ?? ''),
+  });
+  registry.setupAll();
+  disposeComponentsIpc = registerComponentsIpc(() => componentDescriptors);
 
   disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);
@@ -171,6 +184,8 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   disposeConnectionsIpc?.();
   disposeConnectionsIpc = null;
+  disposeComponentsIpc?.();
+  disposeComponentsIpc = null;
   disposeConfigIpc?.();
   disposeConfigIpc = null;
   disposeKnownHostsIpc?.();

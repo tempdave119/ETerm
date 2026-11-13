@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import type {
   AppConfig,
+  ComponentDescriptor,
   ConnectionInput,
   ConnectionRecord,
   GroupRecord,
@@ -76,6 +77,7 @@ export function App() {
   const [panels, setPanels] = useState<PanelState>(defaultPanelState);
   const [transfers, setTransfers] = useState<TransferView[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [components, setComponents] = useState<ComponentDescriptor[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -109,6 +111,12 @@ export function App() {
   useEffect(() => {
     void window.eterm.getPanelState().then((result) => {
       if (result.ok) setPanels(result.value);
+    });
+  }, []);
+
+  useEffect(() => {
+    void window.eterm.listComponents().then((result) => {
+      if (result.ok) setComponents(result.value);
     });
   }, []);
 
@@ -705,6 +713,7 @@ export function App() {
         <ConnectionForm
           groups={groups}
           connections={connections}
+          components={components}
           editing={form.editing}
           hasStoredPassword={form.hasPassword}
           hasStoredPassphrase={form.hasPassphrase}

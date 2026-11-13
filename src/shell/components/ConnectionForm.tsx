@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { ConnectionInput, ConnectionRecord, GroupRecord } from '../../shared/ipc.ts';
+import type {
+  ComponentDescriptor,
+  ComponentField,
+  ConnectionInput,
+  ConnectionRecord,
+  GroupRecord,
+} from '../../shared/ipc.ts';
 
 export interface FormSecrets {
   password?: string;
@@ -9,6 +15,7 @@ export interface FormSecrets {
 interface ConnectionFormProps {
   groups: GroupRecord[];
   connections: ConnectionRecord[];
+  components: ComponentDescriptor[];
   editing: ConnectionRecord | null;
   hasStoredPassword: boolean;
   hasStoredPassphrase: boolean;
@@ -21,6 +28,7 @@ interface ConnectionFormProps {
 export function ConnectionForm({
   groups,
   connections,
+  components,
   editing,
   hasStoredPassword,
   hasStoredPassphrase,
@@ -30,6 +38,7 @@ export function ConnectionForm({
   onSubmit,
 }: ConnectionFormProps) {
   const [name, setName] = useState(editing?.name ?? '');
+  const [protocol, setProtocol] = useState(editing?.protocol ?? 'ssh');
   const [host, setHost] = useState(editing?.host ?? '');
   const [port, setPort] = useState(String(editing?.port ?? 22));
   const [username, setUsername] = useState(editing?.username ?? '');
@@ -40,9 +49,13 @@ export function ConnectionForm({
   const [proxyType, setProxyType] = useState<'none' | 'http' | 'socks5'>(editing?.proxy?.type ?? 'none');
   const [proxyHost, setProxyHost] = useState(editing?.proxy?.host ?? '');
   const [proxyPort, setProxyPort] = useState(String(editing?.proxy?.port ?? 1080));
+  const [options, setOptions] = useState<Record<string, string>>(editing?.options ?? {});
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const isSsh = protocol === 'ssh';
+  const component = components.find((item) => item.protocol === protocol) ?? null;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -52,11 +65,48 @@ export function ConnectionForm({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onCancel]);
 
+  const selectProtocol = (value: string): void => {
+    setProtocol(value);
+    const next = components.find((item) => item.protocol === value);
+    if (!next) return;
+    setOptions((current) => {
+      const merged = { ...current };
+      for (const field of next.fields) {
+        if (merged[field.key] === undefined) merged[field.key] = field.default ?? '';
+      }
+      return merged;
+    });
+  };
+
+  const setOption = (key: string, value: string): void => {
+    setOptions((current) => ({ ...current, [key]: value }));
+  };
+
   const submit = (connectAfter: boolean): void => {
     setLocalError(null);
-    const portNumber = Number(port);
-
     if (!name.trim()) return setLocalError('请填写连接名称');
+
+    if (!isSsh) {
+      for (const field of component?.fields ?? []) {
+        if (field.required && !(options[field.key] ?? '').trim()) {
+          return setLocalError(`请填写${field.label}`);
+        }
+      }
+      onSubmit(
+        {
+          id: editing?.id,
+          name: name.trim(),
+          protocol,
+          groupId: groupId || null,
+          options,
+        },
+        {},
+        connectAfter,
+      );
+      return;
+    }
+
+    const portNumber = Number(port);
     if (!host.trim()) return setLocalError('请填写主机');
     if (!username.trim()) return setLocalError('请填写用户名');
     if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
@@ -76,25 +126,23 @@ export function ConnectionForm({
       }
     }
 
-    const input: ConnectionInput = {
-      id: editing?.id,
-      name: name.trim(),
-      protocol: 'ssh',
-      host: host.trim(),
-      port: portNumber,
-      username: username.trim(),
-      auth,
-      groupId: groupId || null,
-      keyPath: auth === 'key' ? keyPath.trim() : undefined,
-      jumpConnectionId: jumpConnectionId || null,
-      proxy:
-        proxyType === 'none'
-          ? null
-          : { type: proxyType, host: proxyHost.trim(), port: Number(proxyPort) },
-    };
-
     onSubmit(
-      input,
+      {
+        id: editing?.id,
+        name: name.trim(),
+        protocol: 'ssh',
+        host: host.trim(),
+        port: portNumber,
+        username: username.trim(),
+        auth,
+        groupId: groupId || null,
+        keyPath: auth === 'key' ? keyPath.trim() : undefined,
+        jumpConnectionId: jumpConnectionId || null,
+        proxy:
+          proxyType === 'none'
+            ? null
+            : { type: proxyType, host: proxyHost.trim(), port: Number(proxyPort) },
+      },
       {
         password: auth === 'password' && password ? password : undefined,
         passphrase: auth === 'key' && passphrase ? passphrase : undefined,
@@ -119,145 +167,181 @@ export function ConnectionForm({
           />
         </div>
 
-        <div className="form-grid">
-          <div className="form-row">
-            <label htmlFor="connection-host">主机</label>
-            <input
-              id="connection-host"
-              value={host}
-              placeholder="10.0.0.1 或 example.com"
-              onChange={(event) => setHost(event.target.value)}
-            />
-          </div>
-          <div className="form-row">
-            <label htmlFor="connection-port">端口</label>
-            <input
-              id="connection-port"
-              value={port}
-              inputMode="numeric"
-              onChange={(event) => setPort(event.target.value)}
-            />
-          </div>
-        </div>
-
         <div className="form-row">
-          <label htmlFor="connection-user">用户名</label>
-          <input
-            id="connection-user"
-            value={username}
-            placeholder="root"
-            onChange={(event) => setUsername(event.target.value)}
-          />
-        </div>
-
-        <div className="form-row">
-          <label htmlFor="connection-auth">认证方式</label>
+          <label htmlFor="connection-protocol">协议</label>
           <select
-            id="connection-auth"
-            value={auth}
-            onChange={(event) => setAuth(event.target.value as ConnectionInput['auth'] ?? 'password')}
+            id="connection-protocol"
+            data-testid="connection-protocol"
+            value={protocol}
+            onChange={(event) => selectProtocol(event.target.value)}
           >
-            <option value="password">密码</option>
-            <option value="key">私钥</option>
-            <option value="agent">SSH agent</option>
+            <option value="ssh">SSH</option>
+            {components.map((item) => (
+              <option key={item.id} value={item.protocol}>
+                {item.label}
+              </option>
+            ))}
+            {!isSsh && !component ? <option value={protocol}>{protocol}（组件未装载）</option> : null}
           </select>
         </div>
 
-        {auth === 'password' ? (
-          <div className="form-row">
-            <label htmlFor="connection-password">密码</label>
-            <input
-              id="connection-password"
-              type="password"
-              value={password}
-              placeholder={hasStoredPassword ? '已保存，留空保持不变' : '登录密码'}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </div>
-        ) : null}
-
-        {auth === 'key' ? (
-          <>
-            <div className="form-row">
-              <label htmlFor="connection-key">私钥路径</label>
-              <input
-                id="connection-key"
-                value={keyPath}
-                placeholder="~/.ssh/id_ed25519"
-                onChange={(event) => setKeyPath(event.target.value)}
-              />
-            </div>
-            <div className="form-row">
-              <label htmlFor="connection-passphrase">私钥口令</label>
-              <input
-                id="connection-passphrase"
-                type="password"
-                value={passphrase}
-                placeholder={hasStoredPassphrase ? '已保存，留空保持不变' : '没有口令可留空'}
-                onChange={(event) => setPassphrase(event.target.value)}
-              />
-            </div>
-          </>
-        ) : null}
-
-        {auth === 'agent' ? <p className="form-hint">使用当前 SSH_AUTH_SOCK；没有启动 agent 时会提示。</p> : null}
-
-        <div className="form-row">
-          <label htmlFor="connection-jump">经由跳板机</label>
-          <select
-            id="connection-jump"
-            data-testid="connection-jump"
-            value={jumpConnectionId}
-            onChange={(event) => setJumpConnectionId(event.target.value)}
-          >
-            <option value="">不使用</option>
-            {connections
-              .filter((connection) => connection.protocol === 'ssh' && connection.id !== editing?.id)
-              .map((connection) => (
-                <option key={connection.id} value={connection.id}>
-                  {connection.name}（{connection.host}）
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div className="form-row">
-          <label htmlFor="connection-proxy-type">代理</label>
-          <select
-            id="connection-proxy-type"
-            data-testid="connection-proxy-type"
-            value={proxyType}
-            onChange={(event) => setProxyType(event.target.value as 'none' | 'http' | 'socks5')}
-          >
-            <option value="none">不使用</option>
-            <option value="http">HTTP 代理</option>
-            <option value="socks5">SOCKS5 代理</option>
-          </select>
-        </div>
-
-        {proxyType !== 'none' ? (
+        {isSsh ? (
           <>
             <div className="form-grid">
               <div className="form-row">
-                <label htmlFor="connection-proxy-host">代理地址</label>
+                <label htmlFor="connection-host">主机</label>
                 <input
-                  id="connection-proxy-host"
-                  value={proxyHost}
-                  placeholder="127.0.0.1"
-                  onChange={(event) => setProxyHost(event.target.value)}
+                  id="connection-host"
+                  value={host}
+                  placeholder="10.0.0.1 或 example.com"
+                  onChange={(event) => setHost(event.target.value)}
                 />
               </div>
               <div className="form-row">
-                <label htmlFor="connection-proxy-port">端口</label>
+                <label htmlFor="connection-port">端口</label>
                 <input
-                  id="connection-proxy-port"
-                  value={proxyPort}
+                  id="connection-port"
+                  value={port}
                   inputMode="numeric"
-                  onChange={(event) => setProxyPort(event.target.value)}
+                  onChange={(event) => setPort(event.target.value)}
                 />
               </div>
             </div>
-            <p className="form-hint">代理只用于直连；已设置跳板机时忽略。首版不支持代理认证。</p>
+
+            <div className="form-row">
+              <label htmlFor="connection-user">用户名</label>
+              <input
+                id="connection-user"
+                value={username}
+                placeholder="root"
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="connection-auth">认证方式</label>
+              <select
+                id="connection-auth"
+                value={auth}
+                onChange={(event) => setAuth(event.target.value as ConnectionInput['auth'] ?? 'password')}
+              >
+                <option value="password">密码</option>
+                <option value="key">私钥</option>
+                <option value="agent">SSH agent</option>
+              </select>
+            </div>
+
+            {auth === 'password' ? (
+              <div className="form-row">
+                <label htmlFor="connection-password">密码</label>
+                <input
+                  id="connection-password"
+                  type="password"
+                  value={password}
+                  placeholder={hasStoredPassword ? '已保存，留空保持不变' : '登录密码'}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </div>
+            ) : null}
+
+            {auth === 'key' ? (
+              <>
+                <div className="form-row">
+                  <label htmlFor="connection-key">私钥路径</label>
+                  <input
+                    id="connection-key"
+                    value={keyPath}
+                    placeholder="~/.ssh/id_ed25519"
+                    onChange={(event) => setKeyPath(event.target.value)}
+                  />
+                </div>
+                <div className="form-row">
+                  <label htmlFor="connection-passphrase">私钥口令</label>
+                  <input
+                    id="connection-passphrase"
+                    type="password"
+                    value={passphrase}
+                    placeholder={hasStoredPassphrase ? '已保存，留空保持不变' : '没有口令可留空'}
+                    onChange={(event) => setPassphrase(event.target.value)}
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {auth === 'agent' ? <p className="form-hint">使用当前 SSH_AUTH_SOCK；没有启动 agent 时会提示。</p> : null}
+
+            <div className="form-row">
+              <label htmlFor="connection-jump">经由跳板机</label>
+              <select
+                id="connection-jump"
+                data-testid="connection-jump"
+                value={jumpConnectionId}
+                onChange={(event) => setJumpConnectionId(event.target.value)}
+              >
+                <option value="">不使用</option>
+                {connections
+                  .filter((connection) => connection.protocol === 'ssh' && connection.id !== editing?.id)
+                  .map((connection) => (
+                    <option key={connection.id} value={connection.id}>
+                      {connection.name}（{connection.host}）
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="connection-proxy-type">代理</label>
+              <select
+                id="connection-proxy-type"
+                data-testid="connection-proxy-type"
+                value={proxyType}
+                onChange={(event) => setProxyType(event.target.value as 'none' | 'http' | 'socks5')}
+              >
+                <option value="none">不使用</option>
+                <option value="http">HTTP 代理</option>
+                <option value="socks5">SOCKS5 代理</option>
+              </select>
+            </div>
+
+            {proxyType !== 'none' ? (
+              <>
+                <div className="form-grid">
+                  <div className="form-row">
+                    <label htmlFor="connection-proxy-host">代理地址</label>
+                    <input
+                      id="connection-proxy-host"
+                      value={proxyHost}
+                      placeholder="127.0.0.1"
+                      onChange={(event) => setProxyHost(event.target.value)}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="connection-proxy-port">端口</label>
+                    <input
+                      id="connection-proxy-port"
+                      value={proxyPort}
+                      inputMode="numeric"
+                      onChange={(event) => setProxyPort(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="form-hint">代理只用于直连；已设置跳板机时忽略。首版不支持代理认证。</p>
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        {component ? (
+          <>
+            {component.fields.map((field) => (
+              <ComponentFieldRow
+                key={field.key}
+                field={field}
+                value={options[field.key] ?? field.default ?? ''}
+                onChange={(value) => setOption(field.key, value)}
+              />
+            ))}
+            <p className="form-hint">字段由组件「{component.label}」提供，宿主只负责保存与透传。</p>
           </>
         ) : null}
 
@@ -299,6 +383,41 @@ export function ConnectionForm({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ComponentFieldRow({
+  field,
+  value,
+  onChange,
+}: {
+  field: ComponentField;
+  value: string;
+  onChange(value: string): void;
+}) {
+  const id = `connection-option-${field.key}`;
+  return (
+    <div className="form-row">
+      <label htmlFor={id}>{field.label}</label>
+      {field.type === 'select' ? (
+        <select id={id} data-testid={id} value={value} onChange={(event) => onChange(event.target.value)}>
+          {field.options?.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={id}
+          data-testid={id}
+          value={value}
+          inputMode={field.type === 'number' ? 'numeric' : undefined}
+          placeholder={field.placeholder}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
     </div>
   );
 }

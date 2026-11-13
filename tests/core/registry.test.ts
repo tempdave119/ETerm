@@ -50,6 +50,37 @@ test('registry_setup_requires_dispose', () => {
   assert.throws(() => registry.setupAll(), /必须返回 dispose/);
 });
 
+test('registry_setup_is_idempotent_for_late_modules', () => {
+  const calls: string[] = [];
+  const registry = new ModuleRegistry();
+  registry.register(
+    makeModule({
+      id: 'core-a',
+      setup: () => {
+        calls.push('a');
+        return { dispose: () => {} };
+      },
+    }),
+  );
+
+  registry.setupAll();
+  registry.setupAll();
+  assert.deepEqual(calls, ['a']);
+
+  registry.register(
+    makeModule({
+      id: 'core-b',
+      protocol: 'b',
+      setup: () => {
+        calls.push('b');
+        return { dispose: () => {} };
+      },
+    }),
+  );
+  registry.setupAll();
+  assert.deepEqual(calls, ['a', 'b']);
+});
+
 test('registry_service_is_visible_to_later_modules_and_disposed_in_reverse', () => {
   const calls: string[] = [];
   const registry = new ModuleRegistry();

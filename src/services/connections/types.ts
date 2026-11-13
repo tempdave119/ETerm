@@ -1,4 +1,4 @@
-export type ConnectionProtocol = 'ssh' | 'local';
+export type ConnectionProtocol = string;
 export type AuthMethod = 'password' | 'key' | 'agent' | 'none';
 export type ProxyType = 'http' | 'socks5';
 
@@ -22,6 +22,8 @@ export interface ConnectionRecord {
   jumpConnectionId?: string;
   /** 直连代理；走跳板时忽略。 */
   proxy?: ConnectionProxy;
+  /** 可选组件的协议字段（如串口设备路径 / 波特率），宿主不解释内容。 */
+  options?: Record<string, string>;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +52,7 @@ export interface ConnectionInput {
   keyPath?: string;
   jumpConnectionId?: string | null;
   proxy?: ConnectionProxy | null;
+  options?: Record<string, string> | null;
 }
 
 export interface GroupInput {

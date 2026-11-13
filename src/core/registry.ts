@@ -22,6 +22,7 @@ export class ModuleRegistry {
   #modules = new Map<string, ModuleSlot>();
   #protocols = new Map<string, string>();
   #services = new Map<string, unknown>();
+  #setup = new Set<string>();
   #bus = new EventBus();
   #disposed = false;
 
@@ -43,6 +44,9 @@ export class ModuleRegistry {
 
   setupAll(): void {
     for (const slot of this.#modules.values()) {
+      // 可选组件可能在内置模块 setup 之后才装载，这里按模块幂等，重复调用只补新模块。
+      if (this.#setup.has(slot.manifest.id)) continue;
+
       const ctx = createContext({
         moduleId: slot.manifest.id,
         bus: this.#bus,
@@ -56,6 +60,7 @@ export class ModuleRegistry {
 
       slot.exports = setup.exports ?? {};
       slot.dispose = setup.dispose;
+      this.#setup.add(slot.manifest.id);
 
       for (const [name, service] of Object.entries(slot.exports.services ?? {})) {
         if (this.#services.has(name)) throw new Error(`服务名重复：${name}`);

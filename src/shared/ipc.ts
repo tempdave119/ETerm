@@ -5,6 +5,7 @@ import type { AppConfig, ThemePreference, UiDensity } from '../services/config/s
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelState } from './panels.ts';
+import type { ComponentDescriptor } from './components.ts';
 import type {
   ConnectionInput,
   ConnectionRecord,
@@ -23,6 +24,8 @@ export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
 export type { PanelState };
+export type { ComponentDescriptor };
+export type { ComponentField } from './components.ts';
 
 export const IPC = {
   open: 'session:open',
@@ -104,6 +107,10 @@ export const KNOWN_HOSTS_IPC = {
   remember: 'known_hosts:remember',
 } as const;
 
+export const COMPONENTS_IPC = {
+  list: 'components:list',
+} as const;
+
 export const CREDENTIALS_IPC = {
   set: 'credentials:set',
   has: 'credentials:has',
@@ -168,4 +175,6 @@ export interface EtermApi {
   saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;
   resetConfig(): Promise<IpcResult<AppConfig>>;
   onConfigChange(handler: (config: AppConfig) => void): () => void;
+
+  listComponents(): Promise<IpcResult<ComponentDescriptor[]>>;
 }

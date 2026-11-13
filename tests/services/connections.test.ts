@@ -260,6 +260,28 @@ test('connections_delete_jump_clears_references', async () => {
   assert.equal(snapshot.connections.find((item) => item.id === target.id)?.jumpConnectionId, undefined);
 });
 
+test('connections_component_protocol_persists_options', async () => {
+  const { dir, store } = await createStore();
+  const connection = await store.saveConnection({
+    name: 'serial',
+    protocol: 'serial',
+    options: { path: '/dev/ttys001', baudRate: '115200' },
+  });
+
+  assert.equal(connection.auth, 'none');
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  const found = snapshot.connections.find((item) => item.id === connection.id);
+  assert.equal(found?.protocol, 'serial');
+  assert.deepEqual(found?.options, { path: '/dev/ttys001', baudRate: '115200' });
+
+  await assert.rejects(
+    store.saveConnection({ name: 'bad', protocol: 'serial', jumpConnectionId: 'some-id' }),
+    /可选组件连接不支持跳板或代理/,
+  );
+});
+
 test('connections_proxy_persists_and_is_validated', async () => {
   const { dir, store } = await createStore();
   const connection = await store.saveConnection({

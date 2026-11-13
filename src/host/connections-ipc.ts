@@ -27,15 +27,18 @@ function failure(error: unknown): IpcResult<never> {
   return { ok: false, error: normalizeError(error).toInfo() };
 }
 
-function readProtocol(raw: unknown): 'ssh' | 'local' {
-  if (raw === 'ssh' || raw === 'local') return raw;
-  throw new Error('连接协议必须是 ssh 或 local');
-}
-
 function readAuth(raw: unknown): ConnectionInput['auth'] {
   if (raw === undefined || raw === null) return undefined;
   if (raw === 'password' || raw === 'key' || raw === 'agent' || raw === 'none') return raw;
   throw new Error('认证方式无效');
+}
+
+function readOptions(raw: unknown): ConnectionInput['options'] {
+  if (raw === undefined || raw === null) return raw;
+  const value = readRecord(raw, '组件字段');
+  const entries = Object.entries(value);
+  if (entries.length > 32) throw new Error('组件字段最多 32 项');
+  return Object.fromEntries(entries.map(([key, item]) => [key, readString(item, `组件字段 ${key}`, 4096)]));
 }
 
 function readProxy(raw: unknown): ConnectionInput['proxy'] {
@@ -54,7 +57,7 @@ function readConnectionInput(raw: unknown): ConnectionInput {
   return {
     id: readOptionalString(value.id, '连接 id', ID_MAX),
     name: readString(value.name, '连接名称', NAME_MAX),
-    protocol: readProtocol(value.protocol),
+    protocol: readString(value.protocol, '连接协议', 32),
     host: readOptionalString(value.host, '主机', HOST_MAX),
     port: readOptionalInteger(value.port, '端口', 1, 65535),
     username: readOptionalString(value.username, '用户名', USER_MAX),
@@ -64,6 +67,7 @@ function readConnectionInput(raw: unknown): ConnectionInput {
     jumpConnectionId:
       value.jumpConnectionId === null ? null : readOptionalString(value.jumpConnectionId, '跳板机', ID_MAX),
     proxy: readProxy(value.proxy),
+    options: readOptions(value.options),
   };
 }
 

@@ -41,6 +41,16 @@ export async function resolveOpenOptions(
     return { protocol: 'local', cols: options.cols, rows: options.rows };
   }
 
+  // 可选组件的协议参数原样透传；宿主不解释字段内容。
+  if (record.protocol !== 'ssh') {
+    return {
+      protocol: record.protocol,
+      cols: options.cols,
+      rows: options.rows,
+      target: record.options ?? {},
+    };
+  }
+
   return {
     protocol: 'ssh',
     cols: options.cols,
