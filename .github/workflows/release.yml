@@ -1,10 +1,13 @@
 name: release
 
 # 打 tag 即出包：x64 dmg 交给 Intel runner 构建，成功后自动创建 Release 并挂上产物。
+# branches 里的 ci-probe 是诊断用临时入口，定位完 CI 环境差异后移除。
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - "ci-probe"
 
 permissions:
   contents: write
@@ -14,10 +17,10 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 安装 Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
@@ -28,10 +31,34 @@ jobs:
       - name: 单元测试
         run: npm test
 
-      - name: 构建 dmg
-        run: npm run dist
+      - name: 构建主进程与渲染层
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/build.log
+
+      - name: 打包 dmg
+        run: |
+          set -o pipefail
+          npx electron-builder --mac dmg 2>&1 | tee -a /tmp/build.log
+
+      - name: 失败诊断
+        if: failure()
+        run: |
+          {
+            echo "## 构建失败诊断"
+            echo ""
+            echo "- node: $(node -v)"
+            echo "- npm: $(npm -v)"
+            echo "- arch: $(uname -m)"
+            echo "- os: $(sw_vers -productVersion)"
+            echo ""
+            echo '```'
+            tail -80 /tmp/build.log 2>/dev/null || echo "（没有 build.log）"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 创建 Release 并上传产物
+        if: startsWith(github.ref, 'refs/tags/') && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
