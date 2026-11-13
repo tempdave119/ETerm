@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeTheme } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
+import type { CapabilityModule } from '../core/manifest.ts';
 import { SessionService } from '../core/session-service.ts';
 import { localTerminalModule } from '../modules/local-terminal/index.ts';
 import { sshModule } from '../modules/ssh/index.ts';
@@ -40,7 +41,15 @@ app.setName('ETerm');
 
 const registry = new ModuleRegistry();
 registry.register(localTerminalModule);
-registry.register(sshModule);
+
+// M4 验证入口：仅开发环境可通过环境变量换掉 SSH 实现，打包产物始终用内置模块。
+const altSshPath = process.env.ETERM_SSH_ALT_PATH;
+if (!app.isPackaged && altSshPath) {
+  const alt = require(altSshPath) as { sshAltModule: CapabilityModule };
+  registry.register(alt.sshAltModule);
+} else {
+  registry.register(sshModule);
+}
 
 let disposeIpc: (() => void) | null = null;
 let disposeConnectionsIpc: (() => void) | null = null;

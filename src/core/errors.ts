@@ -128,12 +128,27 @@ const MESSAGE_RULES: Array<[RegExp, ProductErrorCode]> = [
 export function normalizeError(raw: unknown): ProductError {
   if (raw instanceof ProductError) return raw;
 
-  const record = typeof raw === 'object' && raw !== null ? (raw as { code?: unknown; level?: unknown; message?: unknown }) : {};
+  const record =
+    typeof raw === 'object' && raw !== null
+      ? (raw as { code?: unknown; level?: unknown; message?: unknown; next?: unknown; detail?: unknown; host?: unknown; port?: unknown })
+      : {};
   const nodeCode = typeof record.code === 'string' ? record.code : undefined;
   const sftpStatus = typeof record.code === 'number' ? record.code : undefined;
   const level = typeof record.level === 'string' ? record.level : undefined;
   const detail =
     raw instanceof Error ? raw.message : typeof record.message === 'string' ? record.message : String(raw);
+
+  // 外挂组件拿不到宿主的 ProductError 类，按形状识别产品码；
+  // 不这样做，组件报的 HOST_KEY_CHANGED 等会被降级成 INTERNAL。
+  if (nodeCode && Object.hasOwn(PRODUCT_ERRORS, nodeCode)) {
+    return new ProductError(nodeCode as ProductErrorCode, {
+      ...(typeof record.message === 'string' ? { message: record.message } : {}),
+      ...(typeof record.next === 'string' ? { next: record.next } : {}),
+      ...(typeof record.detail === 'string' ? { detail: record.detail } : {}),
+      ...(typeof record.host === 'string' ? { host: record.host } : {}),
+      ...(typeof record.port === 'number' ? { port: record.port } : {}),
+    });
+  }
 
   const mapped = level ? SSH_LEVEL_MAP[level] : undefined;
   if (mapped) return new ProductError(mapped, { detail });

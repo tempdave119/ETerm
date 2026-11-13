@@ -74,6 +74,22 @@ test('errors_product_error_passes_through_unchanged', () => {
   assert.equal(normalizeError(original), original);
 });
 
+test('errors_structural_product_error_from_external_module_is_preserved', () => {
+  const error = normalizeError({
+    code: 'HOST_KEY_CHANGED',
+    message: '首次连接需要确认主机指纹',
+    detail: '观察到的主机指纹 SHA256:abc',
+    host: '127.0.0.1',
+    port: 2222,
+  });
+
+  assert.equal(error.code, 'HOST_KEY_CHANGED');
+  assert.equal(error.message, '首次连接需要确认主机指纹');
+  assert.equal(error.detail, '观察到的主机指纹 SHA256:abc');
+  assert.equal(error.host, '127.0.0.1');
+  assert.equal(error.port, 2222);
+});
+
 test('errors_ssh_auth_level_maps_to_auth_failed', () => {
   const error = normalizeError(
     Object.assign(new Error('All configured authentication methods failed'), { level: 'client-authentication' }),

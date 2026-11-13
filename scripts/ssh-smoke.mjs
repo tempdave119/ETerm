@@ -17,6 +17,10 @@ const STATUS = { OK: 0, EOF: 1, NO_SUCH_FILE: 2, PERMISSION_DENIED: 3, FAILURE: 
 const DEBUG_PORT = 9334;
 const MARKER = 'ssh-smoke-ok';
 const SCREENSHOT = 'tmp/ssh-smoke.png';
+const swapOnly = process.env.ETERM_SWAP_ONLY === '1';
+
+// swap 模式在核心链路跑完后用它提前收尾，保证 finally 清理仍然执行。
+class SwapDone extends Error {}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -98,6 +102,20 @@ function setSelectScript(selector, value) {
 
 await run(process.execPath, ['scripts/build-main.mjs']);
 await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
+
+if (swapOnly) {
+  mkdirSync('tmp', { recursive: true });
+  const { build } = await import('esbuild');
+  await build({
+    entryPoints: ['tests/fixtures/ssh-alt/index.ts'],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['ssh2'],
+    outfile: 'tmp/ssh-alt.cjs',
+    logLevel: 'silent',
+  });
+}
 
 const dataDir = join(process.cwd(), 'tmp', 'ssh-smoke', randomUUID());
 mkdirSync(dataDir, { recursive: true });
@@ -457,6 +475,7 @@ const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], 
     ETERM_USER_DATA: dataDir,
     ETERM_SMOKE_UPLOAD: uploadFixture,
     ETERM_SMOKE_DOWNLOAD: downloadTarget,
+    ...(swapOnly ? { ETERM_SSH_ALT_PATH: resolve('tmp/ssh-alt.cjs') } : {}),
   },
 });
 
@@ -577,6 +596,13 @@ try {
     '文件预览',
   );
   if (!previewText.includes('hello-from-sftp')) throw new Error('文件预览内容不正确');
+
+  if (swapOnly) {
+    const swapShot = await client.send('Page.captureScreenshot', { format: 'png' });
+    mkdirSync('tmp', { recursive: true });
+    writeFileSync('tmp/ssh-swap.png', Buffer.from(swapShot.data, 'base64'));
+    throw new SwapDone('swap-ok');
+  }
 
   // 关闭预览与标签，再次点击连接：指纹已保存，不应再弹确认。
   await evaluate(`document.querySelector('[data-testid="file-preview"] .button--primary').click()`);
@@ -1089,19 +1115,24 @@ try {
   console.log(`SSH 冒烟通过：指纹 ${fingerprint}，终端输出「${tail}」，截图 ${SCREENSHOT}`);
   process.exitCode = 0;
 } catch (error) {
-  if (client) {
-    // 失败现场截图：CDP 可能已断，最多等 3 秒，不能让收尾再挂住。
-    const shot = await Promise.race([
-      client.send('Page.captureScreenshot', { format: 'png' }).catch(() => null),
-      delay(3000).then(() => null),
-    ]);
-    if (shot?.data) {
-      mkdirSync('tmp', { recursive: true });
-      writeFileSync('tmp/ssh-smoke-failure.png', Buffer.from(shot.data, 'base64'));
+  if (error instanceof SwapDone) {
+    console.log('SSH 交换验证通过：第二个 adapter 跑通连接 / 终端 / 文件，界面零改动，截图 tmp/ssh-swap.png');
+    process.exitCode = 0;
+  } else {
+    if (client) {
+      // 失败现场截图：CDP 可能已断，最多等 3 秒，不能让收尾再挂住。
+      const shot = await Promise.race([
+        client.send('Page.captureScreenshot', { format: 'png' }).catch(() => null),
+        delay(3000).then(() => null),
+      ]);
+      if (shot?.data) {
+        mkdirSync('tmp', { recursive: true });
+        writeFileSync('tmp/ssh-smoke-failure.png', Buffer.from(shot.data, 'base64'));
+      }
     }
+    console.error(`SSH 冒烟失败：${error.message}`);
+    process.exitCode = 1;
   }
-  console.error(`SSH 冒烟失败：${error.message}`);
-  process.exitCode = 1;
 } finally {
   client?.close();
   app.kill('SIGTERM');

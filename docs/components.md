@@ -85,6 +85,7 @@ module.exports = {
 - 组件拿不到宿主的 `connections` / `credentials` / `knownHosts` / `layouts`：`ctx.get()` 先看 `consumes` 声明，宿主服务一律拒绝。
 - 凭据由宿主在 `openSession` 前组装进 `target`，组件只收到本次连接的一份；读不到凭据库，也拿不到其他连接的凭据。
 - 组件之间要复用服务时，由提供方在 `exports.services` 导出，消费方在模块对象的 `consumes` 字段声明。
+- 组件报错可以抛 `{ code, message?, next?, detail?, host?, port? }` 形状的对象，宿主按产品码识别；不要依赖 `ProductError` 类实例跨 bundle 共享。
 - 安装即信任：组件在主进程内运行，无签名、无沙箱、无市场；不要装来路不明的组件。
 
 ## 串口样例
