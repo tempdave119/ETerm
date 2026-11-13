@@ -1112,17 +1112,23 @@ button {
 }
 
 .monitor-source {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-tight);
+  row-gap: 2px;
   align-items: center;
-  gap: var(--space-tight);
-  padding: var(--space-tight) 0;
-  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-tight);
+  padding: var(--space-tight) var(--space-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
   color: var(--text-tertiary);
   font-size: var(--font-aux);
 }
 
 .monitor-source__badge {
-  flex: 0 0 auto;
+  grid-column: 1;
+  grid-row: 1;
   padding: 0 var(--space-tight);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -1135,8 +1141,24 @@ button {
   color: var(--status-info);
 }
 
-.monitor-source__target {
+.monitor-source__name {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
   overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-body);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.monitor-source__target {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -1176,6 +1198,35 @@ button {
   text-overflow: ellipsis;
 }
 
+.monitor-processes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.monitor-process {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  font-size: var(--font-aux);
+}
+
+.monitor-process__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.monitor-process__meta {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 .monitor-error {
   margin: 0;
   color: var(--status-danger);
@@ -1193,6 +1244,14 @@ button {
   display: block;
   height: 100%;
   background: var(--status-info);
+}
+
+.monitor-meter__fill[data-tone="warning"] {
+  background: var(--status-warning);
+}
+
+.monitor-meter__fill[data-tone="danger"] {
+  background: var(--status-danger);
 }
 
 .file-row {

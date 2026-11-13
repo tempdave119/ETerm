@@ -375,7 +375,7 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
         const stream = acceptExec();
         if (String(info?.command ?? '').includes('MemTotal')) {
           stream.write(
-            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\nuptime=7200\nfs=/|524288|1048576\n',
+            'cpus=4\nload=0.15 0.20 0.25\ncpu=28\ntotal=8589934592\navail=4294967296\nuptime=7200\nhostname=mock-remote\nfs=/|524288|1048576\nproc=101 512000 1.2 2.5 node\nproc=102 256000 0.5 1.2 zsh\nproc=103 128000 0.1 0.6 sshd\nproc=104 64000 0.0 0.3 bash\nproc=105 32000 0.0 0.1 cron\n',
           );
         } else {
           stream.write('ok\n');
@@ -679,6 +679,15 @@ try {
     `document.querySelector('.monitor-source__target')?.textContent ?? ''`,
   );
   if (!monitorTarget.includes('@')) throw new Error(`远端资源缺少连接标识：${monitorTarget}`);
+  const monitorName = await evaluate(
+    `document.querySelector('[data-testid="monitor-source-name"]')?.textContent ?? ''`,
+  );
+  if (monitorName !== 'mock-host') throw new Error(`远端资源缺少连接名：${monitorName}`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-hostname"]')?.textContent === 'mock-remote'`),
+    10_000,
+    '远端主机名',
+  );
   await waitFor(
     () => evaluate(`/\\d+%/.test(document.querySelector('[data-testid="monitor-cpu"]')?.textContent ?? '')`),
     10_000,
@@ -700,6 +709,15 @@ try {
     10_000,
     '远端文件系统',
   );
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('[data-testid="monitor-processes"] .monitor-process').length === 5`),
+    10_000,
+    '远端进程 Top5',
+  );
+  const topProcess = await evaluate(
+    `document.querySelector('[data-testid="monitor-processes"] .monitor-process__name')?.textContent ?? ''`,
+  );
+  if (topProcess !== 'node') throw new Error(`进程 Top5 排序异常：${topProcess}`);
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   mkdirSync('tmp', { recursive: true });
   writeFileSync('tmp/ssh-smoke-monitor.png', Buffer.from(monitorShot.data, 'base64'));

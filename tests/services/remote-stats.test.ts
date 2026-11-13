@@ -11,7 +11,10 @@ test('remote_stats_parses_linux_output', () => {
       'total=8589934592',
       'avail=4294967296',
       'uptime=7200',
+      'hostname=linux-box',
       'fs=/|524288|1048576',
+      'proc=101 4096 1.0 0.1 big proc',
+      'proc=102 1024 0.5 0.05 small',
     ].join('\n'),
   );
 
@@ -20,13 +23,16 @@ test('remote_stats_parses_linux_output', () => {
   assert.equal(stats.memTotal, 8589934592);
   assert.equal(stats.memUsed, 4294967296);
   assert.equal(stats.uptime, 7200);
+  assert.equal(stats.hostname, 'linux-box');
   assert.deepEqual(stats.filesystems, [{ path: '/', used: 536870912, total: 1073741824 }]);
+  assert.deepEqual(stats.processes?.map((item) => item.name), ['big proc', 'small']);
+  assert.equal(stats.processes?.[0]?.rss, 4096 * 1024);
   assert.deepEqual(stats.load, [0.52, 0.58, 0.59]);
 });
 
 test('remote_stats_parses_macos_output_and_clamps_cpu', () => {
   const stats = parseRemoteStats(
-    ['cpus=8', 'load= 1.23 1.45 1.67', 'cpu=200', 'total=17179869184', 'avail=8589934592', 'uptime=90061'].join(
+    ['cpus=8', 'load= 1.23 1.45 1.67', 'cpu=200', 'total=17179869184', 'avail=8589934592', 'uptime=90061', 'hostname=mac-box'].join(
       '\n',
     ),
   );
@@ -35,6 +41,7 @@ test('remote_stats_parses_macos_output_and_clamps_cpu', () => {
   assert.equal(stats.cpuPercent, 25);
   assert.equal(stats.memUsed, 8589934592);
   assert.equal(stats.uptime, 90061);
+  assert.equal(stats.hostname, 'mac-box');
   assert.deepEqual(stats.load, [1.23, 1.45, 1.67]);
 });
 

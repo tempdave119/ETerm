@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { statfsSync } from 'node:fs';
 import os from 'node:os';
-import type { FileSystemUsage, SystemStats } from '../../shared/ipc.ts';
+import type { FileSystemUsage, ProcessUsage, SystemStats } from '../../shared/ipc.ts';
+import { parseProcessList } from './processes.ts';
 
 export interface CpuSnapshot {
   idle: number;
@@ -42,6 +44,17 @@ export function readSystemStats(previous: CpuSnapshot | null): {
   } catch {
     filesystems = [];
   }
+  let processes: ProcessUsage[] = [];
+  try {
+    processes = parseProcessList(
+      execFileSync('ps', ['-A', '-o', 'pid=,rss=,%cpu=,%mem=,comm='], {
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+      }),
+    );
+  } catch {
+    processes = [];
+  }
   return {
     stats: {
       cpuPercent: cpuPercentBetween(previous, snapshot),
@@ -51,6 +64,8 @@ export function readSystemStats(previous: CpuSnapshot | null): {
       uptime: os.uptime(),
       cpus: os.cpus().length,
       filesystems,
+      hostname: os.hostname(),
+      processes,
     },
     snapshot,
   };

@@ -8,6 +8,8 @@ interface MonitorPanelProps {
   sessionId: string | null;
   /** 来源说明：远端为 user@host:port，本机为「这台 Mac」。 */
   targetLabel: string;
+  /** 连接名称；本机为 null。 */
+  connectionName: string | null;
   dock: DockId | null;
   onMove(target: DockId | null): void;
   canPanelMoveUp?: boolean;
@@ -22,6 +24,7 @@ const REMOTE_POLL_INTERVAL = 2000;
 export function MonitorPanel({
   sessionId,
   targetLabel,
+  connectionName,
   dock,
   onMove,
   canPanelMoveUp,
@@ -76,8 +79,22 @@ export function MonitorPanel({
           <span className="monitor-source__badge" data-testid="monitor-source-badge">
             {sessionId ? '远端' : '本机'}
           </span>
-          <span className="monitor-source__target" title={targetLabel}>
-            {targetLabel}
+          <span className="monitor-source__name" title={connectionName ?? targetLabel} data-testid="monitor-source-name">
+            {connectionName ?? (sessionId ? '远端主机' : '这台 Mac')}
+          </span>
+          {sessionId ? (
+            <span className="monitor-source__target" title={targetLabel}>
+              {targetLabel}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="monitor-section-title">资源</div>
+
+        <div className="monitor-row">
+          <span>主机名</span>
+          <span className="monitor-row__value" data-testid="monitor-hostname">
+            {stats?.hostname ?? '—'}
           </span>
         </div>
         <div className="monitor-row">
@@ -93,7 +110,7 @@ export function MonitorPanel({
         <div className="monitor-row">
           <span>内存</span>
           <span className="monitor-row__value" data-testid="monitor-memory">
-            {stats ? `${formatBytes(stats.memUsed)} / ${formatBytes(stats.memTotal)}` : '—'}
+            {stats ? `${formatBytes(stats.memUsed)} / ${formatBytes(stats.memTotal)} · ${memoryPercent}%` : '—'}
           </span>
         </div>
         <div className="monitor-meter">
@@ -124,6 +141,7 @@ export function MonitorPanel({
             <div className="monitor-section-title">文件系统</div>
             {stats.filesystems.map((item) => {
               const percent = item.total > 0 ? Math.min(100, Math.round((item.used / item.total) * 100)) : 0;
+              const tone = percent >= 90 ? 'danger' : percent >= 80 ? 'warning' : undefined;
               return (
                 <div className="monitor-fs" key={item.path}>
                   <div className="monitor-fs__head">
@@ -131,15 +149,31 @@ export function MonitorPanel({
                       {item.path}
                     </span>
                     <span className="monitor-row__value">
-                      {formatBytes(item.used)} / {formatBytes(item.total)}
+                      {formatBytes(item.used)} / {formatBytes(item.total)} · {percent}%
                     </span>
                   </div>
                   <div className="monitor-meter">
-                    <span className="monitor-meter__fill" style={{ width: `${percent}%` }} />
+                    <span className="monitor-meter__fill" data-tone={tone} style={{ width: `${percent}%` }} />
                   </div>
                 </div>
               );
             })}
+          </div>
+        ) : null}
+
+        {stats?.processes?.length ? (
+          <div className="monitor-processes" data-testid="monitor-processes">
+            <div className="monitor-section-title">占用最高进程</div>
+            {stats.processes.map((proc) => (
+              <div className="monitor-process" key={`${proc.pid}-${proc.name}`}>
+                <span className="monitor-process__name" title={proc.name}>
+                  {proc.name}
+                </span>
+                <span className="monitor-process__meta">
+                  {formatBytes(proc.rss)} · {proc.cpuPercent.toFixed(1)}%
+                </span>
+              </div>
+            ))}
           </div>
         ) : null}
 

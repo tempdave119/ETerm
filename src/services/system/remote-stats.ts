@@ -1,4 +1,5 @@
 import type { FileSystemUsage, SystemStats } from '../../shared/ipc.ts';
+import { parseProcessList } from './processes.ts';
 
 /**
  * 远端资源采样脚本：只依赖 POSIX shell + ps + awk，Linux / macOS 通用。
@@ -6,6 +7,7 @@ import type { FileSystemUsage, SystemStats } from '../../shared/ipc.ts';
  */
 export const REMOTE_STATS_COMMAND = [
   'cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)',
+  'hostname=$(hostname 2>/dev/null || uname -n 2>/dev/null || echo "")',
   'if [ -r /proc/loadavg ]; then load=$(awk \'{print $1" "$2" "$3}\' /proc/loadavg); else load=$(sysctl -n vm.loadavg 2>/dev/null | tr -d "{}"); fi',
   'cpu=$(ps -A -o %cpu 2>/dev/null | awk \'NR>1 {s+=$1} END {print s+0}\')',
   'if [ -r /proc/uptime ]; then uptime=$(awk \'{print int($1)}\' /proc/uptime); else boot=$(sysctl -n kern.boottime 2>/dev/null | awk -F\'[=,]\' \'{print $2}\' | tr -d " "); now=$(date +%s); if [ -n "$boot" ]; then uptime=$((now-boot)); else uptime=0; fi; fi',
@@ -24,7 +26,9 @@ export const REMOTE_STATS_COMMAND = [
   'echo "total=$total"',
   'echo "avail=$avail"',
   'echo "uptime=$uptime"',
+  'echo "hostname=$hostname"',
   'df -kP 2>/dev/null | awk \'NR>1 && $1 !~ /^(devfs|devtmpfs|tmpfs|overlay|shm|udev|none)$/ && $6 != "" {print "fs=" $6 "|" $3 "|" $2}\' | head -n 6',
+  'ps -A -o pid=,rss=,%cpu=,%mem=,comm= 2>/dev/null | sort -k2 -nr | head -n 5 | sed "s/^/proc=/"',
 ].join('\n');
 
 function toNumber(value: string | undefined): number {
@@ -65,5 +69,7 @@ export function parseRemoteStats(stdout: string): SystemStats {
     uptime: toNumber(values.get('uptime')),
     cpus,
     filesystems,
+    hostname: values.get('hostname') || undefined,
+    processes: parseProcessList(stdout),
   };
 }

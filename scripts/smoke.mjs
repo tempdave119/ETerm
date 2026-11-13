@@ -533,6 +533,21 @@ try {
     5_000,
     '内存采样',
   );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-source-badge"]')?.textContent === '本机'`),
+    5_000,
+    '本机资源来源',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-hostname"]')?.textContent !== '—'`),
+    5_000,
+    '本机主机名',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-processes"]') !== null`),
+    10_000,
+    '本机进程 Top5',
+  );
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/monitor-smoke.png', Buffer.from(monitorShot.data, 'base64'));
 

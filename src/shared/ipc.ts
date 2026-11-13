@@ -108,6 +108,15 @@ export interface FileSystemUsage {
   total: number;
 }
 
+export interface ProcessUsage {
+  pid: number;
+  name: string;
+  cpuPercent: number;
+  memPercent: number;
+  /** 常驻内存，字节。 */
+  rss: number;
+}
+
 export interface SystemStats {
   cpuPercent: number;
   memUsed: number;
@@ -117,6 +126,10 @@ export interface SystemStats {
   cpus: number;
   /** 本机取根分区；远端取 df 的主要挂载点。 */
   filesystems?: FileSystemUsage[];
+  /** 系统主机名；连接名由渲染层另外提供。 */
+  hostname?: string;
+  /** 按常驻内存排序的前 5 个进程。 */
+  processes?: ProcessUsage[];
 }
 
 export const CONNECTION_IPC = {

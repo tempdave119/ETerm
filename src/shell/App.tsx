@@ -869,6 +869,7 @@ export function App() {
           <MonitorPanel
             sessionId={monitorRemote ? (activePane?.sessionId ?? null) : null}
             targetLabel={monitorTargetLabel}
+            connectionName={monitorConnection?.name ?? null}
             dock={dock}
             onMove={(target) => movePanelTo('monitor', target)}
             {...panelChrome('monitor', dock)}
