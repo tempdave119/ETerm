@@ -1,0 +1,42 @@
+:root {
+  color-scheme: dark;
+
+  /* 背景三层必须有明显差值，否则面板与画布糊在一起 */
+  --bg-canvas: #16181c;
+  --bg-panel: #1c1f24;
+  --bg-overlay: #23272e;
+
+  --text-primary: #e6e8eb;
+  --text-secondary: #a6adb8;
+  --text-tertiary: #737b86;
+  --text-disabled: #4d545d;
+
+  --border-subtle: #2a2f37;
+  --border-strong: #3a4352;
+
+  --status-success: #9ece6a;
+  --status-warning: #e0af68;
+  --status-danger: #f7768e;
+  --status-info: #7aa2f7;
+
+  /* 字号只有四档：辅助 / 主体 / 区块标题 / 终端 */
+  --font-aux: 12px;
+  --font-body: 13px;
+  --font-section: 16px;
+  --font-mono: "SFMono-Regular", Menlo, Monaco, "Courier New", monospace;
+
+  /* 间距只有五档，全部是 4 的倍数 */
+  --space-tight: 4px;
+  --space-base: 8px;
+  --space-container: 12px;
+  --space-block: 16px;
+  --space-section: 24px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --row-height: 28px;
+  --control-height: 32px;
+  --panel-header-height: 32px;
+}

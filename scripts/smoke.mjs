@@ -1,0 +1,249 @@
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
+import electronPath from 'electron';
+
+const DEBUG_PORT = 9333;
+const MARKER = 'eterm-smoke-ok';
+const SCREENSHOT = 'tmp/p0-smoke.png';
+
+function run(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${command} 退出码 ${code}`))));
+  });
+}
+
+async function waitFor(check, timeoutMs, label) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const value = await check();
+      if (value) return value;
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(200);
+  }
+  throw new Error(`等待超时：${label}${lastError ? `（${lastError.message}）` : ''}`);
+}
+
+function createClient(wsUrl) {
+  const socket = new WebSocket(wsUrl);
+  const pending = new Map();
+  let nextId = 0;
+
+  socket.addEventListener('message', (event) => {
+    const message = JSON.parse(event.data);
+    if (!message.id || !pending.has(message.id)) return;
+    const { resolve, reject } = pending.get(message.id);
+    pending.delete(message.id);
+    if (message.error) reject(new Error(message.error.message));
+    else resolve(message.result);
+  });
+
+  const ready = new Promise((resolve, reject) => {
+    socket.addEventListener('open', () => resolve());
+    socket.addEventListener('error', () => reject(new Error('CDP WebSocket 连接失败')));
+  });
+
+  const send = (method, params = {}) =>
+    new Promise((resolve, reject) => {
+      const id = ++nextId;
+      pending.set(id, { resolve, reject });
+      socket.send(JSON.stringify({ id, method, params }));
+    });
+
+  return { ready, send, close: () => socket.close() };
+}
+
+await run(process.execPath, ['scripts/build-main.mjs']);
+await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
+
+const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
+  stdio: 'inherit',
+  env: { ...process.env, ETERM_SMOKE: '1' },
+});
+
+let client;
+
+try {
+  const target = await waitFor(
+    async () => {
+      const response = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
+      const targets = await response.json();
+      return targets.find((item) => item.type === 'page');
+    },
+    20_000,
+    'CDP 页面目标',
+  );
+
+  client = createClient(target.webSocketDebuggerUrl);
+  await client.ready;
+  await client.send('Page.enable');
+  await client.send('Runtime.enable');
+  // 窗口不在前台时 CDP 的键盘事件会被丢弃，先置前。
+  await client.send('Page.bringToFront');
+
+  const evaluate = async (expression) => {
+    const result = await client.send('Runtime.evaluate', {
+      expression,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+    }
+    return result.result.value;
+  };
+
+  await waitFor(() => evaluate(`typeof window.eterm === 'object'`), 15_000, 'preload 注入');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="new-terminal"]') !== null`),
+    10_000,
+    '空态渲染',
+  );
+
+  await evaluate(`document.querySelector('[data-testid="new-terminal"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.xterm-helper-textarea') !== null`),
+    10_000,
+    '终端挂载',
+  );
+
+  const sessionId = await waitFor(
+    () => evaluate(`document.querySelector('.terminal-host')?.dataset.sessionId ?? ''`),
+    5_000,
+    '会话 id',
+  );
+  await waitFor(() => evaluate(`typeof window.__etermDebug === 'object'`), 5_000, '调试桥');
+  // 等 shell 打印首个 prompt：过早输入会让 zsh 把 prompt 与回显顺序打乱。
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).trim().length > 0,
+    10_000,
+    '首个 prompt',
+  );
+
+  // 走 xterm 自己的 input()，与键盘输入同一条通路；CDP 的键盘事件在窗口未激活时不会送达。
+  const command = `cd '${process.cwd()}' && echo ${MARKER} && ls`;
+  const typed = await evaluate(
+    `window.__etermDebug.type(${JSON.stringify(sessionId)}, ${JSON.stringify(`${command}\r`)})`,
+  );
+  if (!typed) throw new Error('会话已关闭，无法输入');
+
+  const screen = await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
+      const occurrences = (text.match(new RegExp(MARKER, 'g')) ?? []).length;
+      return occurrences === 2 && text.includes('package.json') ? text : '';
+    },
+    10_000,
+    '命令输出回显',
+  );
+
+  // 宽字符：中文必须原样落在缓冲区里，宽度算错会把后续内容挤歪。
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(sessionId)}, "echo 中文-宽字符\\r")`);
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
+      return (text.match(/中文-宽字符/g) ?? []).length >= 2;
+    },
+    8_000,
+    '宽字符回显',
+  );
+
+  // 真彩色：24 位色序列必须能被 xterm 直接渲染（截图可见红色）。
+  const colorCommand = "printf '\\033[38;2;255;0;0mRGB-TRUE-COLOR\\033[0m\\n'\r";
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(sessionId)}, ${JSON.stringify(colorCommand)})`);
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).includes('RGB-TRUE-COLOR'),
+    8_000,
+    '真彩色输出',
+  );
+
+  // 缩放：视口变化后 xterm 列数必须跟着变，否则界面与 PTY 尺寸不同步。
+  const beforeSize = await evaluate(`JSON.stringify(window.__etermDebug.size(${JSON.stringify(sessionId)}))`);
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 960,
+    height: 640,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await waitFor(
+    async () => {
+      const size = await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`);
+      return size !== null && size.cols < JSON.parse(beforeSize).cols;
+    },
+    5_000,
+    '缩放后列数更新',
+  );
+  await client.send('Emulation.clearDeviceMetricsOverride');
+
+  // 第二个标签：新建、切换、关闭都要动到真实会话。
+  await evaluate(`document.querySelector('.tabbar__new').click()`);
+  const sessionIds = await waitFor(
+    () => evaluate(`[...document.querySelectorAll('.terminal-host')].map((element) => element.dataset.sessionId)`),
+    8_000,
+    '第二个终端',
+  );
+  if (sessionIds.length < 2) throw new Error('没有创建第二个终端');
+  const secondId = sessionIds[1];
+  await waitFor(
+    async () => String(await evaluate(`window.__etermDebug.read(${JSON.stringify(secondId)})`)).trim().length > 0,
+    10_000,
+    '第二个 prompt',
+  );
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(secondId)}, "echo ${MARKER}-tab2\\r")`);
+  await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(secondId)})`));
+      return (text.match(new RegExp(`${MARKER}-tab2`, 'g')) ?? []).length === 2;
+    },
+    8_000,
+    '第二个终端输出',
+  );
+
+  await evaluate(`document.querySelectorAll('.tab__label')[0].click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('.pane[data-active="true"] .terminal-host')?.dataset.sessionId === ${JSON.stringify(sessionId)}`,
+      ),
+    3_000,
+    '切回第一个标签',
+  );
+  const firstScreen = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
+  if (!firstScreen.includes('package.json')) throw new Error('切回后第一个终端内容丢失');
+
+  await evaluate(`document.querySelectorAll('.tab__close')[1].click()`);
+  await waitFor(() => evaluate(`document.querySelectorAll('.terminal-host').length === 1`), 5_000, '关闭第二个标签');
+
+  const shot = await client.send('Page.captureScreenshot', { format: 'png' });
+  mkdirSync('tmp', { recursive: true });
+  writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));
+
+  const tail = screen.split('\n').filter(Boolean).slice(-2).join(' | ');
+  console.log(`冒烟通过：终端输出「${tail}」，截图 ${SCREENSHOT}`);
+  process.exitCode = 0;
+} catch (error) {
+  console.error(`冒烟失败：${error.message}`);
+  if (client) {
+    try {
+      const structure = await client.send('Runtime.evaluate', {
+        expression: `document.querySelector('.terminal-host')?.innerHTML.slice(0, 1200) ?? 'no terminal'`,
+        returnByValue: true,
+      });
+      console.error(`终端 DOM：${structure.result?.value}`);
+    } catch {
+      // 诊断信息拿不到就只保留原始错误。
+    }
+  }
+  process.exitCode = 1;
+} finally {
+  client?.close();
+  app.kill('SIGTERM');
+  await delay(500);
+  if (app.exitCode === null) app.kill('SIGKILL');
+}

@@ -1,0 +1,225 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  font-size: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 标签栏同时充当窗口拖拽区，左侧给红绿灯留位 */
+.tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  height: 44px;
+  padding: 0 var(--space-base) var(--space-tight) 88px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-canvas);
+  -webkit-app-region: drag;
+}
+
+.tabbar__tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tabbar__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabbar__new {
+  -webkit-app-region: no-drag;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.tabbar__new:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.tab {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  height: var(--row-height);
+  padding: 0 var(--space-tight) 0 var(--space-container);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tab[data-active="true"] {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.tab__label {
+  max-width: 180px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  padding: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tab__close {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+.tab__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.workspace {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane {
+  position: absolute;
+  inset: 0;
+  padding: var(--space-base) 0 0 var(--space-base);
+}
+
+.pane[data-active="false"] {
+  display: none;
+}
+
+.terminal-host {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+/* 空态三段式：一句说明 + 一个动作 + 一个可选提示 */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-base);
+  height: 100%;
+  padding: var(--space-section);
+  text-align: center;
+}
+
+.empty__title {
+  margin: 0;
+  font-size: var(--font-section);
+  font-weight: 600;
+}
+
+.empty__hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
+.empty__detail {
+  max-width: 560px;
+  color: var(--text-tertiary);
+  font-size: var(--font-aux);
+}
+
+.empty__detail pre {
+  margin: var(--space-base) 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+/* 控件五态：默认 / hover / active / focus / disabled */
+.button {
+  height: var(--control-height);
+  padding: 0 var(--space-container);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  cursor: default;
+  transition: background 120ms ease;
+}
+
+.button:hover {
+  background: var(--bg-overlay);
+}
+
+.button:active {
+  background: var(--bg-canvas);
+}
+
+.button:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: 1px;
+}
+
+.button[disabled] {
+  opacity: 0.5;
+}
+
+.button--primary {
+  border-color: transparent;
+  background: var(--text-primary);
+  color: #101318;
+  font-weight: 600;
+}
+
+.button--primary:hover {
+  background: #d5d9de;
+}
+
+.button--primary:active {
+  background: #c2c7cd;
+}

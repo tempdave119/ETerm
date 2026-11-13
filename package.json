@@ -1,0 +1,41 @@
+{
+  "name": "eterm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "macOS 优先的 SSH / SFTP 工作台",
+  "type": "module",
+  "main": "dist/main/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run typecheck && npm run build:main && npm run build:renderer",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "smoke": "node scripts/smoke.mjs",
+    "postinstall": "node scripts/postinstall.mjs"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron": "^45.3.1",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true,
+    "esbuild@0.28.2": true
+  }
+}
