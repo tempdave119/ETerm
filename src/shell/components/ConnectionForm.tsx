@@ -239,6 +239,7 @@ export function ConnectionForm({
               </div>
             ) : null}
           </div>
+          {components.length === 0 ? <p className="form-hint">{t('connection.noComponentsHint')}</p> : null}
 
           {isSsh ? (
             <>

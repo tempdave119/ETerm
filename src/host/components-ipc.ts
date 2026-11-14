@@ -1,12 +1,67 @@
-import { ipcMain } from 'electron';
-import type { ComponentDescriptor } from '../shared/components.ts';
+import { mkdir } from 'node:fs/promises';
+import { ipcMain, shell } from 'electron';
+import { normalizeError } from '../core/errors.ts';
+import {
+  installComponentSamples,
+  listComponentSamples,
+  type ComponentSampleDirs,
+} from '../services/components/samples.ts';
+import type { ComponentDescriptor, ComponentSample } from '../shared/components.ts';
 import { COMPONENTS_IPC, type IpcResult } from '../shared/ipc.ts';
 
-/** 可选组件只在启动时装载一次，这里只把已装载的协议与字段表交给渲染层。 */
-export function registerComponentsIpc(getDescriptors: () => ComponentDescriptor[]): () => void {
+export interface ComponentsIpcOptions {
+  getDescriptors: () => ComponentDescriptor[];
+  sampleDirs: ComponentSampleDirs;
+}
+
+function failure(error: unknown): IpcResult<never> {
+  return { ok: false, error: normalizeError(error).toInfo() };
+}
+
+/** 可选组件只在启动时装载一次；示例组件按需复制到 userData，安装后需重启生效。 */
+export function registerComponentsIpc(options: ComponentsIpcOptions): () => void {
   ipcMain.handle(COMPONENTS_IPC.list, (): IpcResult<ComponentDescriptor[]> => {
-    return { ok: true, value: getDescriptors() };
+    return { ok: true, value: options.getDescriptors() };
   });
 
-  return () => ipcMain.removeHandler(COMPONENTS_IPC.list);
+  ipcMain.handle(COMPONENTS_IPC.samples, async (): Promise<IpcResult<ComponentSample[]>> => {
+    try {
+      return { ok: true, value: await listComponentSamples(options.sampleDirs) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(
+    COMPONENTS_IPC.installSamples,
+    async (): Promise<IpcResult<{ installed: string[]; skipped: string[] }>> => {
+      try {
+        return { ok: true, value: await installComponentSamples(options.sampleDirs) };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  ipcMain.handle(COMPONENTS_IPC.openDir, async (): Promise<IpcResult<null>> => {
+    try {
+      await mkdir(options.sampleDirs.userDir, { recursive: true });
+      const error = await shell.openPath(options.sampleDirs.userDir);
+      if (error) throw new Error(error);
+      return { ok: true, value: null };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  return () => {
+    for (const channel of [
+      COMPONENTS_IPC.list,
+      COMPONENTS_IPC.samples,
+      COMPONENTS_IPC.installSamples,
+      COMPONENTS_IPC.openDir,
+    ]) {
+      ipcMain.removeHandler(channel);
+    }
+  };
 }

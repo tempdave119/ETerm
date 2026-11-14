@@ -12,7 +12,7 @@ import type {
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
-import type { ComponentDescriptor } from './components.ts';
+import type { ComponentDescriptor, ComponentSample } from './components.ts';
 import type { ThemeDefinition } from './theme.ts';
 import type {
   ConnectionInput,
@@ -34,8 +34,7 @@ export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
 export type { PanelLayout };
-export type { ComponentDescriptor };
-export type { ComponentField } from './components.ts';
+export type { ComponentField, ComponentSample, ComponentDescriptor } from './components.ts';
 export type { ThemeDefinition };
 
 export const IPC = {
@@ -169,6 +168,9 @@ export const KNOWN_HOSTS_IPC = {
 
 export const COMPONENTS_IPC = {
   list: 'components:list',
+  samples: 'components:samples',
+  installSamples: 'components:install-samples',
+  openDir: 'components:open-dir',
 } as const;
 
 export const SERIAL_IPC = {
@@ -264,5 +266,8 @@ export interface EtermApi {
   onMenuCommand(handler: (command: MenuCommand) => void): () => void;
 
   listComponents(): Promise<IpcResult<ComponentDescriptor[]>>;
+  listComponentSamples(): Promise<IpcResult<ComponentSample[]>>;
+  installComponentSamples(): Promise<IpcResult<{ installed: string[]; skipped: string[] }>>;
+  openComponentsDir(): Promise<IpcResult<null>>;
   listSerialDevices(): Promise<IpcResult<SerialDevice[]>>;
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Activity, ArrowLeftRight, Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
 import { t } from '../../shared/i18n/index.ts';
 
@@ -17,6 +18,8 @@ interface TabBarProps {
   onSelect(id: string): void;
   onClose(id: string): void;
   onNew(): void;
+  onNewShell(command: string): void;
+  onNewCustomShell(): void;
   onToggleFiles(): void;
   onToggleMonitor(): void;
   onOpenForward(): void;
@@ -35,12 +38,35 @@ export function TabBar({
   onSelect,
   onClose,
   onNew,
+  onNewShell,
+  onNewCustomShell,
   onToggleFiles,
   onToggleMonitor,
   onOpenForward,
   onSplit,
   onOpenSettings,
 }: TabBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+
+  const closeMenu = (): void => setMenuOpen(false);
+
   return (
     <header className="tabbar">
       <div className="tabbar__tabs">
@@ -129,9 +155,66 @@ export function TabBar({
       >
         <Settings size={16} strokeWidth={1.5} />
       </button>
-      <button className="tabbar__new" type="button" title={t('menu.newTerminal')} aria-label={t('menu.newTerminal')} onClick={onNew}>
-        +
-      </button>
+      <div className="tabbar__new-group" ref={menuRef}>
+        <button className="tabbar__new" type="button" title={t('menu.newTerminal')} aria-label={t('menu.newTerminal')} onClick={onNew}>
+          +
+        </button>
+        <button
+          className="tabbar__new-caret"
+          type="button"
+          data-testid="tabbar-new-shell"
+          title={t('tab.newShell')}
+          aria-label={t('tab.newShell')}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          ▾
+        </button>
+        {menuOpen ? (
+          <div className="new-menu" role="menu" data-testid="local-shell-menu">
+            <button
+              className="new-menu__item"
+              type="button"
+              role="menuitem"
+              data-testid="local-shell-option-default"
+              onClick={() => {
+                closeMenu();
+                onNew();
+              }}
+            >
+              {t('tab.newDefaultShell')}
+            </button>
+            {(['zsh', 'bash', 'sh'] as const).map((shell) => (
+              <button
+                className="new-menu__item"
+                type="button"
+                role="menuitem"
+                key={shell}
+                data-testid={`local-shell-option-${shell}`}
+                onClick={() => {
+                  closeMenu();
+                  onNewShell(`${shell} -l`);
+                }}
+              >
+                {shell} -l
+              </button>
+            ))}
+            <button
+              className="new-menu__item"
+              type="button"
+              role="menuitem"
+              data-testid="local-shell-option-custom"
+              onClick={() => {
+                closeMenu();
+                onNewCustomShell();
+              }}
+            >
+              {t('tab.newCustomShell')}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </header>
   );
 }

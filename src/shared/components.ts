@@ -23,3 +23,11 @@ export interface ComponentDescriptor {
   label: string;
   fields: ComponentField[];
 }
+
+/** 设置页展示的示例组件：来自应用内置资源，可一键安装到 userData。 */
+export interface ComponentSample {
+  id: string;
+  label: string;
+  protocol: string;
+  installed: boolean;
+}

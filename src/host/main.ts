@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, nativeTheme, shell, type Tray } from 'electron';
+import Module from 'node:module';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
@@ -247,6 +248,12 @@ void app.whenReady().then(async () => {
   registry.provide('knownHosts', services.knownHosts);
   registry.provide('layouts', services.layouts);
 
+  // 外挂组件位于 userData，组件内部的 require 不在应用目录下；
+  // 把 app 的 node_modules 加进全局搜索路径，serialport 这类依赖才能解析。
+  const appModules = path.join(app.getAppPath(), 'node_modules');
+  process.env.NODE_PATH = [appModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter);
+  (Module as unknown as { _initPaths(): void })._initPaths();
+
   // 服务注入后再装载组件并 setup，组件就能通过 ctx.get() 取宿主服务。
   componentDescriptors = await loadComponents({
     baseDir,
@@ -254,7 +261,14 @@ void app.whenReady().then(async () => {
     logger: (message, detail) => console.warn(`[components] ${message}`, detail ?? ''),
   });
   registry.setupAll();
-  disposeComponentsIpc = registerComponentsIpc(() => componentDescriptors);
+  // 示例组件随包放在 Resources/components；开发模式直接读仓库 examples/components。
+  const bundledComponentsDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'components')
+    : path.join(__dirname, '..', '..', 'examples', 'components');
+  disposeComponentsIpc = registerComponentsIpc({
+    getDescriptors: () => componentDescriptors,
+    sampleDirs: { bundledDir: bundledComponentsDir, userDir: path.join(baseDir, 'components') },
+  });
 
   disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);

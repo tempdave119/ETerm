@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import type {
   AppConfig,
   ComponentDescriptor,
+  ComponentSample,
   ConnectionInput,
   ConnectionRecord,
   GroupRecord,
@@ -42,6 +43,7 @@ import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { FilePanel } from './components/FilePanel.tsx';
 import { ForwardDialog } from './components/ForwardDialog.tsx';
 import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.tsx';
+import { LocalShellDialog } from './components/LocalShellDialog.tsx';
 import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
@@ -115,11 +117,15 @@ export function App() {
   const pendingConfigSaves = useRef(0);
   const configVersionRef = useRef(0);
   const [components, setComponents] = useState<ComponentDescriptor[]>([]);
+  const [componentSamples, setComponentSamples] = useState<ComponentSample[]>([]);
+  const [componentsBusy, setComponentsBusy] = useState(false);
+  const [componentsNotice, setComponentsNotice] = useState<string | null>(null);
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
+  const [shellDialogOpen, setShellDialogOpen] = useState(false);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   );
@@ -185,6 +191,15 @@ export function App() {
       if (result.ok) setThemes(result.value);
     });
   }, []);
+
+  const loadComponentSamples = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.listComponentSamples();
+    if (result.ok) setComponentSamples(result.value);
+  }, []);
+
+  useEffect(() => {
+    void loadComponentSamples();
+  }, [loadComponentSamples]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -329,6 +344,30 @@ export function App() {
 
   const openThemesDir = useCallback(async (): Promise<void> => {
     const result = await window.eterm.openThemesDir();
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const installComponentSamples = useCallback(async (): Promise<void> => {
+    setComponentsBusy(true);
+    setComponentsNotice(null);
+    try {
+      const result = await window.eterm.installComponentSamples();
+      if (!result.ok) {
+        setSettingsError(result.error.message);
+        return;
+      }
+      await loadComponentSamples();
+      const count = result.value.installed.length;
+      setComponentsNotice(
+        count > 0 ? t('settings.extensions.installDone', { count }) : t('settings.extensions.installNone'),
+      );
+    } finally {
+      setComponentsBusy(false);
+    }
+  }, [loadComponentSamples]);
+
+  const openComponentsDir = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.openComponentsDir();
     if (!result.ok) setError(result.error);
   }, []);
 
@@ -549,14 +588,14 @@ export function App() {
     if (!result.ok) setError(result.error);
   }, []);
 
-  const openLocalTerminal = useCallback(async (): Promise<void> => {
+  const openLocalTerminal = useCallback(async (commandOverride?: string): Promise<void> => {
     setError(null);
     try {
       const template = await loadLayout('local');
       const count = template ? countTemplateLeaves(template) : 1;
       const leaves: PaneLeaf[] = [];
-      // 启动命令在会话建立时快照：已开的终端不受后续设置影响。
-      const localCommand = configRef.current?.terminal.localCommand ?? '';
+      // 启动命令在会话建立时快照：已开的终端不受后续设置影响；临时选择只作用于本次。
+      const localCommand = commandOverride ?? configRef.current?.terminal.localCommand ?? '';
 
       for (let index = 0; index < count; index += 1) {
         const result = await window.eterm.openSession({
@@ -946,7 +985,7 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       // 弹层打开时全局命令不分发：避免在设置 / 命令面板 / 连接表单里误触 ⌘W 这类动作。
-      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form) return;
+      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form || shellDialogOpen) return;
       const command = findCommandByShortcut(event, shortcuts);
       if (!command) return;
       event.preventDefault();
@@ -954,12 +993,12 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [runCommand, shortcuts, settingsOpen, paletteOpen, forwardOpen, hostKey, form]);
+  }, [runCommand, shortcuts, settingsOpen, paletteOpen, forwardOpen, hostKey, form, shellDialogOpen]);
 
   useEffect(() => {
     return window.eterm.onMenuCommand((command) => {
       // 菜单命令与快捷键共用同一道弹层守卫。
-      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form) return;
+      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form || shellDialogOpen) return;
       if (command === 'edit.copy' || command === 'edit.paste' || command === 'edit.selectAll') {
         const paneId = activePaneRef.current;
         const handle = paneId ? terminalHandlesRef.current.get(paneId) : null;
@@ -971,7 +1010,7 @@ export function App() {
       }
       runCommand(command);
     });
-  }, [runCommand, settingsOpen, paletteOpen, forwardOpen, hostKey, form]);
+  }, [runCommand, settingsOpen, paletteOpen, forwardOpen, hostKey, form, shellDialogOpen]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
 
@@ -1100,6 +1139,8 @@ export function App() {
         onSelect={setActiveId}
         onClose={closeTab}
         onNew={() => void openLocalTerminal()}
+        onNewShell={(command) => void openLocalTerminal(command)}
+        onNewCustomShell={() => setShellDialogOpen(true)}
         onToggleFiles={() => togglePanel('files')}
         onToggleMonitor={() => togglePanel('monitor')}
         onOpenForward={() => setForwardOpen(true)}
@@ -1241,6 +1282,22 @@ export function App() {
           themes={themes}
           onReloadThemes={() => void reloadThemes()}
           onOpenThemesDir={() => void openThemesDir()}
+          components={components}
+          componentSamples={componentSamples}
+          componentsBusy={componentsBusy}
+          componentsNotice={componentsNotice}
+          onInstallComponentSamples={() => void installComponentSamples()}
+          onOpenComponentsDir={() => void openComponentsDir()}
+        />
+      ) : null}
+
+      {shellDialogOpen ? (
+        <LocalShellDialog
+          onCancel={() => setShellDialogOpen(false)}
+          onSubmit={(command) => {
+            setShellDialogOpen(false);
+            void openLocalTerminal(command);
+          }}
         />
       ) : null}
 

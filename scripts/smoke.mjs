@@ -366,6 +366,7 @@ try {
     appearance: '#settings-theme',
     terminal: '#settings-font-size',
     connection: '#settings-keepalive',
+    extensions: '[data-testid="component-sample-telnet"]',
     transfer: '[data-testid="settings-files-default"]',
     shortcuts: '[data-testid="shortcut-row-terminal.new"]',
     layout: '[data-testid="settings-dock-size-left"]',
@@ -385,7 +386,7 @@ try {
   );
   if (settingsWidth < 760) throw new Error(`设置面板宽度不足：${settingsWidth}`);
   const navCount = await evaluate(`document.querySelectorAll('.settings-nav__item').length`);
-  if (navCount !== 6) throw new Error(`设置分类应为 6 个，实际 ${navCount}`);
+  if (navCount !== 7) throw new Error(`设置分类应为 7 个，实际 ${navCount}`);
 
   await openSection('terminal');
   await evaluate(setSelectScript('#settings-font-size', '18'));
@@ -449,6 +450,24 @@ try {
     5_000,
     '切回内置主题清理覆盖',
   );
+
+  // 能力包：示例组件默认未安装；一键安装后状态变化并落到临时 userData。
+  await openSection('extensions');
+  const beforeInstall = await evaluate(
+    `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed`,
+  );
+  if (beforeInstall !== 'false') throw new Error(`示例组件初始状态异常：${beforeInstall}`);
+  await evaluate(`document.querySelector('[data-testid="components-install"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed === 'true'`,
+      ),
+    10_000,
+    '安装示例组件',
+  );
+  const installedManifest = await readFile(join(dataDir, 'components', 'telnet', 'manifest.json'), 'utf8');
+  if (!installedManifest.includes('"telnet"')) throw new Error('Telnet 示例组件未落到 userData');
 
   // 取消：草稿丢弃，界面回到已保存值。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
@@ -647,11 +666,11 @@ try {
     throw new Error('旧快捷键应失效');
   }
 
-  // 启动命令：设置 bash -l 后新终端跑 bash，清空后回到系统默认登录 shell。
+  // 默认 shell：设置 bash 后新终端跑 bash，切回系统默认后恢复。
   const sessionsBefore = await evaluate(`window.__etermDebug.list()`);
   await openSettings();
   await openSection('terminal');
-  await evaluate(setInputScript('#settings-local-command', 'bash -l'));
+  await evaluate(setSelectScript('#settings-local-shell', 'bash'));
   await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
@@ -697,7 +716,7 @@ try {
 
   await openSettings();
   await openSection('terminal');
-  await evaluate(setInputScript('#settings-local-command', ''));
+  await evaluate(setSelectScript('#settings-local-shell', 'system'));
   await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
   await waitFor(
     async () => {
@@ -711,6 +730,77 @@ try {
     () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
     5_000,
     '关闭设置',
+  );
+
+  // 本地 shell 分体按钮：默认用系统 shell；▾ 菜单临时用 bash；自定义命令只作用于本次。
+  const openShellMenu = async () => {
+    await evaluate(`document.querySelector('[data-testid="tabbar-new-shell"]').click()`);
+    await waitFor(
+      () => evaluate(`document.querySelector('[data-testid="local-shell-menu"]') !== null`),
+      5_000,
+      'shell 菜单',
+    );
+  };
+
+  const menuSessionsBefore = await evaluate(`window.__etermDebug.list()`);
+  await openShellMenu();
+  await evaluate(`document.querySelector('[data-testid="local-shell-option-bash"]').click()`);
+  const menuSession = await waitFor(
+    async () => {
+      const list = await evaluate(`window.__etermDebug.list()`);
+      return list.find((id) => !menuSessionsBefore.includes(id)) ?? null;
+    },
+    10_000,
+    '菜单 bash 终端',
+  );
+  await evaluate(
+    `window.__etermDebug.type(${JSON.stringify(menuSession)}, ${JSON.stringify('echo menu-shell-$BASH_VERSION\r')})`,
+  );
+  await waitFor(
+    async () => /menu-shell-\d/.test(String(await evaluate(`window.__etermDebug.read(${JSON.stringify(menuSession)})`))),
+    10_000,
+    '菜单 bash 生效',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.list()`)).length === menuSessionsBefore.length,
+    5_000,
+    '关闭菜单终端',
+  );
+
+  const customSessionsBefore = await evaluate(`window.__etermDebug.list()`);
+  await openShellMenu();
+  await evaluate(`document.querySelector('[data-testid="local-shell-option-custom"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="local-shell-dialog"]') !== null`),
+    5_000,
+    '自定义 shell 弹窗',
+  );
+  await evaluate(setInputScript('#local-shell-command', 'echo custom-shell-ok && exec bash -l'));
+  await evaluate(`document.querySelector('[data-testid="local-shell-submit"]').click()`);
+  const customSession = await waitFor(
+    async () => {
+      const list = await evaluate(`window.__etermDebug.list()`);
+      return list.find((id) => !customSessionsBefore.includes(id)) ?? null;
+    },
+    10_000,
+    '自定义命令终端',
+  );
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(customSession)})`)).includes('custom-shell-ok'),
+    10_000,
+    '自定义命令输出',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.list()`)).length === customSessionsBefore.length,
+    5_000,
+    '关闭自定义终端',
   );
 
   // 中英文：切到 English 后设置面板变英文，切回中文恢复。

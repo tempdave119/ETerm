@@ -19,6 +19,7 @@ import {
   TRANSFERS_IPC,
   type AppConfig,
   type ComponentDescriptor,
+  type ComponentSample,
   type ConnectionInput,
   type ConnectionRecord,
   type ConnectionsSnapshot,
@@ -180,6 +181,14 @@ const api: EtermApi = {
   },
 
   listComponents: () => ipcRenderer.invoke(COMPONENTS_IPC.list) as Promise<IpcResult<ComponentDescriptor[]>>,
+  listComponentSamples: () =>
+    ipcRenderer.invoke(COMPONENTS_IPC.samples) as Promise<IpcResult<ComponentSample[]>>,
+  installComponentSamples: () =>
+    ipcRenderer.invoke(COMPONENTS_IPC.installSamples) as Promise<
+      IpcResult<{ installed: string[]; skipped: string[] }>
+    >,
+  openComponentsDir: () =>
+    ipcRenderer.invoke(COMPONENTS_IPC.openDir) as Promise<IpcResult<null>>,
   listSerialDevices: () => ipcRenderer.invoke(SERIAL_IPC.list) as Promise<IpcResult<SerialDevice[]>>,
 };
 

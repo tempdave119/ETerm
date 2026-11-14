@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
+import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
+import { commandForShellPreset, detectShellPreset, type LocalShellPreset } from '../../shared/local-shell.ts';
 import type { ThemeDefinition } from '../../shared/theme.ts';
 import { panelById } from '../panels/registry.ts';
 import { findConflictIds, resolveShortcuts } from '../commands/resolve.ts';
@@ -24,14 +26,21 @@ interface SettingsPanelProps {
   themes: ThemeDefinition[];
   onReloadThemes(): void;
   onOpenThemesDir(): void;
+  components: ComponentDescriptor[];
+  componentSamples: ComponentSample[];
+  componentsBusy: boolean;
+  componentsNotice: string | null;
+  onInstallComponentSamples(): void;
+  onOpenComponentsDir(): void;
 }
 
-type SectionId = 'appearance' | 'terminal' | 'connection' | 'transfer' | 'shortcuts' | 'layout';
+type SectionId = 'appearance' | 'terminal' | 'connection' | 'extensions' | 'transfer' | 'shortcuts' | 'layout';
 
 const SECTIONS: { id: SectionId; titleKey: MessageKey }[] = [
   { id: 'appearance', titleKey: 'settings.nav.appearance' },
   { id: 'terminal', titleKey: 'settings.nav.terminal' },
   { id: 'connection', titleKey: 'settings.nav.connection' },
+  { id: 'extensions', titleKey: 'settings.nav.extensions' },
   { id: 'transfer', titleKey: 'settings.nav.transfer' },
   { id: 'shortcuts', titleKey: 'settings.nav.shortcuts' },
   { id: 'layout', titleKey: 'settings.nav.layout' },
@@ -57,6 +66,12 @@ export function SettingsPanel({
   themes,
   onReloadThemes,
   onOpenThemesDir,
+  components,
+  componentSamples,
+  componentsBusy,
+  componentsNotice,
+  onInstallComponentSamples,
+  onOpenComponentsDir,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>('appearance');
   // 恢复默认是破坏性动作，用「再点一次确认」替代额外弹窗。
@@ -97,6 +112,8 @@ export function SettingsPanel({
   const selectedExternalMissing = Boolean(
     selectedExternalId && !themes.some((theme) => theme.id === selectedExternalId),
   );
+  const loadedComponentIds = new Set(components.map((component) => component.id));
+  const localShellPreset = detectShellPreset(config.terminal.localCommand);
 
   const confirmThen = (kind: 'settings' | 'layout', run: () => void): void => {
     if (confirming !== kind) {
@@ -232,20 +249,42 @@ export function SettingsPanel({
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="settings-local-command">{t('settings.localCommand')}</label>
-                  <input
-                    id="settings-local-command"
-                    data-testid="settings-local-command"
-                    value={config.terminal.localCommand}
-                    maxLength={200}
-                    placeholder={t('settings.localCommandPlaceholder')}
-                    onChange={(event) =>
+                  <label htmlFor="settings-local-shell">{t('settings.localShell')}</label>
+                  <select
+                    id="settings-local-shell"
+                    data-testid="settings-local-shell"
+                    value={localShellPreset}
+                    onChange={(event) => {
+                      const preset = event.target.value as LocalShellPreset;
                       update((draft) => {
-                        draft.terminal.localCommand = event.target.value;
-                      })
-                    }
-                  />
+                        draft.terminal.localCommand = commandForShellPreset(preset);
+                      });
+                    }}
+                  >
+                    <option value="system">{t('settings.localShell.system')}</option>
+                    <option value="zsh">zsh -l</option>
+                    <option value="bash">bash -l</option>
+                    <option value="sh">sh -l</option>
+                    <option value="custom">{t('settings.localShell.custom')}</option>
+                  </select>
                 </div>
+                {localShellPreset === 'custom' ? (
+                  <div className="form-row">
+                    <label htmlFor="settings-local-command">{t('settings.localCommand')}</label>
+                    <input
+                      id="settings-local-command"
+                      data-testid="settings-local-command"
+                      value={config.terminal.localCommand}
+                      maxLength={200}
+                      placeholder={t('settings.localCommandPlaceholder')}
+                      onChange={(event) =>
+                        update((draft) => {
+                          draft.terminal.localCommand = event.target.value;
+                        })
+                      }
+                    />
+                  </div>
+                ) : null}
                 <p className="form-hint">{t('settings.localCommandHint')}</p>
                 <div className="form-row">
                   <label htmlFor="settings-right-click">{t('settings.rightClick')}</label>
@@ -323,6 +362,63 @@ export function SettingsPanel({
                   </select>
                 </div>
                 <p className="form-hint">{t('settings.keepaliveHint')}</p>
+              </section>
+            ) : null}
+
+            {section === 'extensions' ? (
+              <section className="settings-group">
+                <h3 className="settings-group__title">{t('settings.nav.extensions')}</h3>
+                <p className="form-hint">{t('settings.extensions.intro')}</p>
+                <p className="form-hint">{t('settings.extensions.builtin')}</p>
+                <h4 className="settings-subtitle">{t('settings.extensions.samples')}</h4>
+                {componentSamples.length === 0 ? (
+                  <p className="form-hint">{t('settings.extensions.empty')}</p>
+                ) : (
+                  <div className="component-sample-list">
+                    {componentSamples.map((sample) => {
+                      const loaded = loadedComponentIds.has(sample.id);
+                      const status = !sample.installed
+                        ? t('settings.extensions.notInstalled')
+                        : loaded
+                          ? t('settings.extensions.installed')
+                          : t('settings.extensions.pendingRestart');
+                      return (
+                        <div
+                          className="component-sample"
+                          key={sample.id}
+                          data-testid={`component-sample-${sample.id}`}
+                          data-installed={sample.installed}
+                          data-loaded={loaded}
+                        >
+                          <span className="component-sample__name">{sample.label}</span>
+                          <span className="component-sample__protocol">{sample.protocol}</span>
+                          <span className="component-sample__status">{status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="settings-theme-actions">
+                  <button
+                    className="button"
+                    type="button"
+                    data-testid="components-install"
+                    disabled={componentsBusy}
+                    onClick={onInstallComponentSamples}
+                  >
+                    {t('settings.extensions.install')}
+                  </button>
+                  <button
+                    className="button"
+                    type="button"
+                    data-testid="components-open-dir"
+                    onClick={onOpenComponentsDir}
+                  >
+                    {t('settings.extensions.openDir')}
+                  </button>
+                </div>
+                <p className="form-hint">{t('settings.extensions.restartHint')}</p>
+                {componentsNotice ? <p className="form-hint">{componentsNotice}</p> : null}
               </section>
             ) : null}
 

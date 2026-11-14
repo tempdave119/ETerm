@@ -77,6 +77,67 @@ button {
   color: var(--text-primary);
 }
 
+.tabbar__new-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.tabbar__new-group .tabbar__new {
+  margin-bottom: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.tabbar__new-caret {
+  width: 16px;
+  height: 24px;
+  border: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.tabbar__new-caret:hover,
+.tabbar__new-caret[aria-expanded="true"] {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.new-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: var(--space-tight);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.new-menu__item {
+  padding: var(--space-tight) var(--space-base);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.new-menu__item:hover {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
 .tab {
   -webkit-app-region: no-drag;
   display: flex;
@@ -618,9 +679,9 @@ button {
 }
 
 .modal--settings {
-  width: 800px;
+  width: 760px;
   /* 固定高度：切分类时不跳变，内容多的分类在右侧滚动 */
-  height: 540px;
+  height: 520px;
   max-height: calc(100vh - 96px);
   overflow: hidden;
 }
@@ -731,6 +792,48 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-base);
+}
+
+.component-sample-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+}
+
+.component-sample {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px auto;
+  align-items: center;
+  gap: var(--space-base);
+  padding: var(--space-tight) var(--space-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+}
+
+.component-sample__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.component-sample__protocol {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-aux);
+}
+
+.component-sample__status {
+  color: var(--text-secondary);
+  font-size: var(--font-aux);
+  text-align: right;
+}
+
+.component-sample[data-installed="false"] .component-sample__status,
+.component-sample[data-installed="true"][data-loaded="false"] .component-sample__status {
+  color: var(--status-warning);
 }
 
 .settings-subtitle {
@@ -1039,8 +1142,15 @@ button {
 .modal--form .form-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-base) var(--space-block);
+  gap: var(--space-base) var(--space-section);
   align-items: center;
+}
+
+/* 两列表单里控件不参与撑宽，避免长 placeholder 把相邻列的标签顶出去 */
+.modal--form .form-row,
+.modal--form .form-row input,
+.modal--form .form-row select {
+  min-width: 0;
 }
 
 .modal--form .form-row label {
