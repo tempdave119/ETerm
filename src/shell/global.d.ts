@@ -15,6 +15,8 @@ interface TerminalDebugApi {
     cursorBlink: boolean | undefined;
     scrollback: number | undefined;
   } | null;
+  /** 逐行 dump 缓冲区文本与折行标记，排行号 / 时间映射问题用。 */
+  lines(sessionId: string): { text: string; wrapped: boolean }[];
   type(sessionId: string, data: string): boolean;
 }
 

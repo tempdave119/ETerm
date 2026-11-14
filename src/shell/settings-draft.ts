@@ -13,6 +13,8 @@ export const PREVIEW_FIELDS = [
   'terminal.cursorStyle',
   'terminal.cursorBlink',
   'terminal.scrollback',
+  'terminal.showLineNumbers',
+  'terminal.showTimestamps',
   'ui.theme',
   'ui.density',
 ] as const;
@@ -33,6 +35,8 @@ export function previewConfig(draft: AppConfig, saved: AppConfig): AppConfig {
       cursorBlink: draft.terminal.cursorBlink,
       // scrollback 只在新建终端时生效，进预览只是让新开终端与草稿一致。
       scrollback: draft.terminal.scrollback,
+      showLineNumbers: draft.terminal.showLineNumbers,
+      showTimestamps: draft.terminal.showTimestamps,
     },
     ui: { ...saved.ui, theme: draft.ui.theme, density: draft.ui.density },
   };

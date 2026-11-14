@@ -17,6 +17,8 @@ interface PaneLayoutProps {
   cursorStyle: TerminalCursorStyle;
   cursorBlink: boolean;
   scrollback: number;
+  showLineNumbers: boolean;
+  showTimestamps: boolean;
   theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
@@ -39,6 +41,8 @@ export function PaneLayout({
   cursorStyle,
   cursorBlink,
   scrollback,
+  showLineNumbers,
+  showTimestamps,
   theme,
   rightClick,
   rightClickCopySelection,
@@ -85,6 +89,8 @@ export function PaneLayout({
             cursorStyle={cursorStyle}
             cursorBlink={cursorBlink}
             scrollback={scrollback}
+            showLineNumbers={showLineNumbers}
+            showTimestamps={showTimestamps}
             theme={theme}
             rightClick={rightClick}
             rightClickCopySelection={rightClickCopySelection}
@@ -139,6 +145,8 @@ export function PaneLayout({
           cursorStyle={cursorStyle}
           cursorBlink={cursorBlink}
           scrollback={scrollback}
+          showLineNumbers={showLineNumbers}
+          showTimestamps={showTimestamps}
           theme={theme}
           rightClick={rightClick}
           rightClickCopySelection={rightClickCopySelection}
@@ -168,6 +176,8 @@ export function PaneLayout({
           cursorStyle={cursorStyle}
           cursorBlink={cursorBlink}
           scrollback={scrollback}
+          showLineNumbers={showLineNumbers}
+          showTimestamps={showTimestamps}
           theme={theme}
           rightClick={rightClick}
           rightClickCopySelection={rightClickCopySelection}

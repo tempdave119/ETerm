@@ -25,11 +25,36 @@ interface TerminalViewProps {
   cursorBlink: boolean;
   /** 只在新建终端时生效。 */
   scrollback: number;
+  showLineNumbers: boolean;
+  showTimestamps: boolean;
   theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
   /** 把复制 / 粘贴 / 全选句柄交给外壳，供应用菜单调用；卸载时传 null。 */
   onReady?(handle: TerminalHandle | null): void;
+}
+
+interface GutterRow {
+  /** 绝对行号，同时作为 React key。 */
+  key: number;
+  /** 该行首次输出的时刻；折行或空行为 null。 */
+  time: number | null;
+  /** 行号；空行不显示行号。 */
+  line: number | null;
+}
+
+function formatClock(epoch: number): string {
+  const date = new Date(epoch);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** 单元格高度：用 xterm 可视区高度除以行数，随字号 / 行高自动变化。 */
+function measureCellHeight(term: Terminal): number {
+  const screen = term.element?.querySelector('.xterm-screen') as HTMLElement | null;
+  if (!screen || term.rows <= 0) return 0;
+  const height = screen.getBoundingClientRect().height / term.rows;
+  return Number.isFinite(height) ? height : 0;
 }
 
 /** 应用菜单的编辑动作：终端是 canvas 渲染，只能通过实例方法操作选区。 */
@@ -63,6 +88,8 @@ export function TerminalView({
   cursorStyle,
   cursorBlink,
   scrollback,
+  showLineNumbers,
+  showTimestamps,
   theme,
   rightClick,
   rightClickCopySelection,
@@ -76,6 +103,13 @@ export function TerminalView({
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [gutterRows, setGutterRows] = useState<GutterRow[]>([]);
+  const [cellHeight, setCellHeight] = useState(0);
+  // 累计逻辑行（按数据流换行计数）与每行首次输出时刻；缓冲满后旧行被顶掉，
+  // 用「累计行数 - 当前缓冲行数」反推缓冲第 0 行的绝对行号，行号才能持续递增。
+  const writtenRowsRef = useRef(0);
+  const rowTimesRef = useRef(new Map<number, number>([[0, Date.now()]]));
+  const gutterFrameRef = useRef<number | null>(null);
   const rightClickRef = useRef(rightClick);
   const copySelectionRef = useRef(rightClickCopySelection);
   // 用 ref 保存回调：onReady 变化不应该重建终端实例。
@@ -90,6 +124,75 @@ export function TerminalView({
     copySelectionRef.current = rightClickCopySelection;
     if (rightClick !== 'menu') setMenu(null);
   }, [rightClick, rightClickCopySelection]);
+
+  const syncGutter = (): void => {
+    const term = termRef.current;
+    if (!term) return;
+    const buffer = term.buffer.active;
+    // 全屏应用（vim / top）没有行号意义，直接清空。
+    if (buffer.type === 'alternate') {
+      setGutterRows((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const absoluteTop = Math.max(0, writtenRowsRef.current - buffer.length + 1);
+    const rows: GutterRow[] = [];
+    for (let i = 0; i < term.rows; i += 1) {
+      const row = buffer.viewportY + i;
+      if (row >= buffer.length) break;
+      const abs = absoluteTop + row;
+      const line = buffer.getLine(row);
+      // 空行不显示行号与时间，只保留占位高度，保证与终端逐行对齐。
+      const hasContent = Boolean(line?.translateToString(true));
+      rows.push({
+        key: abs,
+        time: !hasContent || line?.isWrapped ? null : (rowTimesRef.current.get(abs) ?? null),
+        line: hasContent ? abs + 1 : null,
+      });
+    }
+    setGutterRows((prev) => {
+      if (
+        prev.length === rows.length &&
+        prev.every((item, index) => item.key === rows[index]?.key && item.time === rows[index]?.time)
+      ) {
+        return prev;
+      }
+      return rows;
+    });
+  };
+
+  const scheduleGutterSync = (): void => {
+    if (gutterFrameRef.current !== null) return;
+    gutterFrameRef.current = requestAnimationFrame(() => {
+      gutterFrameRef.current = null;
+      syncGutter();
+    });
+  };
+
+  const recordRows = (data: string): void => {
+    const newlines = (data.match(/\n/g) ?? []).length;
+    if (newlines === 0) return;
+    const now = Date.now();
+    const start = writtenRowsRef.current + 1;
+    writtenRowsRef.current += newlines;
+    for (let index = 0; index < newlines; index += 1) {
+      rowTimesRef.current.set(start + index, now);
+    }
+    // 时间表只服务当前滚回范围，超出后从最早的行开始丢。
+    if (rowTimesRef.current.size > 20000) {
+      for (const key of rowTimesRef.current.keys()) {
+        if (rowTimesRef.current.size <= 10000) break;
+        rowTimesRef.current.delete(key);
+      }
+    }
+    scheduleGutterSync();
+  };
+
+  const clearTerminal = (): void => {
+    termRef.current?.clear();
+    writtenRowsRef.current = 0;
+    rowTimesRef.current = new Map([[0, Date.now()]]);
+    scheduleGutterSync();
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -122,6 +225,8 @@ export function TerminalView({
     term.unicode.activeVersion = '11';
     term.open(host);
     fit.fit();
+    setCellHeight(measureCellHeight(term));
+    scheduleGutterSync();
 
     onReadyRef.current?.({
       copy: () => copySelection(term),
@@ -166,7 +271,11 @@ export function TerminalView({
     });
 
     const detach = attachSession(sessionId, {
-      onData: (data) => term.write(data),
+      onData: (data) => {
+        recordRows(data);
+        // 写入解析完成后再同步一次：否则最后一行（提示符）刚进缓冲区时 gutter 已经跑完，会缺行号。
+        term.write(data, () => scheduleGutterSync());
+      },
       onExit: (info) => {
         const line =
           info.reason === 'network'
@@ -184,14 +293,25 @@ export function TerminalView({
     const observer = new ResizeObserver(() => {
       if (!host.isConnected || host.clientWidth === 0 || host.clientHeight === 0) return;
       fit.fit();
+      setCellHeight(measureCellHeight(term));
+      scheduleGutterSync();
       void window.eterm.resizeSession(sessionId, term.cols, term.rows);
     });
     observer.observe(host);
 
+    // 以渲染帧为准同步 gutter：onScroll / 写入回调当时 viewportY 可能还没跟上屏幕，
+    // 读到旧视口会把行号对到错误的缓冲区行（表现为偶发空白行）。
+    const renderSubscription = term.onRender(() => scheduleGutterSync());
+
     return () => {
       onReadyRef.current?.(null);
       observer.disconnect();
+      renderSubscription.dispose();
       inputSubscription.dispose();
+      if (gutterFrameRef.current !== null) {
+        cancelAnimationFrame(gutterFrameRef.current);
+        gutterFrameRef.current = null;
+      }
       host.removeEventListener('contextmenu', onContextMenu);
       detach();
       detachDebug();
@@ -210,6 +330,8 @@ export function TerminalView({
       const fit = fitRef.current;
       if (!term || !fit) return;
       fit.fit();
+      setCellHeight(measureCellHeight(term));
+      scheduleGutterSync();
       void window.eterm.resizeSession(sessionId, term.cols, term.rows);
       term.focus();
     });
@@ -233,6 +355,8 @@ export function TerminalView({
     const frame = requestAnimationFrame(() => {
       if (!termRef.current || !fitRef.current) return;
       fitRef.current.fit();
+      setCellHeight(measureCellHeight(termRef.current));
+      scheduleGutterSync();
       void window.eterm.resizeSession(sessionId, termRef.current.cols, termRef.current.rows);
     });
     return () => cancelAnimationFrame(frame);
@@ -271,7 +395,36 @@ export function TerminalView({
 
   return (
     <>
-      <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />
+      <div className="terminal-shell">
+        {showLineNumbers || showTimestamps ? (
+          <div
+            className="terminal-gutter"
+            data-testid="terminal-gutter"
+            style={{
+              background: theme.background,
+              color: theme.foreground ? `${theme.foreground}99` : undefined,
+              fontFamily: TERMINAL_FONT_STACKS[fontFamily],
+              fontSize,
+            }}
+          >
+            {gutterRows.map((row) => (
+              <div
+                className="terminal-gutter__row"
+                key={row.key}
+                style={{ height: cellHeight > 0 ? cellHeight : undefined }}
+              >
+                {showTimestamps ? (
+                  <span className="terminal-gutter__time">{row.time ? `[${formatClock(row.time)}]` : ''}</span>
+                ) : null}
+                {showLineNumbers && row.line !== null ? (
+                  <span className="terminal-gutter__num">{row.line}</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />
+      </div>
       {findOpen ? (
         <div className="terminal-find" data-testid="terminal-find">
           <input
@@ -377,7 +530,7 @@ export function TerminalView({
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  termRef.current?.clear();
+                  clearTerminal();
                   setMenu(null);
                 }}
               >

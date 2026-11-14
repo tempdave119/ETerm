@@ -50,6 +50,17 @@ function install(): void {
         scrollback: options.scrollback,
       };
     },
+    lines: (sessionId) => {
+      const terminal = terminals.get(sessionId);
+      if (!terminal) return [];
+      const buffer = terminal.buffer.active;
+      const out: { text: string; wrapped: boolean }[] = [];
+      for (let index = 0; index < buffer.length; index += 1) {
+        const line = buffer.getLine(index);
+        out.push({ text: line?.translateToString(true) ?? '', wrapped: line?.isWrapped ?? false });
+      }
+      return out;
+    },
     type: (sessionId, data) => {
       const terminal = terminals.get(sessionId);
       if (!terminal) return false;

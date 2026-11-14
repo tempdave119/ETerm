@@ -266,6 +266,22 @@ try {
     '右键粘贴执行',
   );
 
+  // 行号与时间戳：默认开启；行号递增、时间格式合法（折行行时间留空）。
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-gutter__num').length > 0`),
+    5_000,
+    '终端 gutter 渲染',
+  );
+  const gutter = await evaluate(`(() => {
+    const nums = [...document.querySelectorAll('.terminal-gutter__num')].map((el) => Number(el.textContent));
+    const times = [...document.querySelectorAll('.terminal-gutter__time')].map((el) => el.textContent ?? '');
+    return { first: nums[0], last: nums[nums.length - 1], count: nums.length, times };
+  })()`);
+  if (!(gutter.count > 0) || !(gutter.last > gutter.first)) throw new Error('行号未递增或为空');
+  if (!gutter.times.every((text) => text === '' || /^\[\d{2}:\d{2}:\d{2}\]$/.test(text))) {
+    throw new Error(`时间格式不正确：${JSON.stringify(gutter.times.slice(0, 3))}`);
+  }
+
   // 终端内搜索：⌘F 打开搜索条，输入后跳转，关闭后终端仍可正常输入。
   await evaluate(
     `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', metaKey: true, bubbles: true }))`,
@@ -458,6 +474,27 @@ try {
     async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).rows < rowsAtFont18,
     5_000,
     '行高草稿预览',
+  );
+
+  // 行号 / 时间戳开关：草稿即时生效，全部关闭后 gutter 消失。
+  await evaluate(`document.querySelector('[data-testid="settings-line-numbers"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-gutter__num').length === 0`),
+    5_000,
+    '关闭行号',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-timestamps"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="terminal-gutter"]') === null`),
+    5_000,
+    '关闭时间戳后 gutter 消失',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-timestamps"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="settings-line-numbers"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-gutter__num').length > 0`),
+    5_000,
+    '重新打开行号',
   );
 
   await openSection('appearance');

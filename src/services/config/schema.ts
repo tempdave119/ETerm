@@ -35,6 +35,10 @@ export interface AppConfig {
     cursorBlink: boolean;
     /** 滚回缓冲行数；只在新建终端时生效。 */
     scrollback: number;
+    /** 终端左侧 gutter：行号开关。 */
+    showLineNumbers: boolean;
+    /** 终端左侧 gutter：时间戳开关。 */
+    showTimestamps: boolean;
     rightClick: RightClickAction;
     /** 仅 rightClick = paste 时生效：有选中内容时复制，否则粘贴。 */
     rightClickCopySelection: boolean;
@@ -90,6 +94,8 @@ export function defaultConfig(): AppConfig {
       cursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
       cursorBlink: true,
       scrollback: DEFAULT_TERMINAL_SCROLLBACK,
+      showLineNumbers: true,
+      showTimestamps: true,
       rightClick: 'paste',
       rightClickCopySelection: false,
       localCommand: '',
@@ -138,6 +144,8 @@ export function sanitizeConfig(value: unknown): AppConfig {
       cursorStyle: readCursorStyle(terminal.cursorStyle, defaults.terminal.cursorStyle),
       cursorBlink: readBoolean(terminal.cursorBlink, defaults.terminal.cursorBlink),
       scrollback: readScrollback(terminal.scrollback, defaults.terminal.scrollback),
+      showLineNumbers: readBoolean(terminal.showLineNumbers, defaults.terminal.showLineNumbers),
+      showTimestamps: readBoolean(terminal.showTimestamps, defaults.terminal.showTimestamps),
       rightClick: readRightClick(terminal.rightClick, defaults.terminal.rightClick),
       rightClickCopySelection: readBoolean(
         terminal.rightClickCopySelection,
@@ -195,6 +203,8 @@ export function parseConfigInput(value: unknown): AppConfig {
       cursorStyle: requireCursorStyle(terminal.cursorStyle),
       cursorBlink: requireBoolean(terminal.cursorBlink, '光标闪烁'),
       scrollback: requireScrollback(terminal.scrollback),
+      showLineNumbers: requireBoolean(terminal.showLineNumbers, '显示行号'),
+      showTimestamps: requireBoolean(terminal.showTimestamps, '显示时间戳'),
       rightClick: requireRightClick(terminal.rightClick),
       rightClickCopySelection: requireBoolean(terminal.rightClickCopySelection, '选中时复制'),
       localCommand: requireCommand(terminal.localCommand),

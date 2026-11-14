@@ -170,6 +170,8 @@ export const zhCN = {
   'settings.cursorBlink': '光标闪烁',
   'settings.scrollback': '滚回缓冲',
   'settings.scrollback.lines': '{count} 行',
+  'settings.showLineNumbers': '显示行号',
+  'settings.showTimestamps': '显示时间戳',
   'settings.terminalAppearanceHint': '字体、行高、光标即时生效；滚回缓冲只对重新打开的终端生效。',
   'settings.localShell': '默认 shell',
   'settings.localShell.system': '系统默认登录 shell',

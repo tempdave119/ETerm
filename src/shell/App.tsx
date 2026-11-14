@@ -1175,6 +1175,8 @@ export function App() {
   const cursorStyle = effectiveConfig?.terminal.cursorStyle ?? 'block';
   const cursorBlink = effectiveConfig?.terminal.cursorBlink ?? true;
   const scrollback = effectiveConfig?.terminal.scrollback ?? 1000;
+  const showLineNumbers = effectiveConfig?.terminal.showLineNumbers ?? true;
+  const showTimestamps = effectiveConfig?.terminal.showTimestamps ?? true;
   const rightClick = effectiveConfig?.terminal.rightClick ?? 'paste';
   const rightClickCopySelection = effectiveConfig?.terminal.rightClickCopySelection ?? false;
   const density = effectiveConfig?.ui.density ?? 'comfortable';
@@ -1279,6 +1281,8 @@ export function App() {
                     cursorStyle={cursorStyle}
                     cursorBlink={cursorBlink}
                     scrollback={scrollback}
+                    showLineNumbers={showLineNumbers}
+                    showTimestamps={showTimestamps}
                     theme={terminalTheme}
                     rightClick={rightClick}
                     rightClickCopySelection={rightClickCopySelection}

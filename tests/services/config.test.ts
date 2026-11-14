@@ -128,6 +128,8 @@ test('config_input_accepts_valid_full_config', () => {
       cursorStyle: 'bar',
       cursorBlink: false,
       scrollback: 5000,
+      showLineNumbers: true,
+      showTimestamps: false,
       rightClick: 'menu',
       rightClickCopySelection: true,
       localCommand: 'bash -l',
@@ -184,6 +186,14 @@ test('config_input_rejects_bad_terminal_appearance', () => {
   assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, cursorStyle: 'beam' } }), /光标样式/);
   assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, cursorBlink: 'yes' } }), /光标闪烁/);
   assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, scrollback: 2000 } }), /滚回缓冲/);
+  assert.throws(
+    () => parseConfigInput({ ...base, terminal: { ...base.terminal, showLineNumbers: 'yes' } }),
+    /显示行号/,
+  );
+  assert.throws(
+    () => parseConfigInput({ ...base, terminal: { ...base.terminal, showTimestamps: 1 } }),
+    /显示时间戳/,
+  );
 });
 
 test('config_local_command_is_trimmed_and_bounded', () => {

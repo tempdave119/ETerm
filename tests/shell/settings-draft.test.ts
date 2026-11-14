@@ -25,6 +25,8 @@ test('settings_preview_only_applies_appearance_fields', () => {
   draft.terminal.cursorStyle = 'bar';
   draft.terminal.cursorBlink = false;
   draft.terminal.scrollback = 10000;
+  draft.terminal.showLineNumbers = false;
+  draft.terminal.showTimestamps = false;
   draft.ui.theme = 'light';
   draft.ui.density = 'compact';
   draft.ssh.keepaliveInterval = 120;
@@ -41,6 +43,8 @@ test('settings_preview_only_applies_appearance_fields', () => {
   assert.equal(preview.terminal.cursorStyle, 'bar');
   assert.equal(preview.terminal.cursorBlink, false);
   assert.equal(preview.terminal.scrollback, 10000);
+  assert.equal(preview.terminal.showLineNumbers, false);
+  assert.equal(preview.terminal.showTimestamps, false);
   assert.equal(preview.ui.theme, 'light');
   assert.equal(preview.ui.density, 'compact');
 
@@ -62,6 +66,8 @@ test('settings_preview_fields_cover_expected_paths', () => {
     'terminal.cursorStyle',
     'terminal.cursorBlink',
     'terminal.scrollback',
+    'terminal.showLineNumbers',
+    'terminal.showTimestamps',
     'ui.theme',
     'ui.density',
   ]);

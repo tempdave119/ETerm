@@ -171,6 +171,8 @@ export const enUS: Record<MessageKey, string> = {
   'settings.cursorBlink': 'Blink Cursor',
   'settings.scrollback': 'Scrollback',
   'settings.scrollback.lines': '{count} lines',
+  'settings.showLineNumbers': 'Show Line Numbers',
+  'settings.showTimestamps': 'Show Timestamps',
   'settings.terminalAppearanceHint': 'Font, line height and cursor apply instantly; scrollback applies to newly opened terminals.',
   'settings.localShell': 'Default shell',
   'settings.localShell.system': 'System login shell',

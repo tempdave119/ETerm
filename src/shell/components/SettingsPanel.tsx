@@ -453,6 +453,32 @@ export function SettingsPanel({
                     ))}
                   </select>
                 </div>
+                <label className="settings-check">
+                  <input
+                    type="checkbox"
+                    data-testid="settings-line-numbers"
+                    checked={config.terminal.showLineNumbers}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.showLineNumbers = event.target.checked;
+                      })
+                    }
+                  />
+                  {t('settings.showLineNumbers')}
+                </label>
+                <label className="settings-check">
+                  <input
+                    type="checkbox"
+                    data-testid="settings-timestamps"
+                    checked={config.terminal.showTimestamps}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.showTimestamps = event.target.checked;
+                      })
+                    }
+                  />
+                  {t('settings.showTimestamps')}
+                </label>
                 <p className="form-hint">{t('settings.terminalAppearanceHint')}</p>
                 <div className="form-row">
                   <label htmlFor="settings-local-shell">{t('settings.localShell')}</label>
