@@ -11,7 +11,7 @@ import type {
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
-import { defaultPanelLayout, isPanelOpen, movePanel, movePanelWithinDock, panelDockOf, setDivider, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
+import { defaultPanelLayout, isPanelOpen, movePanel, movePanelWithinDock, panelDockOf, setDivider, setDockSize, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
 import {
   clampRatio,
   collectLeaves,
@@ -42,6 +42,7 @@ import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { SettingsPanel } from './components/SettingsPanel.tsx';
 import { DockColumn } from './components/DockColumn.tsx';
+import { DockResizer, dockSizeMax } from './components/DockResizer.tsx';
 import { PanelFrame } from './components/PanelFrame.tsx';
 import { TabBar } from './components/TabBar.tsx';
 import { TransferPanel } from './components/TransferPanel.tsx';
@@ -386,6 +387,39 @@ export function App() {
     },
     [applyPanelLayout],
   );
+
+  const resizeDock = useCallback(
+    (dock: 'left' | 'right', width: number): void => {
+      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, width), false);
+    },
+    [applyPanelLayout],
+  );
+
+  const finishDockResize = useCallback(
+    (dock: 'left' | 'right', width: number): void => {
+      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, width), true);
+    },
+    [applyPanelLayout],
+  );
+
+  useEffect(() => {
+    // 窗口变窄时把超出边界的宽度收回来，保证工作区仍有最小可用宽度。
+    const handleResize = (): void => {
+      const current = panelLayoutRef.current;
+      const leftOpen = current.docks.left.length > 0;
+      const rightOpen = current.docks.right.length > 0;
+      const left = leftOpen
+        ? Math.min(current.sizes.left, dockSizeMax('left', rightOpen ? current.sizes.right : 0))
+        : current.sizes.left;
+      const right = rightOpen
+        ? Math.min(current.sizes.right, dockSizeMax('right', leftOpen ? left : 0))
+        : current.sizes.right;
+      if (left === current.sizes.left && right === current.sizes.right) return;
+      applyPanelLayout(setDockSize(setDockSize(current, 'left', left), 'right', right), true);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [applyPanelLayout]);
 
   /**
    * 打开连接后按配置自动展开文件面板；关掉时只表示「不自动展开」，
@@ -955,11 +989,21 @@ export function App() {
       <div className="app__body">
         <DockColumn
           dock="left"
+          size={panelLayout.sizes.left}
           panels={leftPanels}
           dividers={panelLayout.dividers.left}
           onResize={(index, ratio) => resizePanelDivider('left', index, ratio)}
           onResizeEnd={(index, ratio) => finishPanelDivider('left', index, ratio)}
         />
+        {leftPanels.length ? (
+          <DockResizer
+            side="left"
+            width={panelLayout.sizes.left}
+            otherWidth={rightPanels.length ? panelLayout.sizes.right : 0}
+            onResize={(width) => resizeDock('left', width)}
+            onResizeEnd={(width) => finishDockResize('left', width)}
+          />
+        ) : null}
         <main className="workspace">
           {error && tabs.length > 0 ? (
             <div className="error-bar" data-testid="error-bar">
@@ -1010,8 +1054,18 @@ export function App() {
             onResizeEnd={(index, ratio) => finishPanelDivider('bottom', index, ratio)}
           />
         </main>
+        {rightPanels.length ? (
+          <DockResizer
+            side="right"
+            width={panelLayout.sizes.right}
+            otherWidth={leftPanels.length ? panelLayout.sizes.left : 0}
+            onResize={(width) => resizeDock('right', width)}
+            onResizeEnd={(width) => finishDockResize('right', width)}
+          />
+        ) : null}
         <DockColumn
           dock="right"
+          size={panelLayout.sizes.right}
           panels={rightPanels}
           dividers={panelLayout.dividers.right}
           onResize={(index, ratio) => resizePanelDivider('right', index, ratio)}

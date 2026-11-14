@@ -551,6 +551,63 @@ try {
   const monitorShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/monitor-smoke.png', Buffer.from(monitorShot.data, 'base64'));
 
+  // 左右停靠区可拖宽度：拖到静态上限 / 下限，验证边界与落盘。
+  const dragDockResizer = async (side, dx) => {
+    const point = await evaluate(`(() => {
+      const element = document.querySelector('[data-testid="dock-resizer-${side}"]');
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`);
+    if (!point) throw new Error(`没有 ${side} 侧宽度拖拽条`);
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+    });
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: point.x + dx,
+      y: point.y,
+      button: 'left',
+      buttons: 1,
+    });
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: point.x + dx,
+      y: point.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+    });
+  };
+  const dockSizes = () =>
+    evaluate(`window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.sizes : null))`);
+
+  await dragDockResizer('right', -400);
+  await waitFor(async () => (await dockSizes())?.right === 560, 5_000, '右栏拖到上限');
+  await dragDockResizer('right', 400);
+  await waitFor(async () => (await dockSizes())?.right === 260, 5_000, '右栏拖到下限');
+  await dragDockResizer('left', 200);
+  await waitFor(async () => (await dockSizes())?.left === 420, 5_000, '左栏拖到上限');
+  await dragDockResizer('left', -300);
+  await waitFor(async () => (await dockSizes())?.left === 180, 5_000, '左栏拖到下限');
+  await waitFor(
+    async () => {
+      try {
+        const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
+        return parsed.panels?.sizes?.left === 180 && parsed.panels?.sizes?.right === 260;
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '停靠区宽度落盘',
+  );
+
   // 右侧两个面板：拖分隔改比例并落盘，再用齿轮菜单把系统资源移到左侧并改回。
   await waitFor(
     () => evaluate(`document.querySelectorAll('[data-testid="dock-right"] .dock__item').length === 2`),

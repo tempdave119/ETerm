@@ -894,19 +894,49 @@ button {
 .dock--left {
   flex: 0 0 240px;
   width: 240px;
-  border-right: 1px solid var(--border-subtle);
 }
 
 .dock--right {
   flex: 0 0 300px;
   width: 300px;
-  border-left: 1px solid var(--border-subtle);
 }
 
 .dock--bottom {
   flex: 0 0 160px;
   height: 160px;
   border-top: 1px solid var(--border-subtle);
+}
+
+/* 左右停靠区宽度拖拽条；拖动范围由 DockResizer 夹紧 */
+.dock-resizer {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.dock-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.dock-resizer:hover {
+  background: var(--active-overlay);
+}
+
+.dock-resizer:hover::before {
+  background: var(--status-info);
+}
+
+.dock-resizer:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: -1px;
 }
 
 .dock__item {

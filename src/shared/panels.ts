@@ -18,16 +18,27 @@ export interface PanelLayout {
   docks: Record<DockId, PanelId[]>;
   /** 区内分隔位置（累计比例，0.15–0.85），长度 = 面板数 - 1。 */
   dividers: Record<DockId, number[]>;
+  /** 左右停靠区宽度（px）；底栏高度仍固定。 */
+  sizes: { left: number; right: number };
 }
 
 const MIN_GAP = 0.1;
 const MIN_DIVIDER = 0.15;
 const MAX_DIVIDER = 0.85;
 
+/** 左右停靠区的拖动边界；右栏下限保留监控面板两列指标卡所需的宽度。 */
+export const DOCK_SIZE_LIMITS = {
+  left: { min: 180, max: 420 },
+  right: { min: 260, max: 560 },
+} as const;
+
+const DEFAULT_DOCK_SIZES = { left: 240, right: 300 } as const;
+
 export function defaultPanelLayout(): PanelLayout {
   return {
     docks: { left: ['sessions'], right: ['files'], bottom: ['transfers'] },
     dividers: { left: [], right: [], bottom: [] },
+    sizes: { ...DEFAULT_DOCK_SIZES },
   };
 }
 
@@ -100,7 +111,25 @@ function parseDocks(record: Record<string, unknown>, defaults: PanelLayout): Pan
     dividers[dock] = normalizeDividers(values);
   }
 
-  return { docks, dividers };
+  const rawSizes = record.sizes;
+  const sizesRecord =
+    typeof rawSizes === 'object' && rawSizes !== null && !Array.isArray(rawSizes)
+      ? (rawSizes as Record<string, unknown>)
+      : {};
+  return {
+    docks,
+    dividers,
+    sizes: {
+      left: parseDockSize(sizesRecord.left, 'left'),
+      right: parseDockSize(sizesRecord.right, 'right'),
+    },
+  };
+}
+
+function parseDockSize(value: unknown, dock: 'left' | 'right'): number {
+  const limit = DOCK_SIZE_LIMITS[dock];
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_DOCK_SIZES[dock];
+  return Math.min(limit.max, Math.max(limit.min, Math.round(value)));
 }
 
 /** 累计比例必须严格递增且相邻面板至少留出 MIN_GAP。 */
@@ -150,6 +179,7 @@ export function movePanel(layout: PanelLayout, panelId: PanelId, target: DockId 
   return {
     docks: { ...removed.docks, [target]: list },
     dividers: { ...removed.dividers, [target]: normalizeDividers(dividers) },
+    sizes: removed.sizes,
   };
 }
 
@@ -177,6 +207,7 @@ export function movePanelWithinDock(
   return {
     docks: { ...layout.docks, [dock]: entries.map((entry) => entry.id) },
     dividers: { ...layout.dividers, [dock]: cumulativeDividers(entries.map((entry) => entry.ratio)) },
+    sizes: layout.sizes,
   };
 }
 
@@ -216,6 +247,7 @@ export function removePanel(layout: PanelLayout, panelId: PanelId): PanelLayout 
   return {
     docks: { ...layout.docks, [dock]: list },
     dividers: { ...layout.dividers, [dock]: dividers },
+    sizes: layout.sizes,
   };
 }
 
@@ -240,4 +272,12 @@ export function setDivider(layout: PanelLayout, dock: DockId, index: number, rat
   const next = index === dividers.length - 1 ? 1 : (dividers[index + 1] ?? 1);
   dividers[index] = Math.min(next - MIN_GAP, Math.max(previous + MIN_GAP, ratio));
   return { ...layout, dividers: { ...layout.dividers, [dock]: dividers } };
+}
+
+/** 设置左右停靠区宽度；静态边界之外的值夹回范围内。 */
+export function setDockSize(layout: PanelLayout, dock: 'left' | 'right', size: number): PanelLayout {
+  const limit = DOCK_SIZE_LIMITS[dock];
+  const next = Math.min(limit.max, Math.max(limit.min, Math.round(size)));
+  if (next === layout.sizes[dock]) return layout;
+  return { ...layout, sizes: { ...layout.sizes, [dock]: next } };
 }

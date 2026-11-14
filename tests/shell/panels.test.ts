@@ -10,6 +10,7 @@ import {
   parsePanelLayout,
   removePanel,
   setDivider,
+  setDockSize,
 } from '../../src/shared/panels.ts';
 import { PANELS, panelById, panelsInDock } from '../../src/shell/panels/registry.ts';
 
@@ -79,6 +80,31 @@ test('panels_parse_normalizes_invalid_dividers', () => {
 
   assert.equal(layout.dividers.right.length, 1);
   assert.ok((layout.dividers.right[0] ?? 0) <= 0.85);
+});
+
+test('panels_parse_clamps_dock_sizes', () => {
+  const defaults = defaultPanelLayout();
+  assert.deepEqual(defaults.sizes, { left: 240, right: 300 });
+
+  const layout = parsePanelLayout({
+    docks: { left: ['sessions'], right: ['files'], bottom: [] },
+    sizes: { left: 10, right: 999 },
+  });
+
+  assert.equal(layout.sizes.left, 180);
+  assert.equal(layout.sizes.right, 560);
+});
+
+test('panels_set_dock_size_clamps_and_preserves_rest', () => {
+  const layout = defaultPanelLayout();
+
+  const wide = setDockSize(layout, 'left', 999);
+  assert.equal(wide.sizes.left, 420);
+  assert.deepEqual(wide.docks, layout.docks);
+  assert.deepEqual(wide.dividers, layout.dividers);
+
+  const narrow = setDockSize(layout, 'right', 0);
+  assert.equal(narrow.sizes.right, 260);
 });
 
 test('panels_move_between_docks', () => {

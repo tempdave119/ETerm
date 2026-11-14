@@ -9,6 +9,8 @@ interface DockPanelItem {
 
 interface DockColumnProps {
   dock: DockId;
+  /** 左右停靠区的宽度（px）；底栏不传。 */
+  size?: number;
   panels: DockPanelItem[];
   /** 区内分隔的累计比例，长度 = 面板数 - 1。 */
   dividers: number[];
@@ -20,7 +22,7 @@ interface DockColumnProps {
  * 一个停靠区：面板自上而下排列，面板之间的分隔条可拖动改比例。
  * 区内尺寸用累计比例换算成 flexGrow，窗口缩放时比例保持不变。
  */
-export function DockColumn({ dock, panels, dividers, onResize, onResizeEnd }: DockColumnProps) {
+export function DockColumn({ dock, size, panels, dividers, onResize, onResizeEnd }: DockColumnProps) {
   // 拖动时每帧只提交一次比例，避免 pointermove 高频触发整棵面板树重渲染。
   const frameRef = useRef<number | null>(null);
   const pendingRatio = useRef(0);
@@ -63,7 +65,11 @@ export function DockColumn({ dock, panels, dividers, onResize, onResizeEnd }: Do
   };
 
   return (
-    <div className={`dock dock--${dock}`} data-testid={`dock-${dock}`}>
+    <div
+      className={`dock dock--${dock}`}
+      data-testid={`dock-${dock}`}
+      style={size ? { flex: `0 0 ${size}px`, width: `${size}px` } : undefined}
+    >
       {panels.map((panel, index) => {
         const start = index === 0 ? 0 : (dividers[index - 1] ?? index / panels.length);
         const end =
