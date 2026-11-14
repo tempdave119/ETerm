@@ -717,6 +717,23 @@ try {
     `document.querySelector('[data-testid="plugins-disabled"]') !== null`,
   );
   if (!pluginDisabledHint) throw new Error('插件关闭时应提示先启用');
+  const disabledPanel = await evaluate(
+    `document.querySelector('[data-testid="plugins-content"]')?.dataset.disabled`,
+  );
+  if (disabledPanel !== 'true') throw new Error('插件关闭时管理区应为禁用态');
+  const disabledRows = await evaluate(
+    `document.querySelectorAll('[data-testid^="plugin-row-"]').length`,
+  );
+  if (disabledRows < 1) throw new Error('插件关闭时列表仍应可见');
+  const installDisabled = await evaluate(
+    `document.querySelector('[data-testid="plugins-install"]')?.disabled`,
+  );
+  if (installDisabled !== true) throw new Error('插件关闭时安装按钮应禁用');
+  const disabledPluginShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(
+    'tmp/plugin-settings-disabled-smoke.png',
+    Buffer.from(disabledPluginShot.data, 'base64'),
+  );
   const panelBeforeEnable = await evaluate(
     `document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`,
   );
@@ -728,6 +745,12 @@ try {
       evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]')?.checked === true`),
     5_000,
     '打开插件总开关',
+  );
+  await waitFor(
+    () =>
+      evaluate(`document.querySelector('[data-testid="plugins-content"]')?.dataset.disabled === 'false'`),
+    5_000,
+    '插件管理区解锁',
   );
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),

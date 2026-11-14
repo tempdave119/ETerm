@@ -1452,6 +1452,16 @@ button {
   outline-offset: 2px;
 }
 
+/* 总开关关闭时保留插件列表与管理入口，但整体灰度且不可操作。 */
+.settings-plugins[data-disabled='true'] {
+  opacity: 0.5;
+}
+
+.settings-plugins[data-disabled='true'] .component-sample,
+.settings-plugins[data-disabled='true'] .settings-theme-actions {
+  pointer-events: none;
+}
+
 .forward-list {
   display: flex;
   flex-direction: column;

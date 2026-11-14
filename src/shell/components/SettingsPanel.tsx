@@ -737,88 +737,92 @@ export function SettingsPanel({
                 <p className="form-hint">
                   {pluginsEnabled ? t('settings.plugins.enabledHint') : t('settings.plugins.disabledHint')}
                 </p>
-                {pluginsEnabled ? (
-                  <>
-                    {plugins.length === 0 ? (
-                      <p className="form-hint" data-testid="plugins-empty">
-                        {t('settings.plugins.empty')}
-                      </p>
-                    ) : (
-                      <div className="component-sample-list">
-                        {plugins.map((plugin) => (
-                          <div
-                            className="component-sample"
-                            key={plugin.id}
-                            data-testid={`plugin-row-${plugin.id}`}
-                            data-enabled={plugin.enabled}
-                          >
-                            <span className="component-sample__name">{plugin.id}</span>
-                            <span className="component-sample__protocol">
-                              v{plugin.version}
-                              {plugin.author ? ` · ${plugin.author}` : ''}
-                            </span>
-                            <span className="component-sample__status">
-                              {plugin.enabled ? t('settings.plugins.enabled') : t('settings.plugins.disabled')}
-                            </span>
-                            <span className="component-sample__actions">
-                              <button
-                                className="link-button"
-                                type="button"
-                                disabled={pluginsBusy}
-                                data-testid={`plugin-toggle-${plugin.id}`}
-                                onClick={() => onSetPluginEnabled(plugin.id, !plugin.enabled)}
-                              >
-                                {plugin.enabled ? t('settings.plugins.disable') : t('settings.plugins.enable')}
-                              </button>
-                              <button
-                                className="link-button"
-                                type="button"
-                                disabled={pluginsBusy}
-                                data-testid={`plugin-uninstall-${plugin.id}`}
-                                onClick={() => onUninstallPlugin(plugin.id)}
-                              >
-                                {t('settings.plugins.uninstall')}
-                              </button>
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {plugins.length > 0 ? (
-                      <p className="form-hint">
-                        {plugins
-                          .map((plugin) =>
-                            `${plugin.id} · ${plugin.permissions.length > 0 ? plugin.permissions.map((item) => t(PLUGIN_PERMISSION_LABELS[item])).join(' / ') : t('settings.plugins.permissionNone')}`,
-                          )
-                          .join('；')}
-                      </p>
-                    ) : null}
-                    <div className="settings-theme-actions">
-                      <button
-                        className="button"
-                        type="button"
-                        data-testid="plugins-install"
-                        disabled={pluginsBusy}
-                        onClick={onInstallPlugin}
-                      >
-                        {t('settings.plugins.install')}
-                      </button>
-                      <button
-                        className="button"
-                        type="button"
-                        data-testid="plugins-open-dir"
-                        onClick={onOpenPluginsDir}
-                      >
-                        {t('settings.plugins.openDir')}
-                      </button>
+                <div
+                  className="settings-plugins"
+                  data-disabled={!pluginsEnabled}
+                  data-testid="plugins-content"
+                >
+                  {plugins.length === 0 ? (
+                    <p className="form-hint" data-testid="plugins-empty">
+                      {t('settings.plugins.empty')}
+                    </p>
+                  ) : (
+                    <div className="component-sample-list">
+                      {plugins.map((plugin) => (
+                        <div
+                          className="component-sample"
+                          key={plugin.id}
+                          data-testid={`plugin-row-${plugin.id}`}
+                          data-enabled={plugin.enabled}
+                        >
+                          <span className="component-sample__name">{plugin.id}</span>
+                          <span className="component-sample__protocol">
+                            v{plugin.version}
+                            {plugin.author ? ` · ${plugin.author}` : ''}
+                          </span>
+                          <span className="component-sample__status">
+                            {plugin.enabled ? t('settings.plugins.enabled') : t('settings.plugins.disabled')}
+                          </span>
+                          <span className="component-sample__actions">
+                            <button
+                              className="link-button"
+                              type="button"
+                              disabled={!pluginsEnabled || pluginsBusy}
+                              data-testid={`plugin-toggle-${plugin.id}`}
+                              onClick={() => onSetPluginEnabled(plugin.id, !plugin.enabled)}
+                            >
+                              {plugin.enabled ? t('settings.plugins.disable') : t('settings.plugins.enable')}
+                            </button>
+                            <button
+                              className="link-button"
+                              type="button"
+                              disabled={!pluginsEnabled || pluginsBusy}
+                              data-testid={`plugin-uninstall-${plugin.id}`}
+                              onClick={() => onUninstallPlugin(plugin.id)}
+                            >
+                              {t('settings.plugins.uninstall')}
+                            </button>
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    {pluginsNotice ? <p className="form-hint">{pluginsNotice}</p> : null}
-                  </>
-                ) : (
-                  <p className="form-hint" data-testid="plugins-disabled">
-                    {t('settings.plugins.enableFirst')}
-                  </p>
-                )}
+                  )}
+                  {plugins.length > 0 ? (
+                    <p className="form-hint">
+                      {plugins
+                        .map((plugin) =>
+                          `${plugin.id} · ${plugin.permissions.length > 0 ? plugin.permissions.map((item) => t(PLUGIN_PERMISSION_LABELS[item])).join(' / ') : t('settings.plugins.permissionNone')}`,
+                        )
+                        .join('；')}
+                    </p>
+                  ) : null}
+                  <div className="settings-theme-actions">
+                    <button
+                      className="button"
+                      type="button"
+                      data-testid="plugins-install"
+                      disabled={!pluginsEnabled || pluginsBusy}
+                      onClick={onInstallPlugin}
+                    >
+                      {t('settings.plugins.install')}
+                    </button>
+                    <button
+                      className="button"
+                      type="button"
+                      data-testid="plugins-open-dir"
+                      disabled={!pluginsEnabled || pluginsBusy}
+                      onClick={onOpenPluginsDir}
+                    >
+                      {t('settings.plugins.openDir')}
+                    </button>
+                  </div>
+                  {!pluginsEnabled ? (
+                    <p className="form-hint" data-testid="plugins-disabled">
+                      {t('settings.plugins.enableFirst')}
+                    </p>
+                  ) : null}
+                  {pluginsNotice ? <p className="form-hint">{pluginsNotice}</p> : null}
+                </div>
               </section>
             ) : null}
 
