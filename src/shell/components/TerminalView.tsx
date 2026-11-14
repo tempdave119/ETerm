@@ -1,21 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import type { RightClickAction } from '../../shared/ipc.ts';
+import {
+  TERMINAL_FONT_STACKS,
+  type TerminalCursorStyle,
+  type TerminalFontFamily,
+} from '../../shared/terminal-font.ts';
 import { t } from '../../shared/i18n/index.ts';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
-
-// SFMono-Regular 不是 macOS 可解析的 family 名（系统私有字体为 .SF NS Mono，Chromium 拒绝访问），
-// 写进去只会被跳过；显式落到 Menlo，装了 SF Mono 的机器优先用它。
-const FONT_FAMILY = '"SF Mono", Menlo, Monaco, "Courier New", monospace';
 
 interface TerminalViewProps {
   sessionId: string;
   active: boolean;
   fontSize: number;
+  fontFamily: TerminalFontFamily;
+  lineHeight: number;
+  cursorStyle: TerminalCursorStyle;
+  cursorBlink: boolean;
+  /** 只在新建终端时生效。 */
+  scrollback: number;
   theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
@@ -28,6 +37,8 @@ export interface TerminalHandle {
   copy(): void;
   paste(): void;
   selectAll(): void;
+  /** 打开终端内搜索条并聚焦输入框。 */
+  find(): void;
 }
 
 function copySelection(term: Terminal | null): void {
@@ -47,6 +58,11 @@ export function TerminalView({
   sessionId,
   active,
   fontSize,
+  fontFamily,
+  lineHeight,
+  cursorStyle,
+  cursorBlink,
+  scrollback,
   theme,
   rightClick,
   rightClickCopySelection,
@@ -55,6 +71,10 @@ export function TerminalView({
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const rightClickRef = useRef(rightClick);
   const copySelectionRef = useRef(rightClickCopySelection);
@@ -76,10 +96,12 @@ export function TerminalView({
     if (!host) return;
 
     const term = new Terminal({
-      fontFamily: FONT_FAMILY,
+      fontFamily: TERMINAL_FONT_STACKS[fontFamily],
       fontSize,
-      lineHeight: 1.2,
-      cursorBlink: true,
+      lineHeight,
+      cursorStyle,
+      cursorBlink,
+      scrollback,
       allowProposedApi: true,
       theme,
     });
@@ -88,6 +110,10 @@ export function TerminalView({
     const fit = new FitAddon();
     fitRef.current = fit;
     term.loadAddon(fit);
+
+    const search = new SearchAddon();
+    searchRef.current = search;
+    term.loadAddon(search);
 
     // 不加载 WebglAddon：xterm 6.0 的 WebGL 渲染器在本机把字形画成半透明细线，
     // 笔画发灰发虚；canvas 渲染器同字号下笔画实心、边缘干净。
@@ -101,6 +127,11 @@ export function TerminalView({
       copy: () => copySelection(term),
       paste: () => pasteClipboard(term),
       selectAll: () => term.selectAll(),
+      find: () => {
+        setFindOpen(true);
+        // 等浮层挂载后再聚焦，否则 ref 还没指向输入框。
+        requestAnimationFrame(() => findInputRef.current?.focus());
+      },
     });
 
     const onContextMenu = (event: MouseEvent): void => {
@@ -167,6 +198,7 @@ export function TerminalView({
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
   }, [sessionId]);
 
@@ -185,14 +217,26 @@ export function TerminalView({
   }, [active, sessionId]);
 
   useEffect(() => {
-    // 字号来自配置：改完立即作用到已开着的终端，再补一次尺寸同步。
+    // 外观来自配置：改完立即作用到已开着的终端，再补一次尺寸同步。
+    // scrollback 是构造期选项，不在 applyOptions 范围内，只有新终端会拿到新值。
     const term = termRef.current;
     const fit = fitRef.current;
     if (!term || !fit) return;
     term.options.fontSize = fontSize;
+    term.options.fontFamily = TERMINAL_FONT_STACKS[fontFamily];
+    term.options.lineHeight = lineHeight;
+    term.options.cursorStyle = cursorStyle;
+    term.options.cursorBlink = cursorBlink;
     fit.fit();
     void window.eterm.resizeSession(sessionId, term.cols, term.rows);
-  }, [fontSize, sessionId]);
+    // 行高变更后 xterm 在下一帧才重算 cell 尺寸，紧接的 fit 会拿到旧值；补一帧再算。
+    const frame = requestAnimationFrame(() => {
+      if (!termRef.current || !fitRef.current) return;
+      fitRef.current.fit();
+      void window.eterm.resizeSession(sessionId, termRef.current.cols, termRef.current.rows);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fontSize, fontFamily, lineHeight, cursorStyle, cursorBlink, sessionId]);
 
   useEffect(() => {
     // 主题切换不重建终端，直接换调色板。
@@ -218,9 +262,75 @@ export function TerminalView({
     };
   }, [menu]);
 
+  const closeFind = (): void => {
+    setFindOpen(false);
+    setFindQuery('');
+    searchRef.current?.clearDecorations();
+    termRef.current?.focus();
+  };
+
   return (
     <>
       <div className="terminal-host" data-session-id={sessionId} ref={hostRef} />
+      {findOpen ? (
+        <div className="terminal-find" data-testid="terminal-find">
+          <input
+            ref={findInputRef}
+            data-testid="terminal-find-input"
+            value={findQuery}
+            placeholder={t('terminal.findPlaceholder')}
+            onChange={(event) => {
+              setFindQuery(event.target.value);
+              // 边输边高亮；空串会清掉之前的匹配高亮。
+              searchRef.current?.findNext(event.target.value, { incremental: true });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (event.shiftKey) searchRef.current?.findPrevious(findQuery);
+                else searchRef.current?.findNext(findQuery);
+                return;
+              }
+              if (event.key === 'Escape') {
+                // 吃掉 Esc：不触发全局命令，也不传给终端。
+                event.preventDefault();
+                event.stopPropagation();
+                closeFind();
+              }
+            }}
+          />
+          <button
+            className="icon-button"
+            type="button"
+            title={t('terminal.findPrev')}
+            aria-label={t('terminal.findPrev')}
+            data-testid="terminal-find-prev"
+            onClick={() => searchRef.current?.findPrevious(findQuery)}
+          >
+            <ChevronUp size={13} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title={t('terminal.findNext')}
+            aria-label={t('terminal.findNext')}
+            data-testid="terminal-find-next"
+            onClick={() => searchRef.current?.findNext(findQuery)}
+          >
+            <ChevronDown size={13} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title={t('terminal.findClose')}
+            aria-label={t('terminal.findClose')}
+            data-testid="terminal-find-close"
+            onClick={closeFind}
+          >
+            <X size={13} strokeWidth={1.5} />
+          </button>
+        </div>
+      ) : null}
       {menu
         ? createPortal(
             <div

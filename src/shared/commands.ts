@@ -10,6 +10,7 @@ import type { ShortcutSpec } from './shortcut.ts';
 
 export type CommandId =
   | 'terminal.new'
+  | 'terminal.find'
   | 'connection.new'
   | 'tab.close'
   | 'tab.next'
@@ -38,6 +39,13 @@ export const COMMANDS: readonly CommandDefinition[] = [
     groupKey: 'command.group.terminal',
     keywords: ['terminal', 'new', 'shell', '本地'],
     shortcut: { code: 'KeyT' },
+  },
+  {
+    id: 'terminal.find',
+    titleKey: 'command.terminal.find',
+    groupKey: 'command.group.terminal',
+    keywords: ['find', 'search', '查找', '搜索'],
+    shortcut: { code: 'KeyF' },
   },
   {
     id: 'connection.new',

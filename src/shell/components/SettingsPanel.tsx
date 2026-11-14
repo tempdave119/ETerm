@@ -3,6 +3,11 @@ import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type Pa
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
 import { commandForShellPreset, detectShellPreset, type LocalShellPreset } from '../../shared/local-shell.ts';
+import {
+  TERMINAL_FONT_FAMILIES,
+  TERMINAL_LINE_HEIGHT_RANGE,
+  TERMINAL_SCROLLBACK_OPTIONS,
+} from '../../shared/terminal-font.ts';
 import type { ThemeDefinition } from '../../shared/theme.ts';
 import { panelById } from '../panels/registry.ts';
 import { findConflictIds, resolveShortcuts } from '../commands/resolve.ts';
@@ -49,6 +54,13 @@ const SECTIONS: { id: SectionId; titleKey: MessageKey }[] = [
 ];
 
 const FONT_SIZES = Array.from({ length: 10 }, (_, index) => 11 + index);
+
+/** 字体名本身不翻译，只有「系统等宽」需要跟随语言。 */
+const FONT_FAMILY_LABELS: Record<string, string> = {
+  'sf-mono': 'SF Mono',
+  menlo: 'Menlo',
+  monaco: 'Monaco',
+};
 const CONCURRENCY = [1, 2, 3, 4];
 const KEEPALIVE_INTERVALS = [10, 30, 60, 120, 300];
 const KEEPALIVE_COUNTS = [1, 2, 3, 4, 5];
@@ -351,6 +363,97 @@ export function SettingsPanel({
                     ))}
                   </select>
                 </div>
+                <div className="form-row">
+                  <label htmlFor="settings-font-family">{t('settings.fontFamily')}</label>
+                  <select
+                    id="settings-font-family"
+                    data-testid="settings-font-family"
+                    value={config.terminal.fontFamily}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.fontFamily = event.target.value as AppConfig['terminal']['fontFamily'];
+                      })
+                    }
+                  >
+                    {TERMINAL_FONT_FAMILIES.map((family) => (
+                      <option key={family} value={family}>
+                        {family === 'system-mono'
+                          ? t('settings.fontFamily.systemMono')
+                          : FONT_FAMILY_LABELS[family]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="settings-line-height">{t('settings.lineHeight')}</label>
+                  <div className="settings-range">
+                    <input
+                      id="settings-line-height"
+                      data-testid="settings-line-height"
+                      type="range"
+                      min={TERMINAL_LINE_HEIGHT_RANGE.min}
+                      max={TERMINAL_LINE_HEIGHT_RANGE.max}
+                      step={0.05}
+                      value={config.terminal.lineHeight}
+                      onChange={(event) =>
+                        update((draft) => {
+                          draft.terminal.lineHeight = Number(event.target.value);
+                        })
+                      }
+                    />
+                    <span className="settings-range__value">{config.terminal.lineHeight.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="settings-cursor-style">{t('settings.cursorStyle')}</label>
+                  <select
+                    id="settings-cursor-style"
+                    data-testid="settings-cursor-style"
+                    value={config.terminal.cursorStyle}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.cursorStyle = event.target.value as AppConfig['terminal']['cursorStyle'];
+                      })
+                    }
+                  >
+                    <option value="block">{t('settings.cursorStyle.block')}</option>
+                    <option value="bar">{t('settings.cursorStyle.bar')}</option>
+                    <option value="underline">{t('settings.cursorStyle.underline')}</option>
+                  </select>
+                </div>
+                <label className="settings-check">
+                  <input
+                    type="checkbox"
+                    data-testid="settings-cursor-blink"
+                    checked={config.terminal.cursorBlink}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.cursorBlink = event.target.checked;
+                      })
+                    }
+                  />
+                  {t('settings.cursorBlink')}
+                </label>
+                <div className="form-row">
+                  <label htmlFor="settings-scrollback">{t('settings.scrollback')}</label>
+                  <select
+                    id="settings-scrollback"
+                    data-testid="settings-scrollback"
+                    value={config.terminal.scrollback}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.scrollback = Number(event.target.value);
+                      })
+                    }
+                  >
+                    {TERMINAL_SCROLLBACK_OPTIONS.map((lines) => (
+                      <option key={lines} value={lines}>
+                        {t('settings.scrollback.lines', { count: lines })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="form-hint">{t('settings.terminalAppearanceHint')}</p>
                 <div className="form-row">
                   <label htmlFor="settings-local-shell">{t('settings.localShell')}</label>
                   <select

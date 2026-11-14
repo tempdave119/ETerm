@@ -253,6 +253,38 @@ button {
   background-color: transparent !important;
 }
 
+/* 终端内搜索：浮在右上角，不挤压 xterm 尺寸 */
+.terminal-find {
+  position: absolute;
+  top: var(--space-base);
+  right: var(--space-base);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  padding: var(--space-tight);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.terminal-find input {
+  width: 160px;
+  height: 24px;
+  padding: 0 var(--space-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: var(--font-body);
+}
+
+.terminal-find input:focus {
+  border-color: var(--status-info);
+  outline: none;
+}
+
 .terminal-menu {
   position: fixed;
   z-index: 20;
@@ -296,6 +328,21 @@ button {
   height: 100%;
   padding: var(--space-section);
   text-align: center;
+}
+
+/* 首次启动引导：主按钮组 + 一次性关闭入口 */
+.empty__guide-hint {
+  max-width: 420px;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.5;
+}
+
+.empty__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  margin-top: var(--space-tight);
 }
 
 .empty__title {
@@ -698,8 +745,8 @@ button {
 
 .settings-layout {
   display: grid;
-  /* 导航只容纳 2–4 字分类，120px 足够；再宽会挤压右侧内容（快捷键页的恢复按钮会换行） */
-  grid-template-columns: 120px minmax(0, 1fr);
+  /* 导航只容纳 2–4 字分类，100px 足够；再宽会挤压右侧内容（快捷键页的恢复按钮会换行） */
+  grid-template-columns: 100px minmax(0, 1fr);
   gap: var(--space-block);
   flex: 1 1 auto;
   min-height: 0;
@@ -780,7 +827,25 @@ button {
   gap: var(--space-block);
   min-height: 0;
   overflow-y: auto;
-  padding-right: var(--space-tight);
+  /* 滚动条槽位恒定保留：有 / 无滚动条的分类页内容宽度一致，下拉框不会忽长忽短 */
+  scrollbar-gutter: stable;
+  /* 控件与滚动条之间留出呼吸空间 */
+  padding-right: 15px;
+}
+
+/* macOS 默认是 overlay 滚动条，会浮在内容上压住右侧数值；
+   显式给宽度让它占位，内容才不会和滚动条叠在一起。 */
+.settings-panel__body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-panel__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-panel__body::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--border-strong);
 }
 
 .settings-panel__body .form-row {
@@ -2232,6 +2297,8 @@ button {
 .pane-node__body {
   flex: 1;
   min-height: 0;
+  /* 终端内搜索浮层以 pane 为定位上下文 */
+  position: relative;
 }
 
 .tabbar__action[disabled] {

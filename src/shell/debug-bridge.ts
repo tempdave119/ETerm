@@ -28,6 +28,28 @@ function install(): void {
       const terminal = terminals.get(sessionId);
       return terminal ? { cols: terminal.cols, rows: terminal.rows } : null;
     },
+    metrics: (sessionId) => {
+      const terminal = terminals.get(sessionId);
+      // xterm 没有公开 cell 尺寸，冒烟只能读内部 renderService（仅 ?debug 安装）。
+      const core = (terminal as unknown as {
+        _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
+      })?._core;
+      const cell = core?._renderService?.dimensions?.css?.cell;
+      return cell?.width && cell?.height ? { cellWidth: cell.width, cellHeight: cell.height } : null;
+    },
+    options: (sessionId) => {
+      const terminal = terminals.get(sessionId);
+      if (!terminal) return null;
+      const options = terminal.options;
+      return {
+        fontSize: options.fontSize,
+        fontFamily: options.fontFamily,
+        lineHeight: options.lineHeight,
+        cursorStyle: options.cursorStyle,
+        cursorBlink: options.cursorBlink,
+        scrollback: options.scrollback,
+      };
+    },
     type: (sessionId, data) => {
       const terminal = terminals.get(sessionId);
       if (!terminal) return false;

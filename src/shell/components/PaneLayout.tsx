@@ -1,6 +1,7 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 import type { RightClickAction } from '../../shared/ipc.ts';
+import type { TerminalCursorStyle, TerminalFontFamily } from '../../shared/terminal-font.ts';
 import type { LayoutNode, SplitNode } from '../layout.ts';
 import type { ITheme } from '@xterm/xterm';
 import { TerminalView, type TerminalHandle } from './TerminalView.tsx';
@@ -11,6 +12,11 @@ interface PaneLayoutProps {
   tabActive: boolean;
   showHeaders: boolean;
   fontSize: number;
+  fontFamily: TerminalFontFamily;
+  lineHeight: number;
+  cursorStyle: TerminalCursorStyle;
+  cursorBlink: boolean;
+  scrollback: number;
   theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
@@ -28,6 +34,11 @@ export function PaneLayout({
   tabActive,
   showHeaders,
   fontSize,
+  fontFamily,
+  lineHeight,
+  cursorStyle,
+  cursorBlink,
+  scrollback,
   theme,
   rightClick,
   rightClickCopySelection,
@@ -69,6 +80,11 @@ export function PaneLayout({
             sessionId={node.sessionId}
             active={active && tabActive}
             fontSize={fontSize}
+            fontFamily={fontFamily}
+            lineHeight={lineHeight}
+            cursorStyle={cursorStyle}
+            cursorBlink={cursorBlink}
+            scrollback={scrollback}
             theme={theme}
             rightClick={rightClick}
             rightClickCopySelection={rightClickCopySelection}
@@ -118,6 +134,11 @@ export function PaneLayout({
           tabActive={tabActive}
           showHeaders={showHeaders}
           fontSize={fontSize}
+          fontFamily={fontFamily}
+          lineHeight={lineHeight}
+          cursorStyle={cursorStyle}
+          cursorBlink={cursorBlink}
+          scrollback={scrollback}
           theme={theme}
           rightClick={rightClick}
           rightClickCopySelection={rightClickCopySelection}
@@ -142,6 +163,11 @@ export function PaneLayout({
           tabActive={tabActive}
           showHeaders={showHeaders}
           fontSize={fontSize}
+          fontFamily={fontFamily}
+          lineHeight={lineHeight}
+          cursorStyle={cursorStyle}
+          cursorBlink={cursorBlink}
+          scrollback={scrollback}
           theme={theme}
           rightClick={rightClick}
           rightClickCopySelection={rightClickCopySelection}

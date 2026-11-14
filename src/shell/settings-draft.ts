@@ -6,7 +6,16 @@
 import type { AppConfig } from '../shared/ipc.ts';
 
 /** 草稿态即时预览的字段：只影响渲染层外观，保存前不落盘。 */
-export const PREVIEW_FIELDS = ['terminal.fontSize', 'ui.theme', 'ui.density'] as const;
+export const PREVIEW_FIELDS = [
+  'terminal.fontSize',
+  'terminal.fontFamily',
+  'terminal.lineHeight',
+  'terminal.cursorStyle',
+  'terminal.cursorBlink',
+  'terminal.scrollback',
+  'ui.theme',
+  'ui.density',
+] as const;
 
 /**
  * 面板打开期间用于显示的配置：预览字段取草稿值，其余字段保持已保存值。
@@ -15,7 +24,16 @@ export const PREVIEW_FIELDS = ['terminal.fontSize', 'ui.theme', 'ui.density'] as
 export function previewConfig(draft: AppConfig, saved: AppConfig): AppConfig {
   return {
     ...saved,
-    terminal: { ...saved.terminal, fontSize: draft.terminal.fontSize },
+    terminal: {
+      ...saved.terminal,
+      fontSize: draft.terminal.fontSize,
+      fontFamily: draft.terminal.fontFamily,
+      lineHeight: draft.terminal.lineHeight,
+      cursorStyle: draft.terminal.cursorStyle,
+      cursorBlink: draft.terminal.cursorBlink,
+      // scrollback 只在新建终端时生效，进预览只是让新开终端与草稿一致。
+      scrollback: draft.terminal.scrollback,
+    },
     ui: { ...saved.ui, theme: draft.ui.theme, density: draft.ui.density },
   };
 }

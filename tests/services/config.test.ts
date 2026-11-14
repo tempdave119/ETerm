@@ -121,15 +121,69 @@ test('config_input_rejects_out_of_range_values', () => {
 
 test('config_input_accepts_valid_full_config', () => {
   const input = {
-    terminal: { fontSize: 11, rightClick: 'menu', rightClickCopySelection: true, localCommand: 'bash -l' },
+    terminal: {
+      fontSize: 11,
+      fontFamily: 'menlo',
+      lineHeight: 1.35,
+      cursorStyle: 'bar',
+      cursorBlink: false,
+      scrollback: 5000,
+      rightClick: 'menu',
+      rightClickCopySelection: true,
+      localCommand: 'bash -l',
+    },
     ssh: { keepaliveInterval: 120, keepaliveCountMax: 5 },
     transfer: { concurrency: 4 },
-    ui: { density: 'compact', theme: 'light', language: 'en-US', monitorProcessSort: 'cpu' },
+    ui: { density: 'compact', theme: 'light', language: 'en-US', monitorProcessSort: 'cpu', onboarded: true },
     files: { openByDefault: false },
     shortcuts: { overrides: { 'files.toggle': { code: 'KeyG', shift: true }, 'panel.monitor': null } },
   };
 
   assert.deepEqual(parseConfigInput(input), input);
+});
+
+test('config_terminal_appearance_defaults_and_fallbacks', () => {
+  // 旧文件缺字段或字段非法时逐项回退默认，不影响其余字段。
+  const file = parseConfigFile({
+    version: 1,
+    config: {
+      terminal: { fontFamily: 'comic', lineHeight: 3, cursorStyle: 'beam', scrollback: 200 },
+    },
+  });
+  assert.equal(file.config.terminal.fontFamily, 'sf-mono');
+  assert.equal(file.config.terminal.lineHeight, 1.2);
+  assert.equal(file.config.terminal.cursorStyle, 'block');
+  assert.equal(file.config.terminal.cursorBlink, true);
+  assert.equal(file.config.terminal.scrollback, 1000);
+
+  const ok = parseConfigFile({
+    version: 1,
+    config: {
+      terminal: {
+        fontFamily: 'monaco',
+        lineHeight: 1.345,
+        cursorStyle: 'underline',
+        cursorBlink: false,
+        scrollback: 10000,
+      },
+    },
+  });
+  assert.equal(ok.config.terminal.fontFamily, 'monaco');
+  assert.equal(ok.config.terminal.lineHeight, 1.35);
+  assert.equal(ok.config.terminal.cursorStyle, 'underline');
+  assert.equal(ok.config.terminal.cursorBlink, false);
+  assert.equal(ok.config.terminal.scrollback, 10000);
+});
+
+test('config_input_rejects_bad_terminal_appearance', () => {
+  const base = defaultConfig();
+
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, fontFamily: 'comic' } }), /终端字体/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, lineHeight: 2 } }), /行高/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, lineHeight: '1.2' } }), /行高/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, cursorStyle: 'beam' } }), /光标样式/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, cursorBlink: 'yes' } }), /光标闪烁/);
+  assert.throws(() => parseConfigInput({ ...base, terminal: { ...base.terminal, scrollback: 2000 } }), /滚回缓冲/);
 });
 
 test('config_local_command_is_trimmed_and_bounded', () => {

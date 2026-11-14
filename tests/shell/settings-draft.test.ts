@@ -20,6 +20,11 @@ test('settings_preview_only_applies_appearance_fields', () => {
   const saved = defaultConfig();
   const draft = defaultConfig();
   draft.terminal.fontSize = 18;
+  draft.terminal.fontFamily = 'menlo';
+  draft.terminal.lineHeight = 1.35;
+  draft.terminal.cursorStyle = 'bar';
+  draft.terminal.cursorBlink = false;
+  draft.terminal.scrollback = 10000;
   draft.ui.theme = 'light';
   draft.ui.density = 'compact';
   draft.ssh.keepaliveInterval = 120;
@@ -31,6 +36,11 @@ test('settings_preview_only_applies_appearance_fields', () => {
 
   // 预览字段跟草稿走。
   assert.equal(preview.terminal.fontSize, 18);
+  assert.equal(preview.terminal.fontFamily, 'menlo');
+  assert.equal(preview.terminal.lineHeight, 1.35);
+  assert.equal(preview.terminal.cursorStyle, 'bar');
+  assert.equal(preview.terminal.cursorBlink, false);
+  assert.equal(preview.terminal.scrollback, 10000);
   assert.equal(preview.ui.theme, 'light');
   assert.equal(preview.ui.density, 'compact');
 
@@ -41,8 +51,18 @@ test('settings_preview_only_applies_appearance_fields', () => {
   assert.deepEqual(preview.shortcuts.overrides, {});
   // 已保存值不被修改。
   assert.equal(saved.terminal.fontSize, 13);
+  assert.equal(saved.terminal.lineHeight, 1.2);
 });
 
 test('settings_preview_fields_cover_expected_paths', () => {
-  assert.deepEqual([...PREVIEW_FIELDS], ['terminal.fontSize', 'ui.theme', 'ui.density']);
+  assert.deepEqual([...PREVIEW_FIELDS], [
+    'terminal.fontSize',
+    'terminal.fontFamily',
+    'terminal.lineHeight',
+    'terminal.cursorStyle',
+    'terminal.cursorBlink',
+    'terminal.scrollback',
+    'ui.theme',
+    'ui.density',
+  ]);
 });

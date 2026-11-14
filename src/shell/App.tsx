@@ -442,6 +442,13 @@ export function App() {
       });
   }, []);
 
+  // 首次启动引导只看一次：关闭或执行任一动作后写标记。
+  const dismissOnboarded = useCallback((): void => {
+    const current = configRef.current;
+    if (!current || current.ui.onboarded) return;
+    saveConfig({ ...current, ui: { ...current.ui, onboarded: true } });
+  }, [saveConfig]);
+
   const changeProcessSort = useCallback(
     (sort: AppConfig['ui']['monitorProcessSort']): void => {
       const current = configRef.current;
@@ -973,6 +980,11 @@ export function App() {
         case 'terminal.new':
           void openLocalTerminal();
           break;
+        case 'terminal.find': {
+          const paneId = activePaneRef.current;
+          if (paneId) terminalHandlesRef.current.get(paneId)?.find();
+          break;
+        }
         case 'connection.new':
           openNewForm();
           break;
@@ -1110,7 +1122,10 @@ export function App() {
             canMoveDown={panelChrome('files', dock).canPanelMoveDown}
             onReorder={panelChrome('files', dock).onPanelReorder}
           >
-            <p className="panel-empty">{t('files.noSftpHint')}</p>
+            <div className="panel-empty panel-empty--stacked" data-testid="files-empty">
+              <p className="panel-empty__title">{t('files.emptyTitle')}</p>
+              <p className="panel-empty__hint">{t('files.noSftpHint')}</p>
+            </div>
           </PanelFrame>
         );
       case 'monitor':
@@ -1154,6 +1169,12 @@ export function App() {
   const rightPanels = dockPanels('right');
   const bottomPanels = dockPanels('bottom');
   const fontSize = effectiveConfig?.terminal.fontSize ?? 13;
+  const onboarded = effectiveConfig?.ui.onboarded ?? true;
+  const fontFamily = effectiveConfig?.terminal.fontFamily ?? 'sf-mono';
+  const lineHeight = effectiveConfig?.terminal.lineHeight ?? 1.2;
+  const cursorStyle = effectiveConfig?.terminal.cursorStyle ?? 'block';
+  const cursorBlink = effectiveConfig?.terminal.cursorBlink ?? true;
+  const scrollback = effectiveConfig?.terminal.scrollback ?? 1000;
   const rightClick = effectiveConfig?.terminal.rightClick ?? 'paste';
   const rightClickCopySelection = effectiveConfig?.terminal.rightClickCopySelection ?? false;
   const density = effectiveConfig?.ui.density ?? 'comfortable';
@@ -1229,8 +1250,20 @@ export function App() {
             {tabs.length === 0 ? (
               <EmptyState
                 error={error}
-                onNewConnection={openNewForm}
-                onNewTerminal={() => void openLocalTerminal()}
+                showGuide={!onboarded && connections.length === 0}
+                onNewConnection={() => {
+                  dismissOnboarded();
+                  openNewForm();
+                }}
+                onNewTerminal={() => {
+                  dismissOnboarded();
+                  void openLocalTerminal();
+                }}
+                onOpenSettings={() => {
+                  dismissOnboarded();
+                  openSettings();
+                }}
+                onDismissGuide={dismissOnboarded}
               />
             ) : (
               tabs.map((tab) => (
@@ -1241,6 +1274,11 @@ export function App() {
                     tabActive={tab.id === activeTabId}
                     showHeaders={countLeaves(tab.layout) > 1}
                     fontSize={fontSize}
+                    fontFamily={fontFamily}
+                    lineHeight={lineHeight}
+                    cursorStyle={cursorStyle}
+                    cursorBlink={cursorBlink}
+                    scrollback={scrollback}
                     theme={terminalTheme}
                     rightClick={rightClick}
                     rightClickCopySelection={rightClickCopySelection}

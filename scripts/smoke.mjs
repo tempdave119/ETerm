@@ -159,6 +159,31 @@ try {
     '空态渲染',
   );
 
+  // 首次启动引导：只展示一次；关闭后写 onboarded 标记，下次启动回简洁空态。
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="onboarding-guide"]') !== null`),
+    5_000,
+    '首次启动引导',
+  );
+  await evaluate(`document.querySelector('[data-testid="guide-dismiss"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="onboarding-guide"]') === null`),
+    5_000,
+    '关闭首次启动引导',
+  );
+  await waitFor(
+    async () => {
+      try {
+        const raw = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'));
+        return raw.config?.ui?.onboarded === true;
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '引导标记落盘',
+  );
+
   await evaluate(`document.querySelector('[data-testid="new-terminal"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelector('.xterm-helper-textarea') !== null`),
@@ -239,6 +264,33 @@ try {
     },
     8_000,
     '右键粘贴执行',
+  );
+
+  // 终端内搜索：⌘F 打开搜索条，输入后跳转，关闭后终端仍可正常输入。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="terminal-find"]') !== null`),
+    5_000,
+    '打开终端搜索',
+  );
+  await evaluate(setInputScript('[data-testid="terminal-find-input"]', MARKER));
+  await evaluate(`document.querySelector('[data-testid="terminal-find-next"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="terminal-find-close"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="terminal-find"]') === null`),
+    5_000,
+    '关闭终端搜索',
+  );
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(sessionId)}, "echo find-after-close-ok\\r")`);
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).includes(
+        'find-after-close-ok',
+      ),
+    8_000,
+    '搜索关闭后终端可用',
   );
 
   // 缩放：视口变化后 xterm 列数必须跟着变，否则界面与 PTY 尺寸不同步。
@@ -381,7 +433,6 @@ try {
     );
   };
   await openSettings();
-
   const settingsWidth = await evaluate(
     `document.querySelector('[data-testid="settings-panel"]')?.getBoundingClientRect().width ?? 0`,
   );
@@ -395,6 +446,18 @@ try {
     async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols < colsAtDefaultFont,
     5_000,
     '字号草稿预览',
+  );
+
+  // 外观草稿预览：字体 / 行高 / 光标即时作用；行高变化会改变终端行数。
+  const rowsAtFont18 = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).rows;
+  await evaluate(setSelectScript('#settings-font-family', 'menlo'));
+  await evaluate(setSelectScript('#settings-cursor-style', 'bar'));
+  await evaluate(`document.querySelector('[data-testid="settings-cursor-blink"]').click()`);
+  await evaluate(setInputScript('[data-testid="settings-line-height"]', '1.35'));
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).rows < rowsAtFont18,
+    5_000,
+    '行高草稿预览',
   );
 
   await openSection('appearance');
@@ -533,6 +596,11 @@ try {
   await openSettings();
   await openSection('terminal');
   await evaluate(setSelectScript('#settings-font-size', '18'));
+  await evaluate(setSelectScript('#settings-font-family', 'menlo'));
+  await evaluate(setSelectScript('#settings-cursor-style', 'bar'));
+  await evaluate(`document.querySelector('[data-testid="settings-cursor-blink"]').click()`);
+  await evaluate(setInputScript('[data-testid="settings-line-height"]', '1.35'));
+  await evaluate(setSelectScript('#settings-scrollback', '10000'));
   await evaluate(setSelectScript('#settings-right-click', 'menu'));
   await openSection('appearance');
   await evaluate(setSelectScript('#settings-density', 'compact'));
@@ -559,6 +627,11 @@ try {
       const config = await readConfig();
       return (
         config?.terminal.fontSize === 18 &&
+        config?.terminal.fontFamily === 'menlo' &&
+        config?.terminal.lineHeight === 1.35 &&
+        config?.terminal.cursorStyle === 'bar' &&
+        config?.terminal.cursorBlink === false &&
+        config?.terminal.scrollback === 10000 &&
         config?.terminal.rightClick === 'menu' &&
         config?.ui.density === 'compact' &&
         config?.ui.theme === 'light' &&
@@ -578,6 +651,8 @@ try {
     5_000,
     '设置重开后保持',
   );
+  const keptFont = await evaluate(`document.querySelector('#settings-font-family')?.value`);
+  if (keptFont !== 'menlo') throw new Error(`重开后字体应保持 menlo，实际 ${keptFont}`);
 
   // 恢复默认设置：二次点击确认，改的是草稿，保存才落盘。
   await evaluate(`document.querySelector('[data-testid="settings-reset"]').click()`);

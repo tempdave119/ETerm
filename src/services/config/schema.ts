@@ -5,6 +5,18 @@
 
 import type { ShortcutOverrides, ShortcutSpec } from '../../shared/shortcut.ts';
 import { isThemePreference, type ThemePreference } from '../../shared/theme.ts';
+import {
+  DEFAULT_TERMINAL_CURSOR_STYLE,
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  DEFAULT_TERMINAL_LINE_HEIGHT,
+  DEFAULT_TERMINAL_SCROLLBACK,
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_FONT_FAMILIES,
+  TERMINAL_LINE_HEIGHT_RANGE,
+  TERMINAL_SCROLLBACK_OPTIONS,
+  type TerminalCursorStyle,
+  type TerminalFontFamily,
+} from '../../shared/terminal-font.ts';
 
 export type { ThemePreference };
 
@@ -16,6 +28,13 @@ export type RightClickAction = 'paste' | 'menu' | 'off';
 export interface AppConfig {
   terminal: {
     fontSize: number;
+    /** 字体族预置：只开放内置几种，避免用户填了系统解析不到的字体名。 */
+    fontFamily: TerminalFontFamily;
+    lineHeight: number;
+    cursorStyle: TerminalCursorStyle;
+    cursorBlink: boolean;
+    /** 滚回缓冲行数；只在新建终端时生效。 */
+    scrollback: number;
     rightClick: RightClickAction;
     /** 仅 rightClick = paste 时生效：有选中内容时复制，否则粘贴。 */
     rightClickCopySelection: boolean;
@@ -38,6 +57,8 @@ export interface AppConfig {
     language: LanguagePreference;
     /** 资源面板「占用最高进程」的排序，跨重启保留。 */
     monitorProcessSort: MonitorProcessSort;
+    /** 首次启动引导是否已读；关闭后不再展示。 */
+    onboarded: boolean;
   };
   files: {
     openByDefault: boolean;
@@ -62,10 +83,20 @@ export interface ConfigFile {
 
 export function defaultConfig(): AppConfig {
   return {
-    terminal: { fontSize: 13, rightClick: 'paste', rightClickCopySelection: false, localCommand: '' },
+    terminal: {
+      fontSize: 13,
+      fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
+      lineHeight: DEFAULT_TERMINAL_LINE_HEIGHT,
+      cursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
+      cursorBlink: true,
+      scrollback: DEFAULT_TERMINAL_SCROLLBACK,
+      rightClick: 'paste',
+      rightClickCopySelection: false,
+      localCommand: '',
+    },
     ssh: { keepaliveInterval: 30, keepaliveCountMax: 3 },
     transfer: { concurrency: 1 },
-    ui: { density: 'comfortable', theme: 'system', language: 'system', monitorProcessSort: 'memory' },
+    ui: { density: 'comfortable', theme: 'system', language: 'system', monitorProcessSort: 'memory', onboarded: false },
     files: { openByDefault: true },
     shortcuts: { overrides: {} },
   };
@@ -102,6 +133,11 @@ export function sanitizeConfig(value: unknown): AppConfig {
   return {
     terminal: {
       fontSize: readInteger(terminal.fontSize, FONT_SIZE_RANGE, defaults.terminal.fontSize),
+      fontFamily: readFontFamily(terminal.fontFamily, defaults.terminal.fontFamily),
+      lineHeight: readLineHeight(terminal.lineHeight, defaults.terminal.lineHeight),
+      cursorStyle: readCursorStyle(terminal.cursorStyle, defaults.terminal.cursorStyle),
+      cursorBlink: readBoolean(terminal.cursorBlink, defaults.terminal.cursorBlink),
+      scrollback: readScrollback(terminal.scrollback, defaults.terminal.scrollback),
       rightClick: readRightClick(terminal.rightClick, defaults.terminal.rightClick),
       rightClickCopySelection: readBoolean(
         terminal.rightClickCopySelection,
@@ -128,6 +164,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
         ui.monitorProcessSort === 'memory' || ui.monitorProcessSort === 'cpu'
           ? ui.monitorProcessSort
           : defaults.ui.monitorProcessSort,
+      onboarded: readBoolean(ui.onboarded, defaults.ui.onboarded),
     },
     files: {
       openByDefault:
@@ -153,6 +190,11 @@ export function parseConfigInput(value: unknown): AppConfig {
   return {
     terminal: {
       fontSize: requireInteger(terminal.fontSize, '终端字号', FONT_SIZE_RANGE),
+      fontFamily: requireFontFamily(terminal.fontFamily),
+      lineHeight: requireLineHeight(terminal.lineHeight),
+      cursorStyle: requireCursorStyle(terminal.cursorStyle),
+      cursorBlink: requireBoolean(terminal.cursorBlink, '光标闪烁'),
+      scrollback: requireScrollback(terminal.scrollback),
       rightClick: requireRightClick(terminal.rightClick),
       rightClickCopySelection: requireBoolean(terminal.rightClickCopySelection, '选中时复制'),
       localCommand: requireCommand(terminal.localCommand),
@@ -167,6 +209,7 @@ export function parseConfigInput(value: unknown): AppConfig {
       theme: requireTheme(ui.theme),
       language: requireLanguage(ui.language),
       monitorProcessSort: requireMonitorProcessSort(ui.monitorProcessSort),
+      onboarded: requireBoolean(ui.onboarded, '首次启动引导'),
     },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
     shortcuts: { overrides: requireShortcuts(shortcuts.overrides) },
@@ -195,6 +238,65 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readRightClick(value: unknown, fallback: RightClickAction): RightClickAction {
   return value === 'paste' || value === 'menu' || value === 'off' ? value : fallback;
+}
+
+function readFontFamily(value: unknown, fallback: TerminalFontFamily): TerminalFontFamily {
+  return typeof value === 'string' && (TERMINAL_FONT_FAMILIES as readonly string[]).includes(value)
+    ? (value as TerminalFontFamily)
+    : fallback;
+}
+
+function requireFontFamily(value: unknown): TerminalFontFamily {
+  if (typeof value === 'string' && (TERMINAL_FONT_FAMILIES as readonly string[]).includes(value)) {
+    return value as TerminalFontFamily;
+  }
+  throw new Error(`终端字体只能是 ${TERMINAL_FONT_FAMILIES.join(' / ')}`);
+}
+
+/** 行高保留两位小数：滑块以 0.05 步进，手改文件也不能塞进多位小数。 */
+function normalizeLineHeight(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function readLineHeight(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  const rounded = normalizeLineHeight(value);
+  return rounded >= TERMINAL_LINE_HEIGHT_RANGE.min && rounded <= TERMINAL_LINE_HEIGHT_RANGE.max
+    ? rounded
+    : fallback;
+}
+
+function requireLineHeight(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('行高必须是数字');
+  const rounded = normalizeLineHeight(value);
+  if (rounded < TERMINAL_LINE_HEIGHT_RANGE.min || rounded > TERMINAL_LINE_HEIGHT_RANGE.max) {
+    throw new Error(`行高必须在 ${TERMINAL_LINE_HEIGHT_RANGE.min}–${TERMINAL_LINE_HEIGHT_RANGE.max} 之间`);
+  }
+  return rounded;
+}
+
+function readCursorStyle(value: unknown, fallback: TerminalCursorStyle): TerminalCursorStyle {
+  return typeof value === 'string' && (TERMINAL_CURSOR_STYLES as readonly string[]).includes(value)
+    ? (value as TerminalCursorStyle)
+    : fallback;
+}
+
+function requireCursorStyle(value: unknown): TerminalCursorStyle {
+  if (typeof value === 'string' && (TERMINAL_CURSOR_STYLES as readonly string[]).includes(value)) {
+    return value as TerminalCursorStyle;
+  }
+  throw new Error(`光标样式只能是 ${TERMINAL_CURSOR_STYLES.join(' / ')}`);
+}
+
+function readScrollback(value: unknown, fallback: number): number {
+  return typeof value === 'number' && (TERMINAL_SCROLLBACK_OPTIONS as readonly number[]).includes(value)
+    ? value
+    : fallback;
+}
+
+function requireScrollback(value: unknown): number {
+  if (typeof value === 'number' && (TERMINAL_SCROLLBACK_OPTIONS as readonly number[]).includes(value)) return value;
+  throw new Error(`滚回缓冲只能是 ${TERMINAL_SCROLLBACK_OPTIONS.join(' / ')} 行`);
 }
 
 /** 读磁盘：启动命令非法时回落默认（空值）。 */
