@@ -126,6 +126,13 @@ button {
   text-overflow: ellipsis;
 }
 
+.tab__label:focus-visible,
+.tab__close:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
 .tab__close {
   display: grid;
   place-items: center;

@@ -43,11 +43,15 @@ description: "F-15 交付物：设计 token 清单、控件五态规则、密度
 | 主按钮 | `.button--primary` | 浅底深字 | 更浅 | 更深 | 同按钮 | 透明度 0.5 |
 | 图标按钮 | `.icon-button` | 透明 | 白色 6% | 白色 10% | `--status-info` 描边 | 透明度 0.4、不可点 |
 | 标签栏按钮 | `.tabbar__action` | 透明 | 白色 6% | 白色 10% | `--status-info` 描边 | 透明度 0.35 |
+| 页签 | `.tab` | 透明 + 三级文字 | `--hover-subtle` + 二级文字 | `--text-secondary` 底 + `--bg-panel` 文字 | `--status-info` 描边 | — |
+| 分段按钮 | `.monitor-sort button` | 透明 + 三级文字 | `--bg-overlay` + 主文字 | `--text-primary` 底 + `--bg-panel` 文字 | `--status-info` 描边 | — |
 | 链接按钮 | `.link-button` | 次级文字 + 下划线 | 主文字 | — | `--status-info` 描边 | — |
 | 输入 / 下拉 | `.form-row input` / `select` | 画布底 + 细边框 | 强边框 | — | `--status-info` 描边 | 透明度 0.5 |
 | 复选框 | `.settings-check input` | 主题色 accent | — | — | `--status-info` 描边 | — |
 
 - 过渡只给背景 120ms；不做位移与缩放动画。
+- 页签选中态用反色：浅色主题深灰底白字，深色主题浅灰底深字；未选中页签降到三级文字，关闭按钮跟随反色。
+- 分段按钮（如进程排序）用同一套反色规则，确保「可切换」与「当前项」都能一眼识别。
 - 焦点一律用 `:focus-visible`，避免鼠标点击后留下描边。
 - 分隔条是拖拽控件：`cursor` 按方向切换，命中区用伪元素撑到 7px，hover 时边框变强。
 
