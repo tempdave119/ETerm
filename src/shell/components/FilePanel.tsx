@@ -22,6 +22,7 @@ import {
   type FileSort,
   type FileSortKey,
 } from '../file-sort.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
 import { PanelFrame } from './PanelFrame.tsx';
 
@@ -34,11 +35,11 @@ interface FilePanelProps {
   onPanelReorder?(delta: -1 | 1): void;
 }
 
-const COLUMNS: { key: FileSortKey; title: string }[] = [
-  { key: 'name', title: '名称' },
-  { key: 'size', title: '大小' },
-  { key: 'mtime', title: '日期' },
-  { key: 'mode', title: '权限' },
+const COLUMNS: { key: FileSortKey; titleKey: MessageKey }[] = [
+  { key: 'name', titleKey: 'files.name' },
+  { key: 'size', titleKey: 'files.size' },
+  { key: 'mtime', titleKey: 'files.date' },
+  { key: 'mode', titleKey: 'files.permission' },
 ];
 
 export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMoveDown, onPanelReorder }: FilePanelProps) {
@@ -125,7 +126,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
         return;
       }
       if (prepared.value.length === 0) {
-        setError({ code: 'UNSUPPORTED', message: '没有读到本地文件', next: '从文件管理器拖入文件后重试' });
+        setError({ code: 'UNSUPPORTED', message: t('files.dropEmpty.message'), next: t('files.dropEmpty.next') });
         return;
       }
 
@@ -156,7 +157,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   return (
     <PanelFrame
       panelId="files"
-      title="文件"
+      title={t('panel.files')}
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
@@ -167,8 +168,8 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           <button
             className="icon-button"
             type="button"
-            title="上一级"
-            aria-label="上一级"
+            title={t('files.up')}
+            aria-label={t('files.up')}
             disabled={path === '/'}
             onClick={() => void load(parentOf(path))}
           >
@@ -177,8 +178,8 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           <button
             className="icon-button"
             type="button"
-            title="上传文件"
-            aria-label="上传文件"
+            title={t('files.upload')}
+            aria-label={t('files.upload')}
             data-testid="file-upload"
             onClick={() => void upload()}
           >
@@ -187,8 +188,8 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           <button
             className="icon-button"
             type="button"
-            title="刷新"
-            aria-label="刷新"
+            title={t('files.refresh')}
+            aria-label={t('files.refresh')}
             onClick={() => void load(path)}
           >
             <RefreshCw size={14} strokeWidth={1.5} />
@@ -196,8 +197,8 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           <button
             className="icon-button"
             type="button"
-            title={showHidden ? '隐藏点文件' : '显示隐藏文件'}
-            aria-label={showHidden ? '隐藏点文件' : '显示隐藏文件'}
+            title={showHidden ? t('files.hideHidden') : t('files.showHidden')}
+            aria-label={showHidden ? t('files.hideHidden') : t('files.showHidden')}
             aria-pressed={showHidden}
             data-testid="file-toggle-hidden"
             onClick={() => setShowHidden((current) => !current)}
@@ -219,10 +220,10 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
             type="button"
             data-testid={`file-sort-${column.key}`}
             data-active={sort.key === column.key}
-            title={`按${column.title}排序`}
+            title={t('files.sortBy', { name: t(column.titleKey) })}
             onClick={() => toggleSort(column.key)}
           >
-            <span>{column.title}</span>
+            <span>{t(column.titleKey)}</span>
             {sort.key === column.key ? (
               sort.direction === 'asc' ? (
                 <ChevronUp size={11} strokeWidth={2} />
@@ -252,15 +253,15 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
         }}
         onDrop={(event) => void dropFiles(event)}
       >
-        {dragOver ? <div className="file-panel__drop-hint">松开上传到 {path}</div> : null}
+        {dragOver ? <div className="file-panel__drop-hint">{t('files.dropHint', { path })}</div> : null}
         {loading ? (
-          <div className="file-panel__hint">正在读取…</div>
+          <div className="file-panel__hint">{t('common.loading')}</div>
         ) : error ? (
           <div className="file-panel__error">
             <ErrorMessage error={error} />
           </div>
         ) : visibleEntries.length === 0 ? (
-          <div className="file-panel__hint">此目录为空</div>
+          <div className="file-panel__hint">{t('files.empty')}</div>
         ) : (
           visibleEntries.map((entry) => (
             <div className="file-row" key={entry.path} title={entry.path}>
@@ -285,8 +286,8 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
               <button
                 className="icon-button file-row__action"
                 type="button"
-                title={`下载 ${entry.name}`}
-                aria-label={`下载 ${entry.name}`}
+                title={t('files.download', { name: entry.name })}
+                aria-label={t('files.download', { name: entry.name })}
                 data-testid={`file-download-${entry.name}`}
                 onClick={() =>
                   void (entry.type === 'directory' ? downloadDirectory(entry.path) : download(entry.path))
@@ -302,16 +303,16 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
       {preview || previewError ? (
         <div className="modal-backdrop" role="presentation">
           <div className="modal modal--wide" role="dialog" aria-modal="true" data-testid="file-preview">
-            <h2 className="modal__title">{preview ? baseName(preview.path) : '无法预览'}</h2>
+            <h2 className="modal__title">{preview ? baseName(preview.path) : t('files.previewTitle')}</h2>
             {previewError ? <ErrorMessage error={previewError} /> : null}
             {preview ? (
               <>
                 <div className="file-preview__meta">
                   {preview.path}
-                  {preview.truncated ? ' · 仅显示前 256 KB' : ''}
+                  {preview.truncated ? ` · ${t('files.previewTruncated')}` : ''}
                 </div>
                 {preview.binary ? (
-                  <p className="form-hint">二进制文件，暂不预览。</p>
+                  <p className="form-hint">{t('files.binaryHint')}</p>
                 ) : (
                   <pre className="file-preview__content">{preview.content}</pre>
                 )}
@@ -326,7 +327,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
                   setPreviewError(null);
                 }}
               >
-                关闭
+                {t('common.close')}
               </button>
             </div>
           </div>

@@ -19,8 +19,11 @@ test('components_loads_serial_example_and_registers_protocol', async () => {
   assert.equal(descriptors[0]?.label, '串口');
   assert.deepEqual(
     descriptors[0]?.fields.map((field) => field.key),
-    ['path', 'baudRate'],
+    ['path', 'baudRate', 'dataBits', 'stopBits', 'parity', 'flowControl', 'lineEnding', 'dtr', 'rts'],
   );
+  // 设备下拉来自宿主枚举，布尔开关用于 DTR / RTS。
+  assert.equal(descriptors[0]?.fields[0]?.optionsSource, 'serial-devices');
+  assert.equal(descriptors[0]?.fields[7]?.type, 'boolean');
 
   registry.setupAll();
   const module = registry.moduleForProtocol('serial');

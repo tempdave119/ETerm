@@ -599,6 +599,107 @@ try {
     throw new Error('旧快捷键应失效');
   }
 
+  // 启动命令：设置 bash -l 后新终端跑 bash，清空后回到系统默认登录 shell。
+  const sessionsBefore = await evaluate(`window.__etermDebug.list()`);
+  await openSettings();
+  await openSection('terminal');
+  await evaluate(setInputScript('#settings-local-command', 'bash -l'));
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '保存启动命令',
+  );
+  await waitFor(
+    async () => (await readConfig())?.terminal.localCommand === 'bash -l',
+    5_000,
+    '启动命令写入',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 't', metaKey: true, bubbles: true }))`,
+  );
+  const bashSession = await waitFor(
+    async () => {
+      const list = await evaluate(`window.__etermDebug.list()`);
+      return list.find((id) => !sessionsBefore.includes(id)) ?? null;
+    },
+    10_000,
+    '新终端会话',
+  );
+  await evaluate(
+    `window.__etermDebug.type(${JSON.stringify(bashSession)}, ${JSON.stringify('echo shell-check-$BASH_VERSION\r')})`,
+  );
+  const bashOutput = await waitFor(
+    async () => {
+      const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(bashSession)})`));
+      return /shell-check-\d/.test(text) ? text : null;
+    },
+    10_000,
+    'bash 启动命令生效',
+  );
+  if (!bashOutput.includes('shell-check-')) throw new Error('启动命令输出异常');
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    async () => (await evaluate(`window.__etermDebug.list()`)).length === sessionsBefore.length,
+    5_000,
+    '关闭测试标签',
+  );
+
+  await openSettings();
+  await openSection('terminal');
+  await evaluate(setInputScript('#settings-local-command', ''));
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    async () => {
+      const config = await readConfig();
+      return config?.terminal.localCommand === '';
+    },
+    5_000,
+    '清空启动命令',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '关闭设置',
+  );
+
+  // 中英文：切到 English 后设置面板变英文，切回中文恢复。
+  await openSettings();
+  await openSection('appearance');
+  await evaluate(setSelectScript('#settings-language', 'en-US'));
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '保存英文',
+  );
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('.modal--settings .modal__title')?.textContent === 'Settings' && document.querySelector('[data-testid="settings-nav-terminal"]')?.textContent === 'Terminal' && document.querySelector('[data-testid="settings-nav-layout"]')?.textContent === 'Panel Layout'`,
+      ),
+    5_000,
+    '英文设置面板',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-nav-appearance"]').click()`);
+  await evaluate(setSelectScript('#settings-language', 'zh-CN'));
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '保存中文',
+  );
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.modal--settings .modal__title')?.textContent === '设置'`),
+    5_000,
+    '中文设置面板',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+
   // 右键菜单模式：配置切到 menu，验证菜单出现与粘贴动作。
   const baseConfig = await evaluate(
     `window.eterm.getConfig().then((result) => (result.ok ? result.value : null))`,

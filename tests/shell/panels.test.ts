@@ -26,7 +26,7 @@ test('panels_registry_covers_six_unique_panels', () => {
   assert.equal(PANELS.length, 6);
   assert.equal(new Set(ids).size, ids.length);
   for (const panel of PANELS) {
-    assert.ok(panel.title.length > 0, `${panel.id} 缺少标题`);
+    assert.ok(panel.titleKey.length > 0, `${panel.id} 缺少标题 key`);
   }
 });
 

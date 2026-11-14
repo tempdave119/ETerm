@@ -1,4 +1,5 @@
 import type { ProductErrorInfo } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
 
 interface EmptyStateProps {
@@ -10,7 +11,7 @@ interface EmptyStateProps {
 export function EmptyState({ error, onNewConnection, onNewTerminal }: EmptyStateProps) {
   return (
     <div className="empty">
-      <h1 className="empty__title">{error ? '连接没有建立' : '还没有连接'}</h1>
+      <h1 className="empty__title">{error ? t('empty.notConnected') : t('tree.empty')}</h1>
       {error ? (
         <div className="empty__error">
           <ErrorMessage error={error} />
@@ -22,14 +23,13 @@ export function EmptyState({ error, onNewConnection, onNewTerminal }: EmptyState
         data-testid="new-connection"
         onClick={onNewConnection}
       >
-        新建连接
+        {t('empty.newConnection')}
       </button>
       <p className="empty__hint">
-        或
+        {t('empty.or')}
         <button className="link-button" type="button" data-testid="new-terminal" onClick={onNewTerminal}>
-          打开本地终端
+          {t('empty.newTerminal')}
         </button>
-        （⌘T）
       </p>
     </div>
   );

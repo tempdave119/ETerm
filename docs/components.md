@@ -31,8 +31,9 @@ description: "F-19 交付物：组件目录、manifest 字段、入口契约与�
   "ui": {
     "label": "串口",
     "fields": [
-      { "key": "path", "label": "设备路径", "placeholder": "/dev/tty.usbserial-0001", "required": true },
-      { "key": "baudRate", "label": "波特率", "type": "select", "options": ["9600", "115200"], "default": "115200" }
+      { "key": "path", "label": "设备", "type": "select", "optionsSource": "serial-devices", "required": true },
+      { "key": "baudRate", "label": "波特率", "type": "select", "options": ["9600", "115200"], "default": "115200" },
+      { "key": "dtr", "label": "DTR", "type": "boolean", "default": "true" }
     ]
   }
 }
@@ -46,9 +47,11 @@ description: "F-19 交付物：组件目录、manifest 字段、入口契约与�
 | `entry` | 相对组件目录的入口文件，必须在目录内 |
 | `activation.onProtocol` | 协议名（1–32 位小写），新建连接的下拉里出现 |
 | `ui.label` | 下拉显示名 |
-| `ui.fields` | 连接表单字段，最多 10 个；类型 text / select / number |
+| `ui.fields` | 连接表单字段，最多 10 个；类型 text / select / number / boolean |
 
-字段项：`key`、`label`、`type`、`placeholder`、`options`、`default`、`required`。宿主只负责渲染、保存与透传，不解释含义。
+字段项：`key`、`label`、`type`、`placeholder`、`options`、`optionsSource`、`default`、`required`。宿主只负责渲染、保存与透传，不解释含义。
+
+动态选项：`optionsSource: "serial-devices"` 时，下拉选项改由宿主枚举（macOS 为 `/dev/cu.*`，没有同名 cu 时补 `tty.*`），并在下拉旁提供刷新按钮；`boolean` 渲染为复选框，写入 `"true"` / `"false"` 字符串。
 
 ## 入口契约
 

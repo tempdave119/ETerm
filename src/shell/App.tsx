@@ -30,6 +30,7 @@ import {
 } from './layout.ts';
 import { type CommandId } from './commands/registry.ts';
 import { findCommandByShortcut, resolveShortcuts } from './commands/resolve.ts';
+import { normalizeLocale, setLocale, t } from '../shared/i18n/index.ts';
 import { previewConfig } from './settings-draft.ts';
 import { panelById, panelsInDock } from './panels/registry.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
@@ -122,6 +123,9 @@ export function App() {
 
   // 草稿优先：设置面板打开期间，只有外观类字段跟草稿走（即时预览），其余仍用已保存值。
   const effectiveConfig = settingsDraft && config ? previewConfig(settingsDraft, config) : (settingsDraft ?? config);
+  // 语言在渲染前同步给 i18n 模块：t() 是模块级函数，随后渲染的组件树即为新语言。
+  const locale = normalizeLocale(effectiveConfig?.ui.language ?? 'system', navigator.language);
+  setLocale(locale);
   // 快捷键生效表随草稿变化，设置面板里改完能立即预览冲突。
   const shortcuts = useMemo(
     () => resolveShortcuts(effectiveConfig?.shortcuts.overrides ?? {}),
@@ -316,7 +320,7 @@ export function App() {
         } else if (!result.ok) setSettingsError(result.error.message);
       })
       .catch((error: unknown) => {
-        setSettingsError(error instanceof Error ? error.message : '保存配置失败');
+        setSettingsError(error instanceof Error ? error.message : t('app.saveConfigFailed'));
       })
       .finally(() => {
         pendingConfigSaves.current -= 1;
@@ -344,7 +348,7 @@ export function App() {
         settingsDraftRef.current = null;
         setSettingsDraft(null);
         setSettingsOpen(false);
-        setNotice('设置已保存');
+        setNotice(t('settings.saved'));
       });
     },
     [saveConfig],
@@ -376,7 +380,7 @@ export function App() {
   // 布局是即时模型，不走设置草稿；恢复后直接落盘。
   const resetPanelLayout = useCallback((): void => {
     applyPanelLayout(defaultPanelLayout(), true);
-    setNotice('已恢复默认布局');
+    setNotice(t('settings.resetLayoutDone'));
   }, [applyPanelLayout]);
 
   useEffect(() => {
@@ -492,8 +496,8 @@ export function App() {
   const monitorTargetLabel = monitorRemote
     ? monitorConnection
       ? `${monitorConnection.username ?? ''}@${monitorConnection.host ?? ''}${monitorConnection.port ? `:${monitorConnection.port}` : ''}`.replace(/^@/, '')
-      : '远端主机'
-    : '这台 Mac';
+      : t('app.remoteHost')
+    : t('app.thisMac');
   const activeConnectionId = activePane?.connectionId ?? null;
   const filesAvailable = activePane?.capabilities.includes('file') === true;
   const forwardAvailable = activePane?.capabilities.includes('forward') === true;
@@ -521,9 +525,16 @@ export function App() {
       const template = await loadLayout('local');
       const count = template ? countTemplateLeaves(template) : 1;
       const leaves: PaneLeaf[] = [];
+      // 启动命令在会话建立时快照：已开的终端不受后续设置影响。
+      const localCommand = configRef.current?.terminal.localCommand ?? '';
 
       for (let index = 0; index < count; index += 1) {
-        const result = await window.eterm.openSession({ protocol: 'local', cols: 80, rows: 24 });
+        const result = await window.eterm.openSession({
+          protocol: 'local',
+          cols: 80,
+          rows: 24,
+          target: { command: localCommand },
+        });
         if (!result.ok) {
           for (const leaf of leaves) void window.eterm.closeSession(leaf.sessionId);
           setError(result.error);
@@ -533,7 +544,7 @@ export function App() {
           type: 'leaf',
           paneId: `pane-${++paneSequence}`,
           sessionId: result.value.sessionId,
-          title: `本地终端 ${++localSequence}`,
+          title: t('app.localTerminal', { index: ++localSequence }),
           capabilities: result.value.capabilities,
         });
       }
@@ -547,8 +558,8 @@ export function App() {
     } catch (cause) {
       setError({
         code: 'INTERNAL',
-        message: '终端没有打开',
-        next: '重试一次；仍然失败请重启应用',
+        message: t('app.terminalFailed.message'),
+        next: t('app.terminalFailed.next'),
         detail: cause instanceof Error ? cause.message : String(cause),
       });
     }
@@ -578,7 +589,7 @@ export function App() {
             const host = result.error.host ?? connection.host;
             const port = result.error.port ?? connection.port ?? 22;
             if (leaves.length === 0 && result.error.code === 'HOST_KEY_CHANGED' && fingerprint && host) {
-              setHostKey({ connection, fingerprint, first: result.error.message.includes('首次'), host, port });
+              setHostKey({ connection, fingerprint, first: result.error.reason === 'first', host, port });
               return;
             }
             setError(result.error);
@@ -690,7 +701,7 @@ export function App() {
 
   const removeConnection = useCallback(
     async (connection: ConnectionRecord): Promise<void> => {
-      const confirmed = window.confirm(`删除连接「${connection.name}」？保存的密码也会一起删除。`);
+      const confirmed = window.confirm(t('app.deleteConnectionConfirm', { name: connection.name }));
       if (!confirmed) return;
 
       const result = await window.eterm.deleteConnection(connection.id);
@@ -741,7 +752,7 @@ export function App() {
         return;
       }
 
-      const title = tab.connectionId ? tab.title : `本地终端 ${++localSequence}`;
+      const title = tab.connectionId ? tab.title : t('app.localTerminal', { index: ++localSequence });
       const leaf: PaneLeaf = {
         type: 'leaf',
         paneId: `pane-${++paneSequence}`,
@@ -977,14 +988,14 @@ export function App() {
         ) : (
           <PanelFrame
             panelId="files"
-            title="文件"
+            title={t('panel.files')}
             dock={dock}
             onMove={(target) => movePanelTo('files', target)}
             canMoveUp={panelChrome('files', dock).canPanelMoveUp}
             canMoveDown={panelChrome('files', dock).canPanelMoveDown}
             onReorder={panelChrome('files', dock).onPanelReorder}
           >
-            <p className="panel-empty">打开一个 SSH 连接后可以浏览远端文件</p>
+            <p className="panel-empty">{t('files.noSftpHint')}</p>
           </PanelFrame>
         );
       case 'monitor':
@@ -1078,14 +1089,14 @@ export function App() {
           {error && tabs.length > 0 ? (
             <div className="error-bar" data-testid="error-bar">
               <ErrorMessage error={error} />
-              <button className="icon-button" type="button" title="关闭" aria-label="关闭错误" onClick={() => setError(null)}>
+              <button className="icon-button" type="button" title={t('error.close')} aria-label={t('error.close')} onClick={() => setError(null)}>
                 <X size={14} strokeWidth={1.5} />
               </button>
             </div>
           ) : null}
           {reconnectNotice ? (
             <div className="reconnect-bar" data-testid="reconnect-bar">
-              连接断开，正在重连（{reconnectNotice.attempt}/{RECONNECT_MAX}）…
+              {t('reconnect.notice', { attempt: reconnectNotice.attempt, max: RECONNECT_MAX })}
             </div>
           ) : null}
           <div className="workspace__content">

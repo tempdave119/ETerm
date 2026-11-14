@@ -26,15 +26,15 @@ test('commands_have_unique_ids_and_shortcuts', () => {
 
 test('commands_every_entry_has_title_group_and_keywords', () => {
   for (const command of COMMANDS) {
-    assert.ok(command.title.length > 0, `${command.id} 缺少标题`);
-    assert.ok(command.group.length > 0, `${command.id} 缺少分组`);
+    assert.ok(command.titleKey.length > 0, `${command.id} 缺少标题 key`);
+    assert.ok(command.groupKey.length > 0, `${command.id} 缺少分组 key`);
     assert.ok(command.keywords.length > 0, `${command.id} 缺少关键词`);
   }
 });
 
 test('commands_lookup_by_id', () => {
-  assert.equal(commandById('settings.open')?.title, '打开设置');
-  assert.equal(commandById('palette.open')?.group, '命令');
+  assert.equal(commandById('settings.open')?.titleKey, 'command.settings.open');
+  assert.equal(commandById('palette.open')?.groupKey, 'command.group.palette');
 });
 
 test('commands_shortcut_matches_meta_and_ctrl_but_not_alt', () => {

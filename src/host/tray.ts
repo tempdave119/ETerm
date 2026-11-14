@@ -1,11 +1,24 @@
-import { Menu, Tray, nativeImage } from 'electron';
+import { Menu, Tray, nativeImage, type MenuItemConstructorOptions } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { t } from '../shared/i18n/index.ts';
 import type { MenuCommand } from '../shared/ipc.ts';
 
 export interface TrayActions {
   showWindow(): void;
   run(command: MenuCommand): void;
+}
+
+/** 托盘菜单单独导出：语言切换时主进程重建菜单会顺带刷新它。 */
+export function buildTrayMenu(actions: TrayActions): MenuItemConstructorOptions[] {
+  return [
+    { label: t('tray.showWindow'), click: () => actions.showWindow() },
+    { type: 'separator' },
+    { label: t('menu.newTerminal'), click: () => actions.run('terminal.new') },
+    { label: t('menu.newConnection'), click: () => actions.run('connection.new') },
+    { type: 'separator' },
+    { label: t('tray.quit', { name: 'ETerm' }), role: 'quit' },
+  ];
 }
 
 /**
@@ -21,15 +34,6 @@ export function createAppTray(actions: TrayActions): Tray | null {
 
   const tray = new Tray(image);
   tray.setToolTip('ETerm');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '显示主窗口', click: () => actions.showWindow() },
-      { type: 'separator' },
-      { label: '新建终端', click: () => actions.run('terminal.new') },
-      { label: '新建连接', click: () => actions.run('connection.new') },
-      { type: 'separator' },
-      { label: '退出 ETerm', role: 'quit' },
-    ]),
-  );
+  tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenu(actions)));
   return tray;
 }

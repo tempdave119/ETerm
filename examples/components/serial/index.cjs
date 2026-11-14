@@ -1,10 +1,16 @@
 const fs = require('node:fs');
+const { SerialPort } = require('serialport');
 
 /**
- * 串口组件样例：打开设备文件做原始字节读写。
- * 说明：样例不设置波特率（需要平台 ioctl），baudRate 字段只做保存；
- * 真串口设备请用 115200 等默认速率，或换成 serialport 实现。
+ * 串口组件：用 serialport 打开设备，参数来自 manifest 字段。
+ * 终端发的是 CR，按「回车发送」把它换成设备要求的 CR / LF / CRLF。
  */
+const LINE_ENDINGS = { cr: '\r', lf: '\n', crlf: '\r\n' };
+
+function lineEndingOf(value) {
+  return LINE_ENDINGS[String(value || 'crlf').toLowerCase()] || '\r\n';
+}
+
 module.exports = {
   id: 'serial',
   kind: 'capability',
@@ -21,68 +27,89 @@ module.exports = {
           const devicePath = String(target.path || '');
           if (!devicePath) throw new Error('串口组件缺少设备路径');
 
-          let fd;
+          // serialport 的打开是异步的，先用同步探测挡住「路径错 / 没权限」这类常见错误，
+          // 让上层能拿到明确的失败原因；被占用等运行期错误走 exit。
           try {
-            fd = fs.openSync(devicePath, 'r+');
-          } catch (error) {
-            throw new Error(`打不开串口设备 ${devicePath}：${error.message}`);
+            fs.accessSync(devicePath, fs.constants.R_OK | fs.constants.W_OK);
+          } catch {
+            throw new Error(`打不开串口设备 ${devicePath}：设备不存在或没有读写权限`);
           }
 
+          const flow = String(target.flowControl || 'none');
+          const ending = lineEndingOf(target.lineEnding);
+          const port = new SerialPort({
+            path: devicePath,
+            baudRate: Number(target.baudRate || 115200),
+            dataBits: Number(target.dataBits || 8),
+            stopBits: Number(target.stopBits || 1),
+            parity: String(target.parity || 'none'),
+            rtscts: flow === 'rtscts',
+            xon: flow === 'xonxoff',
+            xoff: flow === 'xonxoff',
+            autoOpen: false,
+          });
+
           let closed = false;
+          let opened = false;
           const dataHandlers = new Set();
           const exitHandlers = new Set();
 
-          const emitData = (text) => {
-            for (const handler of dataHandlers) handler(text);
-          };
-          const finish = () => {
+          const emitExit = (code) => {
             if (closed) return;
             closed = true;
-            try {
-              fs.closeSync(fd);
-            } catch {
-              // 设备已拔掉时关闭会报错，忽略即可。
-            }
-            for (const handler of exitHandlers) handler({ code: 0 });
+            for (const handler of exitHandlers) handler({ code });
           };
 
-          // 串口没有 EOF：按块读，没有数据时小睡再读。
-          const readLoop = () => {
+          port.on('data', (buffer) => {
             if (closed) return;
-            const buffer = Buffer.alloc(4096);
-            fs.read(fd, buffer, 0, buffer.length, null, (error, bytes) => {
-              if (closed) return;
-              if (!error && bytes > 0) emitData(buffer.subarray(0, bytes).toString('utf8'));
-              setTimeout(readLoop, error || bytes === 0 ? 20 : 1);
-            });
-          };
-          readLoop();
+            const text = buffer.toString('utf8');
+            for (const handler of dataHandlers) handler(text);
+          });
+          port.on('close', () => emitExit(0));
+          port.on('error', () => emitExit(1));
 
-          return {
-            session: {
-              write(data) {
-                if (closed) return;
-                try {
-                  fs.writeSync(fd, data);
-                } catch {
-                  // 写失败通常意味着设备断开，退出由 close 兜底。
-                }
-              },
-              resize() {},
-              close: finish,
-              onData(handler) {
-                dataHandlers.add(handler);
-                return () => dataHandlers.delete(handler);
-              },
-              onExit(handler) {
-                exitHandlers.add(handler);
-                return () => exitHandlers.delete(handler);
-              },
+          port.open((error) => {
+            if (error) {
+              emitExit(1);
+              return;
+            }
+            opened = true;
+            // DTR / RTS 只在打开时设置：Arduino 这类设备靠打开瞬间的 DTR 拉低复位。
+            port.set({ dtr: target.dtr !== 'false', rts: target.rts !== 'false' }, () => {});
+          });
+
+          const session = {
+            write: (data) => {
+              if (closed || !opened) return;
+              port.write(String(data).replace(/\r/g, ending));
+            },
+            // 串口没有终端尺寸概念，保留空实现以对齐会话端口。
+            resize: () => {},
+            close: () => {
+              if (closed) return;
+              closed = true;
+              try {
+                port.close();
+              } catch {
+                // 设备已拔掉时关闭会报错，忽略。
+              }
+            },
+            onData: (handler) => {
+              dataHandlers.add(handler);
+              return () => dataHandlers.delete(handler);
+            },
+            onExit: (handler) => {
+              exitHandlers.add(handler);
+              return () => exitHandlers.delete(handler);
             },
           };
+
+          return { session };
         },
       },
-      dispose() {},
+      dispose() {
+        // 会话由 SessionService 统一释放；组件本身不持有全局资源。
+      },
     };
   },
 };

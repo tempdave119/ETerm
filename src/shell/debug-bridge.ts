@@ -22,6 +22,7 @@ function install(): void {
   if (installed) return;
   installed = true;
   window.__etermDebug = {
+    list: () => [...terminals.keys()],
     read: (sessionId) => dump(terminals.get(sessionId)),
     size: (sessionId) => {
       const terminal = terminals.get(sessionId);

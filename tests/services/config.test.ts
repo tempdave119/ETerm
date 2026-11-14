@@ -83,6 +83,7 @@ test('config_file_keeps_valid_fields_when_one_field_is_bad', () => {
   assert.equal(file.config.ui.theme, 'system');
   assert.equal(file.config.ui.monitorProcessSort, 'memory');
   assert.equal(file.config.files.openByDefault, false);
+  assert.equal(file.config.terminal.localCommand, '');
   assert.deepEqual(file.config.shortcuts.overrides, {});
 });
 
@@ -120,15 +121,38 @@ test('config_input_rejects_out_of_range_values', () => {
 
 test('config_input_accepts_valid_full_config', () => {
   const input = {
-    terminal: { fontSize: 11, rightClick: 'menu', rightClickCopySelection: true },
+    terminal: { fontSize: 11, rightClick: 'menu', rightClickCopySelection: true, localCommand: 'bash -l' },
     ssh: { keepaliveInterval: 120, keepaliveCountMax: 5 },
     transfer: { concurrency: 4 },
-    ui: { density: 'compact', theme: 'light', monitorProcessSort: 'cpu' },
+    ui: { density: 'compact', theme: 'light', language: 'en-US', monitorProcessSort: 'cpu' },
     files: { openByDefault: false },
     shortcuts: { overrides: { 'files.toggle': { code: 'KeyG', shift: true }, 'panel.monitor': null } },
   };
 
   assert.deepEqual(parseConfigInput(input), input);
+});
+
+test('config_local_command_is_trimmed_and_bounded', () => {
+  const base = defaultConfig();
+
+  assert.equal(
+    parseConfigInput({ ...base, terminal: { ...base.terminal, localCommand: '  bash -l  ' } }).terminal.localCommand,
+    'bash -l',
+  );
+  assert.throws(
+    () => parseConfigInput({ ...base, terminal: { ...base.terminal, localCommand: 'x'.repeat(201) } }),
+    /启动命令/,
+  );
+  assert.throws(
+    () => parseConfigInput({ ...base, terminal: { ...base.terminal, localCommand: 42 } }),
+    /启动命令必须是字符串/,
+  );
+
+  const file = parseConfigFile({
+    version: 1,
+    config: { terminal: { localCommand: 'x'.repeat(201) } },
+  });
+  assert.equal(file.config.terminal.localCommand, '');
 });
 
 test('config_file_keeps_valid_shortcut_overrides_and_drops_broken_ones', () => {

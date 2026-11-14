@@ -7,6 +7,7 @@ import type { ShortcutOverrides, ShortcutSpec } from '../../shared/shortcut.ts';
 
 export type UiDensity = 'comfortable' | 'compact';
 export type ThemePreference = 'system' | 'dark' | 'light';
+export type LanguagePreference = 'system' | 'zh-CN' | 'en-US';
 export type MonitorProcessSort = 'memory' | 'cpu';
 export type RightClickAction = 'paste' | 'menu' | 'off';
 
@@ -16,6 +17,8 @@ export interface AppConfig {
     rightClick: RightClickAction;
     /** 仅 rightClick = paste 时生效：有选中内容时复制，否则粘贴。 */
     rightClickCopySelection: boolean;
+    /** 本地终端启动命令；空值使用系统默认登录 shell。 */
+    localCommand: string;
   };
   ssh: {
     /** 秒；每 N 秒发一次 keepalive 全局请求。 */
@@ -29,6 +32,8 @@ export interface AppConfig {
   ui: {
     density: UiDensity;
     theme: ThemePreference;
+    /** 界面语言；system 按系统语言归一。 */
+    language: LanguagePreference;
     /** 资源面板「占用最高进程」的排序，跨重启保留。 */
     monitorProcessSort: MonitorProcessSort;
   };
@@ -43,6 +48,7 @@ export interface AppConfig {
 
 export const CONFIG_VERSION = 1;
 export const FONT_SIZE_RANGE = { min: 11, max: 20 } as const;
+export const LOCAL_COMMAND_MAX = 200;
 export const KEEPALIVE_INTERVAL_RANGE = { min: 10, max: 300 } as const;
 export const KEEPALIVE_COUNT_RANGE = { min: 1, max: 5 } as const;
 export const TRANSFER_CONCURRENCY_RANGE = { min: 1, max: 4 } as const;
@@ -54,10 +60,10 @@ export interface ConfigFile {
 
 export function defaultConfig(): AppConfig {
   return {
-    terminal: { fontSize: 13, rightClick: 'paste', rightClickCopySelection: false },
+    terminal: { fontSize: 13, rightClick: 'paste', rightClickCopySelection: false, localCommand: '' },
     ssh: { keepaliveInterval: 30, keepaliveCountMax: 3 },
     transfer: { concurrency: 1 },
-    ui: { density: 'comfortable', theme: 'system', monitorProcessSort: 'memory' },
+    ui: { density: 'comfortable', theme: 'system', language: 'system', monitorProcessSort: 'memory' },
     files: { openByDefault: true },
     shortcuts: { overrides: {} },
   };
@@ -99,6 +105,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
         terminal.rightClickCopySelection,
         defaults.terminal.rightClickCopySelection,
       ),
+      localCommand: readCommand(terminal.localCommand, defaults.terminal.localCommand),
     },
     ssh: {
       keepaliveInterval: readInteger(
@@ -117,6 +124,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
         ui.theme === 'system' || ui.theme === 'dark' || ui.theme === 'light'
           ? ui.theme
           : defaults.ui.theme,
+      language: readLanguage(ui.language, defaults.ui.language),
       monitorProcessSort:
         ui.monitorProcessSort === 'memory' || ui.monitorProcessSort === 'cpu'
           ? ui.monitorProcessSort
@@ -148,6 +156,7 @@ export function parseConfigInput(value: unknown): AppConfig {
       fontSize: requireInteger(terminal.fontSize, '终端字号', FONT_SIZE_RANGE),
       rightClick: requireRightClick(terminal.rightClick),
       rightClickCopySelection: requireBoolean(terminal.rightClickCopySelection, '选中时复制'),
+      localCommand: requireCommand(terminal.localCommand),
     },
     ssh: {
       keepaliveInterval: requireInteger(ssh.keepaliveInterval, '保活间隔', KEEPALIVE_INTERVAL_RANGE),
@@ -157,6 +166,7 @@ export function parseConfigInput(value: unknown): AppConfig {
     ui: {
       density: requireDensity(ui.density),
       theme: requireTheme(ui.theme),
+      language: requireLanguage(ui.language),
       monitorProcessSort: requireMonitorProcessSort(ui.monitorProcessSort),
     },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
@@ -186,6 +196,22 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readRightClick(value: unknown, fallback: RightClickAction): RightClickAction {
   return value === 'paste' || value === 'menu' || value === 'off' ? value : fallback;
+}
+
+/** 读磁盘：启动命令非法时回落默认（空值）。 */
+function readCommand(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > LOCAL_COMMAND_MAX ? fallback : trimmed;
+}
+
+function requireCommand(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('启动命令必须是字符串');
+  const trimmed = value.trim();
+  if (trimmed.length > LOCAL_COMMAND_MAX) {
+    throw new Error(`启动命令不能超过 ${LOCAL_COMMAND_MAX} 个字符`);
+  }
+  return trimmed;
 }
 
 /** 读磁盘：单条快捷键坏了就丢掉该条，不影响其他定制。 */
@@ -255,6 +281,15 @@ function requireDensity(value: unknown): UiDensity {
 function requireTheme(value: unknown): ThemePreference {
   if (value === 'system' || value === 'dark' || value === 'light') return value;
   throw new Error('外观主题只能是 system、dark 或 light');
+}
+
+function readLanguage(value: unknown, fallback: LanguagePreference): LanguagePreference {
+  return value === 'system' || value === 'zh-CN' || value === 'en-US' ? value : fallback;
+}
+
+function requireLanguage(value: unknown): LanguagePreference {
+  if (value === 'system' || value === 'zh-CN' || value === 'en-US') return value;
+  throw new Error('界面语言只能是 system、zh-CN 或 en-US');
 }
 
 function requireMonitorProcessSort(value: unknown): MonitorProcessSort {

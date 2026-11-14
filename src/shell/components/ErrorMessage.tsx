@@ -1,4 +1,5 @@
 import type { ProductErrorInfo } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 
 interface ErrorMessageProps {
   error: ProductErrorInfo;
@@ -15,7 +16,7 @@ export function ErrorMessage({ error }: ErrorMessageProps) {
       <span className="error-message__next">{error.next}</span>
       {error.detail ? (
         <details className="error-message__detail">
-          <summary>详情</summary>
+          <summary>{t('error.detail')}</summary>
           <pre>{error.detail}</pre>
         </details>
       ) : null}

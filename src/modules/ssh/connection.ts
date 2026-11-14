@@ -2,6 +2,7 @@ import ssh2 from 'ssh2';
 import type { Client, ClientChannel } from 'ssh2';
 import type { Duplex } from 'node:stream';
 import { ProductError, normalizeError } from '../../core/errors.ts';
+import { t } from '../../shared/i18n/index.ts';
 import { fingerprintOf } from './fingerprint.ts';
 import { connectViaProxy } from './proxy.ts';
 import type { SshTarget } from './target.ts';
@@ -92,7 +93,8 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
     // 端口拒绝、DNS 失败这类错误根本没走到 hostVerifier，照实归一。
     if (observedFingerprint && !expected) {
       throw new ProductError('HOST_KEY_CHANGED', {
-        message: '首次连接需要确认主机指纹',
+        message: t('error.hostKeyFirst.message'),
+        reason: 'first',
         detail: `观察到的主机指纹 ${observedFingerprint}`,
         host: target.host,
         port: target.port,

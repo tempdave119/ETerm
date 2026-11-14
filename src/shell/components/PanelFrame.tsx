@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Settings2, X } from 'lucide-react';
 import { DOCK_IDS, type DockId, type PanelId } from '../../shared/panels.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 
-const DOCK_LABEL: Record<DockId, string> = { left: '左侧', right: '右侧', bottom: '底部' };
+const DOCK_LABEL: Record<DockId, MessageKey> = {
+  left: 'panel.dock.left',
+  right: 'panel.dock.right',
+  bottom: 'panel.dock.bottom',
+};
 
 interface PanelFrameProps {
   panelId: PanelId;
@@ -67,8 +72,8 @@ export function PanelFrame({
             <button
               className="icon-button"
               type="button"
-              title="面板位置"
-              aria-label="面板位置"
+              title={t('panel.move')}
+              aria-label={t('panel.move')}
               data-testid={`panel-menu-${panelId}`}
               onClick={() => setMenuOpen((value) => !value)}
             >
@@ -77,8 +82,8 @@ export function PanelFrame({
             <button
               className="icon-button"
               type="button"
-              title={`关闭${title}`}
-              aria-label={`关闭${title}`}
+              title={t('panel.close', { name: title })}
+              aria-label={t('panel.close', { name: title })}
               data-testid={`panel-close-${panelId}`}
               onClick={() => onMove(null)}
             >
@@ -101,7 +106,7 @@ export function PanelFrame({
                     onReorder(-1);
                   }}
                 >
-                  上移
+                  {t('panel.moveUp')}
                 </button>
                 <button
                   className="panel-menu__item"
@@ -114,7 +119,7 @@ export function PanelFrame({
                     onReorder(1);
                   }}
                 >
-                  下移
+                  {t('panel.moveDown')}
                 </button>
               </>
             ) : null}
@@ -128,11 +133,11 @@ export function PanelFrame({
                 disabled={target === dock}
                 onClick={() => pick(target)}
               >
-                {DOCK_LABEL[target]}
+                {t(DOCK_LABEL[target])}
               </button>
             ))}
             <button className="panel-menu__item" type="button" role="menuitem" onClick={() => pick(null)}>
-              关闭
+              {t('panel.menuClose')}
             </button>
           </div>
         ) : null}

@@ -1,5 +1,6 @@
 import type { CapabilityModule } from '../../core/manifest.ts';
 import type { ExitInfo, SessionPort } from '../../core/ports.ts';
+import { commandFromTarget, resolveLocalCommand } from '../../shared/local-command.ts';
 
 // 主进程以 CJS 打包，运行时 require 可用；延迟加载原生模块，纯逻辑测试不依赖 PTY。
 function loadPty(): typeof import('node-pty') {
@@ -7,6 +8,13 @@ function loadPty(): typeof import('node-pty') {
 }
 
 const LOGIN_SHELL = process.env.SHELL ?? '/bin/zsh';
+
+/** target 里的启动命令由设置写入；空值时回落到系统登录 shell。 */
+function launchOf(target: unknown): { file: string; args: string[]; label: string } {
+  const command = commandFromTarget(target);
+  const launch = resolveLocalCommand(command, LOGIN_SHELL);
+  return { ...launch, label: command || `${LOGIN_SHELL} -l` };
+}
 
 export const localTerminalModule: CapabilityModule = {
   id: 'core-local-terminal',
@@ -22,7 +30,8 @@ export const localTerminalModule: CapabilityModule = {
       exports: {
         openSession(options) {
           const pty = loadPty();
-          const proc = pty.spawn(LOGIN_SHELL, ['-l'], {
+          const launch = launchOf(options.target);
+          const proc = pty.spawn(launch.file, launch.args, {
             name: 'xterm-256color',
             cols: options.cols,
             rows: options.rows,
@@ -78,7 +87,7 @@ export const localTerminalModule: CapabilityModule = {
             },
           };
 
-          ctx.log.info(`本地终端已启动 pid=${proc.pid}`);
+          ctx.log.info(`本地终端已启动 pid=${proc.pid} cmd=${launch.label}`);
           return { session };
         },
       },

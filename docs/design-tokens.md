@@ -59,10 +59,19 @@ description: "F-15 交付物：设计 token 清单、控件五态规则、密度
 
 `data-density="compact"` 只覆盖三个尺寸 token（行高、控件高、面板头高），不改颜色与字号。新增控件必须用这三个 token 定高，才能跟着密度一起变。
 
+## 文案与 i18n
+
+- 界面文案一律走 `t('key')`，禁止在组件里写中文字符串；字典在 `src/shared/i18n/zh-CN.ts` / `en-US.ts`，新增 key 必须两份同步（类型会强制）。
+- key 用点分命名，按模块分组：`common.*` / `error.*` / `menu.*` / `tree.*` / `files.*` / `transfer.*` / `monitor.*` / `settings.*` / `connection.*` / `forward.*` / `tab.*`。
+- 插值用 `{name}` 占位符，不拼字符串；数量类文案在字典里写全（如 `{count} 秒` / `{count}s`）。
+- 不翻：源码注释、`docs/` 与 `_pm/` 文档、外挂组件自带的 label / options。
+- 错误码只存 key，界面用 `ProductError.toInfo()` 按当前语言取文案；需要分支判断的差异用结构化字段（如 `reason`），不得匹配文案。
+
 ## 约束
 
 - 禁止在组件里写十六进制颜色；例外只有 xterm 的两套调色板。
 - 禁止新增字号；需要层级时用字重与颜色区分。
 - 新增颜色必须同时给出深 / 浅两套值，并走 `data-theme` 覆盖。
 - 控件五态缺一不可；新增控件先在 `app.css` 补齐五态再接到界面。
+- 新增界面文案必须同时补两份字典，并跑一次 `npm run smoke` 的中英切换断言。
 - 验证：`npm run smoke` 覆盖设置面板即时生效、主题切换（断言 `data-theme` 与背景色）、字号恢复与分隔条拖拽落盘；`npm run typecheck` 守住组件属性。

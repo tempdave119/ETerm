@@ -1,11 +1,13 @@
 /**
  * 应用菜单模板：纯函数，主进程装配与单测共用。
- * accelerator 跟随用户改键（config.shortcuts.overrides），改完重建菜单即可同步。
+ * accelerator 跟随用户改键（config.shortcuts.overrides），改完重建菜单即可同步；
+ * 文案走 t()，随界面语言重建。
  */
 
 import type { MenuItemConstructorOptions } from 'electron';
 import type { CommandId } from '../shared/commands.ts';
 import type { MenuCommand } from '../shared/ipc.ts';
+import { t } from '../shared/i18n/index.ts';
 import type { ResolvedShortcuts, ShortcutSpec } from '../shared/shortcut.ts';
 
 /** event.code 转 Electron accelerator；不认识的键返回 undefined（菜单项不带快捷键）。 */
@@ -65,66 +67,66 @@ export function buildMenuTemplate(
     {
       label: appName,
       submenu: [
-        { role: 'about', label: `关于 ${appName}` },
+        { role: 'about', label: t('menu.about', { name: appName }) },
         { type: 'separator' },
-        { role: 'services', label: '服务' },
+        { role: 'services', label: t('menu.services') },
         { type: 'separator' },
-        { role: 'hide', label: `隐藏 ${appName}` },
-        { role: 'hideOthers', label: '隐藏其他' },
-        { role: 'unhide', label: '全部显示' },
+        { role: 'hide', label: t('menu.hide', { name: appName }) },
+        { role: 'hideOthers', label: t('menu.hideOthers') },
+        { role: 'unhide', label: t('menu.showAll') },
         { type: 'separator' },
-        { role: 'quit', label: `退出 ${appName}` },
+        { role: 'quit', label: t('menu.quit', { name: appName }) },
       ],
     },
     {
-      label: '文件',
+      label: t('menu.file'),
       submenu: [
-        { label: '新建终端', accelerator: accel('terminal.new'), click: () => run('terminal.new') },
-        { label: '新建连接', accelerator: accel('connection.new'), click: () => run('connection.new') },
+        { label: t('menu.newTerminal'), accelerator: accel('terminal.new'), click: () => run('terminal.new') },
+        { label: t('menu.newConnection'), accelerator: accel('connection.new'), click: () => run('connection.new') },
         { type: 'separator' },
-        { label: '关闭标签', accelerator: accel('tab.close'), click: () => run('tab.close') },
+        { label: t('menu.closeTab'), accelerator: accel('tab.close'), click: () => run('tab.close') },
       ],
     },
     {
-      label: '编辑',
+      label: t('menu.edit'),
       // xterm 是 canvas 渲染，role 的 DOM 复制拿不到选区；而注册 ⌘C / ⌘V 会抢走
       // 输入框里的系统复制粘贴。所以只做菜单入口，键盘路径留给终端与浏览器默认行为。
       submenu: [
-        { label: '复制', click: () => run('edit.copy') },
-        { label: '粘贴', click: () => run('edit.paste') },
-        { label: '全选', click: () => run('edit.selectAll') },
+        { label: t('common.copy'), click: () => run('edit.copy') },
+        { label: t('common.paste'), click: () => run('edit.paste') },
+        { label: t('common.selectAll'), click: () => run('edit.selectAll') },
       ],
     },
     {
-      label: '视图',
+      label: t('menu.view'),
       submenu: [
-        { label: '切换文件面板', accelerator: accel('files.toggle'), click: () => run('files.toggle') },
-        { label: '切换系统资源面板', accelerator: accel('panel.monitor'), click: () => run('panel.monitor') },
+        { label: t('menu.toggleFiles'), accelerator: accel('files.toggle'), click: () => run('files.toggle') },
+        { label: t('menu.toggleMonitor'), accelerator: accel('panel.monitor'), click: () => run('panel.monitor') },
         { type: 'separator' },
-        { label: '左右分屏', accelerator: accel('pane.split-row'), click: () => run('pane.split-row') },
-        { label: '上下分屏', accelerator: accel('pane.split-column'), click: () => run('pane.split-column') },
-        { label: '关闭当前窗格', accelerator: accel('pane.close'), click: () => run('pane.close') },
+        { label: t('menu.splitRow'), accelerator: accel('pane.split-row'), click: () => run('pane.split-row') },
+        { label: t('menu.splitColumn'), accelerator: accel('pane.split-column'), click: () => run('pane.split-column') },
+        { label: t('menu.closePane'), accelerator: accel('pane.close'), click: () => run('pane.close') },
         { type: 'separator' },
-        { label: '端口转发…', accelerator: accel('forward.open'), click: () => run('forward.open') },
-        { label: '设置…', accelerator: accel('settings.open'), click: () => run('settings.open') },
-        { label: '命令面板…', accelerator: accel('palette.open'), click: () => run('palette.open') },
+        { label: t('menu.forwards'), accelerator: accel('forward.open'), click: () => run('forward.open') },
+        { label: t('menu.settings'), accelerator: accel('settings.open'), click: () => run('settings.open') },
+        { label: t('menu.palette'), accelerator: accel('palette.open'), click: () => run('palette.open') },
       ],
     },
     {
-      label: '窗口',
+      label: t('menu.window'),
       submenu: [
-        { role: 'minimize', label: '最小化' },
-        { role: 'zoom', label: '缩放' },
+        { role: 'minimize', label: t('menu.minimize') },
+        { role: 'zoom', label: t('menu.zoom') },
         { type: 'separator' },
-        { role: 'front', label: '前置全部窗口' },
+        { role: 'front', label: t('menu.front') },
       ],
     },
     {
-      label: '帮助',
+      label: t('menu.help'),
       submenu: [
-        { label: '打开配置目录', click: () => actions.openDataDir() },
+        { label: t('menu.openDataDir'), click: () => actions.openDataDir() },
         { type: 'separator' },
-        { label: `关于 ${appName}`, click: () => actions.showAbout() },
+        { label: t('menu.about', { name: appName }), click: () => actions.showAbout() },
       ],
     },
   ];

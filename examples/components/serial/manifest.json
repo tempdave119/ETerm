@@ -7,14 +7,57 @@
   "ui": {
     "label": "串口",
     "fields": [
-      { "key": "path", "label": "设备路径", "placeholder": "/dev/tty.usbserial-0001", "required": true },
+      {
+        "key": "path",
+        "label": "设备",
+        "type": "select",
+        "optionsSource": "serial-devices",
+        "required": true
+      },
       {
         "key": "baudRate",
         "label": "波特率",
         "type": "select",
-        "options": ["9600", "19200", "38400", "57600", "115200"],
+        "options": ["300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400"],
         "default": "115200"
-      }
+      },
+      {
+        "key": "dataBits",
+        "label": "数据位",
+        "type": "select",
+        "options": ["5", "6", "7", "8"],
+        "default": "8"
+      },
+      {
+        "key": "stopBits",
+        "label": "停止位",
+        "type": "select",
+        "options": ["1", "2"],
+        "default": "1"
+      },
+      {
+        "key": "parity",
+        "label": "校验",
+        "type": "select",
+        "options": ["none", "even", "odd"],
+        "default": "none"
+      },
+      {
+        "key": "flowControl",
+        "label": "流控",
+        "type": "select",
+        "options": ["none", "rtscts", "xonxoff"],
+        "default": "none"
+      },
+      {
+        "key": "lineEnding",
+        "label": "回车发送",
+        "type": "select",
+        "options": ["cr", "lf", "crlf"],
+        "default": "crlf"
+      },
+      { "key": "dtr", "label": "DTR", "type": "boolean", "default": "true" },
+      { "key": "rts", "label": "RTS", "type": "boolean", "default": "true" }
     ]
   }
 }

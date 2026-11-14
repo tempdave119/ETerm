@@ -4,6 +4,7 @@
  */
 
 import { COMMANDS, type CommandDefinition, type CommandId } from '../../shared/commands.ts';
+import { t } from '../../shared/i18n/index.ts';
 import type { ShortcutSpec } from '../../shared/shortcut.ts';
 
 export { COMMANDS };
@@ -35,7 +36,7 @@ export function filterCommands(query: string): CommandDefinition[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [...COMMANDS];
   return COMMANDS.filter((command) =>
-    [command.title, ...command.keywords].some((text) => text.toLowerCase().includes(needle)),
+    [t(command.titleKey), ...command.keywords].some((text) => text.toLowerCase().includes(needle)),
   );
 }
 

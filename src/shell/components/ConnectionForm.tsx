@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import type {
   ComponentDescriptor,
   ComponentField,
   ConnectionInput,
   ConnectionRecord,
   GroupRecord,
+  SerialDevice,
 } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 
 export interface FormSecrets {
   password?: string;
@@ -54,9 +57,26 @@ export function ConnectionForm({
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [serialDevices, setSerialDevices] = useState<SerialDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
 
   const isSsh = protocol === 'ssh';
   const component = components.find((item) => item.protocol === protocol) ?? null;
+  const needsDevices = Boolean(component?.fields.some((field) => field.optionsSource === 'serial-devices'));
+
+  const refreshSerialDevices = useCallback(async (): Promise<void> => {
+    setDevicesLoading(true);
+    try {
+      const result = await window.eterm.listSerialDevices();
+      setSerialDevices(result.ok ? result.value : []);
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (needsDevices) void refreshSerialDevices();
+  }, [needsDevices, refreshSerialDevices]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -85,14 +105,14 @@ export function ConnectionForm({
 
   const submit = (connectAfter: boolean): void => {
     setLocalError(null);
-    if (!name.trim()) return setLocalError('请填写连接名称');
+    if (!name.trim()) return setLocalError(t('connection.nameRequired'));
 
     const noteValue = note.trim() || null;
 
     if (!isSsh) {
       for (const field of component?.fields ?? []) {
         if (field.required && !(options[field.key] ?? '').trim()) {
-          return setLocalError(`请填写${field.label}`);
+          return setLocalError(t('connection.fieldRequired', { name: field.label }));
         }
       }
       onSubmit(
@@ -111,22 +131,22 @@ export function ConnectionForm({
     }
 
     const portNumber = Number(port);
-    if (!host.trim()) return setLocalError('请填写主机');
-    if (!username.trim()) return setLocalError('请填写用户名');
+    if (!host.trim()) return setLocalError(t('connection.hostRequired'));
+    if (!username.trim()) return setLocalError(t('connection.userRequired'));
     if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
-      return setLocalError('端口必须是 1–65535 的整数');
+      return setLocalError(t('connection.portInvalid'));
     }
     if (auth === 'password' && !hasStoredPassword && !password) {
-      return setLocalError('请填写密码');
+      return setLocalError(t('connection.passwordRequired'));
     }
     if (auth === 'key' && !keyPath.trim()) {
-      return setLocalError('请选择私钥文件路径');
+      return setLocalError(t('connection.keyRequired'));
     }
     if (proxyType !== 'none') {
-      if (!proxyHost.trim()) return setLocalError('请填写代理地址');
+      if (!proxyHost.trim()) return setLocalError(t('connection.proxyHostRequired'));
       const proxyPortNumber = Number(proxyPort);
       if (!Number.isInteger(proxyPortNumber) || proxyPortNumber < 1 || proxyPortNumber > 65535) {
-        return setLocalError('代理端口必须是 1–65535 的整数');
+        return setLocalError(t('connection.proxyPortInvalid'));
       }
     }
 
@@ -158,25 +178,25 @@ export function ConnectionForm({
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal modal--form" role="dialog" aria-modal="true" aria-label={editing ? '编辑连接' : '新建连接'}>
-        <h2 className="modal__title">{editing ? '编辑连接' : '新建连接'}</h2>
+      <div className="modal modal--form" role="dialog" aria-modal="true" aria-label={editing ? t('connection.edit') : t('connection.new')}>
+        <h2 className="modal__title">{editing ? t('connection.edit') : t('connection.new')}</h2>
 
         <div className="form-body">
           <div className="form-columns">
             <div className="form-row">
-              <label htmlFor="connection-name">名称</label>
+              <label htmlFor="connection-name">{t('connection.name')}</label>
               <input
                 id="connection-name"
                 autoFocus
                 value={name}
-                placeholder="例如：生产 web-01"
+                placeholder={t('connection.namePlaceholder')}
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
             <div className="form-row">
-              <label htmlFor="connection-group">分组</label>
+              <label htmlFor="connection-group">{t('connection.group')}</label>
               <select id="connection-group" value={groupId} onChange={(event) => setGroupId(event.target.value)}>
-                <option value="">未分组</option>
+                <option value="">{t('connection.ungrouped')}</option>
                 {groups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
@@ -188,7 +208,7 @@ export function ConnectionForm({
 
           <div className="form-columns">
             <div className="form-row">
-              <label htmlFor="connection-protocol">协议</label>
+              <label htmlFor="connection-protocol">{t('connection.protocol')}</label>
               <select
                 id="connection-protocol"
                 data-testid="connection-protocol"
@@ -201,20 +221,20 @@ export function ConnectionForm({
                     {item.label}
                   </option>
                 ))}
-                {!isSsh && !component ? <option value={protocol}>{protocol}（组件未装载）</option> : null}
+                {!isSsh && !component ? <option value={protocol}>{t('connection.protocolUnloaded', { protocol })}</option> : null}
               </select>
             </div>
             {isSsh ? (
               <div className="form-row">
-                <label htmlFor="connection-auth">认证方式</label>
+                <label htmlFor="connection-auth">{t('connection.auth')}</label>
                 <select
                   id="connection-auth"
                   value={auth}
                   onChange={(event) => setAuth(event.target.value as ConnectionInput['auth'] ?? 'password')}
                 >
-                  <option value="password">密码</option>
-                  <option value="key">私钥</option>
-                  <option value="agent">SSH agent</option>
+                  <option value="password">{t('connection.auth.password')}</option>
+                  <option value="key">{t('connection.auth.key')}</option>
+                  <option value="agent">{t('connection.auth.agent')}</option>
                 </select>
               </div>
             ) : null}
@@ -224,16 +244,16 @@ export function ConnectionForm({
             <>
               <div className="form-columns">
                 <div className="form-row">
-                  <label htmlFor="connection-host">主机</label>
+                  <label htmlFor="connection-host">{t('connection.host')}</label>
                   <input
                     id="connection-host"
                     value={host}
-                    placeholder="10.0.0.1 或 example.com"
+                    placeholder={t('connection.hostPlaceholder')}
                     onChange={(event) => setHost(event.target.value)}
                   />
                 </div>
                 <div className="form-row">
-                  <label htmlFor="connection-port">端口</label>
+                  <label htmlFor="connection-port">{t('connection.port')}</label>
                   <input
                     id="connection-port"
                     value={port}
@@ -245,7 +265,7 @@ export function ConnectionForm({
 
               <div className="form-columns">
                 <div className="form-row">
-                  <label htmlFor="connection-user">用户名</label>
+                  <label htmlFor="connection-user">{t('connection.username')}</label>
                   <input
                     id="connection-user"
                     value={username}
@@ -255,18 +275,18 @@ export function ConnectionForm({
                 </div>
                 {auth === 'password' ? (
                   <div className="form-row">
-                    <label htmlFor="connection-password">密码</label>
+                    <label htmlFor="connection-password">{t('connection.password')}</label>
                     <input
                       id="connection-password"
                       type="password"
                       value={password}
-                      placeholder={hasStoredPassword ? '已保存，留空保持不变' : '登录密码'}
+                      placeholder={hasStoredPassword ? t('connection.passwordStored') : t('connection.passwordPlaceholder')}
                       onChange={(event) => setPassword(event.target.value)}
                     />
                   </div>
                 ) : auth === 'key' ? (
                   <div className="form-row">
-                    <label htmlFor="connection-key">私钥路径</label>
+                    <label htmlFor="connection-key">{t('connection.keyPath')}</label>
                     <input
                       id="connection-key"
                       value={keyPath}
@@ -280,30 +300,30 @@ export function ConnectionForm({
               {auth === 'key' ? (
                 <div className="form-columns">
                   <div className="form-row">
-                    <label htmlFor="connection-passphrase">私钥口令</label>
+                    <label htmlFor="connection-passphrase">{t('connection.passphrase')}</label>
                     <input
                       id="connection-passphrase"
                       type="password"
                       value={passphrase}
-                      placeholder={hasStoredPassphrase ? '已保存，留空保持不变' : '没有口令可留空'}
+                      placeholder={hasStoredPassphrase ? t('connection.passwordStored') : t('connection.passphrasePlaceholder')}
                       onChange={(event) => setPassphrase(event.target.value)}
                     />
                   </div>
                 </div>
               ) : null}
 
-              {auth === 'agent' ? <p className="form-hint">使用当前 SSH_AUTH_SOCK；没有启动 agent 时会提示。</p> : null}
+              {auth === 'agent' ? <p className="form-hint">{t('connection.agentHint')}</p> : null}
 
               <div className="form-columns">
                 <div className="form-row">
-                  <label htmlFor="connection-jump">经由跳板机</label>
+                  <label htmlFor="connection-jump">{t('connection.jump')}</label>
                   <select
                     id="connection-jump"
                     data-testid="connection-jump"
                     value={jumpConnectionId}
                     onChange={(event) => setJumpConnectionId(event.target.value)}
                   >
-                    <option value="">不使用</option>
+                    <option value="">{t('connection.jumpNone')}</option>
                     {connections
                       .filter((connection) => connection.protocol === 'ssh' && connection.id !== editing?.id)
                       .map((connection) => (
@@ -314,16 +334,16 @@ export function ConnectionForm({
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="connection-proxy-type">代理</label>
+                  <label htmlFor="connection-proxy-type">{t('connection.proxy')}</label>
                   <select
                     id="connection-proxy-type"
                     data-testid="connection-proxy-type"
                     value={proxyType}
                     onChange={(event) => setProxyType(event.target.value as 'none' | 'http' | 'socks5')}
                   >
-                    <option value="none">不使用</option>
-                    <option value="http">HTTP 代理</option>
-                    <option value="socks5">SOCKS5 代理</option>
+                    <option value="none">{t('connection.proxyNone')}</option>
+                    <option value="http">{t('connection.proxyHttp')}</option>
+                    <option value="socks5">{t('connection.proxySocks5')}</option>
                   </select>
                 </div>
               </div>
@@ -332,7 +352,7 @@ export function ConnectionForm({
                 <>
                   <div className="form-columns">
                     <div className="form-row">
-                      <label htmlFor="connection-proxy-host">代理地址</label>
+                      <label htmlFor="connection-proxy-host">{t('connection.proxyHost')}</label>
                       <input
                         id="connection-proxy-host"
                         value={proxyHost}
@@ -341,7 +361,7 @@ export function ConnectionForm({
                       />
                     </div>
                     <div className="form-row">
-                      <label htmlFor="connection-proxy-port">端口</label>
+                      <label htmlFor="connection-proxy-port">{t('connection.proxyPort')}</label>
                       <input
                         id="connection-proxy-port"
                         value={proxyPort}
@@ -350,7 +370,7 @@ export function ConnectionForm({
                       />
                     </div>
                   </div>
-                  <p className="form-hint">代理只用于直连；已设置跳板机时忽略。首版不支持代理认证。</p>
+                  <p className="form-hint">{t('connection.proxyHint')}</p>
                 </>
               ) : null}
             </>
@@ -364,23 +384,26 @@ export function ConnectionForm({
                     key={field.key}
                     field={field}
                     value={options[field.key] ?? field.default ?? ''}
+                    devices={serialDevices}
+                    devicesLoading={devicesLoading}
+                    onRefreshDevices={() => void refreshSerialDevices()}
                     onChange={(value) => setOption(field.key, value)}
                   />
                 ))}
               </div>
-              <p className="form-hint">字段由组件「{component.label}」提供，宿主只负责保存与透传。</p>
+              <p className="form-hint">{t('connection.optionsHint', { name: component.label })}</p>
             </>
           ) : null}
 
           <div className="form-row">
-            <label htmlFor="connection-note">备注</label>
+            <label htmlFor="connection-note">{t('connection.note')}</label>
             <textarea
               id="connection-note"
               data-testid="connection-note"
               rows={3}
               maxLength={200}
               value={note}
-              placeholder="可选，例如用途说明"
+              placeholder={t('connection.notePlaceholder')}
               onChange={(event) => setNote(event.target.value)}
             />
           </div>
@@ -390,7 +413,7 @@ export function ConnectionForm({
 
         <div className="modal__actions">
           <button className="button" type="button" onClick={onCancel} disabled={submitting}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             className="button"
@@ -399,7 +422,7 @@ export function ConnectionForm({
             onClick={() => submit(false)}
             disabled={submitting}
           >
-            保存
+            {t('connection.save')}
           </button>
           <button
             className="button button--primary"
@@ -408,7 +431,7 @@ export function ConnectionForm({
             onClick={() => submit(true)}
             disabled={submitting}
           >
-            保存并连接
+            {t('connection.saveConnect')}
           </button>
         </div>
       </div>
@@ -419,13 +442,67 @@ export function ConnectionForm({
 function ComponentFieldRow({
   field,
   value,
+  devices,
+  devicesLoading,
+  onRefreshDevices,
   onChange,
 }: {
   field: ComponentField;
   value: string;
+  devices: SerialDevice[];
+  devicesLoading: boolean;
+  onRefreshDevices(): void;
   onChange(value: string): void;
 }) {
   const id = `connection-option-${field.key}`;
+
+  if (field.type === 'boolean') {
+    return (
+      <label className="settings-check">
+        <input
+          type="checkbox"
+          data-testid={id}
+          checked={value !== 'false'}
+          onChange={(event) => onChange(event.target.checked ? 'true' : 'false')}
+        />
+        {field.label}
+      </label>
+    );
+  }
+
+  // 动态选项由宿主提供（串口设备列表），组件只声明 optionsSource。
+  if (field.optionsSource === 'serial-devices') {
+    return (
+      <div className="form-row">
+        <label htmlFor={id}>{field.label}</label>
+        <div className="form-row__control">
+          <select id={id} data-testid={id} value={value} onChange={(event) => onChange(event.target.value)}>
+            {devices.length === 0 ? <option value="">{t('connection.devices.empty')}</option> : null}
+            {value && !devices.some((device) => device.path === value) ? (
+              <option value={value}>{t('connection.devices.missing', { path: value })}</option>
+            ) : null}
+            {devices.map((device) => (
+              <option key={device.path} value={device.path} title={device.path}>
+                {device.label}
+              </option>
+            ))}
+          </select>
+          <button
+            className="icon-button"
+            type="button"
+            title={t('connection.devices.refresh')}
+            aria-label={t('connection.devices.refresh')}
+            data-testid={`${id}-refresh`}
+            disabled={devicesLoading}
+            onClick={onRefreshDevices}
+          >
+            <RefreshCw size={13} strokeWidth={1.5} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="form-row">
       <label htmlFor={id}>{field.label}</label>

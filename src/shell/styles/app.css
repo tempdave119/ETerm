@@ -939,6 +939,18 @@ button {
   font-size: var(--font-body);
 }
 
+.form-row__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.form-row__control select {
+  flex: 1;
+  min-width: 0;
+}
+
 .form-row textarea {
   min-height: 64px;
   padding: 6px var(--space-base);

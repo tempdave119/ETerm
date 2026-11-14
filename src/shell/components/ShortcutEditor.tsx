@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { COMMANDS, shortcutLabel, type CommandDefinition, type CommandId } from '../commands/registry.ts';
 import { findConflictIds, shortcutFromEvent, type ResolvedShortcuts } from '../commands/resolve.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 import type { ShortcutOverrides } from '../../shared/shortcut.ts';
 
 interface ShortcutEditorProps {
@@ -10,10 +11,10 @@ interface ShortcutEditorProps {
   onChange(next: ShortcutOverrides): void;
 }
 
-const GROUPS = COMMANDS.reduce<{ group: string; commands: CommandDefinition[] }[]>((list, command) => {
-  const existing = list.find((item) => item.group === command.group);
+const GROUPS = COMMANDS.reduce<{ groupKey: MessageKey; commands: CommandDefinition[] }[]>((list, command) => {
+  const existing = list.find((item) => item.groupKey === command.groupKey);
   if (existing) existing.commands.push(command);
-  else list.push({ group: command.group, commands: [command] });
+  else list.push({ groupKey: command.groupKey, commands: [command] });
   return list;
 }, []);
 
@@ -36,7 +37,7 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
       }
       const spec = shortcutFromEvent(event);
       if (!spec) {
-        setHint('只支持 ⌘ 组合；⌘Q / ⌘H / ⌘M / ⌘Tab 等系统键不可绑定');
+        setHint(t('settings.shortcuts.invalid'));
         return;
       }
       onChange({ ...overrides, [recording]: spec });
@@ -50,7 +51,7 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
   return (
     <div className="shortcut-editor">
       <div className="shortcut-editor__header">
-        <p className="form-hint">点快捷键后按下新组合，Esc 取消。只支持 ⌘ 组合，Ctrl 留给终端。</p>
+        <p className="form-hint">{t('settings.shortcuts.hint')}</p>
         <button
           className="button"
           type="button"
@@ -58,26 +59,26 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
           disabled={Object.keys(overrides).length === 0}
           onClick={() => onChange({})}
         >
-          恢复默认快捷键
+          {t('settings.shortcuts.reset')}
         </button>
       </div>
 
       {hint ? <p className="form-error" data-testid="shortcut-hint">{hint}</p> : null}
       {conflicts.size > 0 ? (
         <p className="form-error" data-testid="shortcut-conflict">
-          有 {conflicts.size} 条快捷键冲突，解决后才能保存。
+          {t('settings.shortcuts.conflict', { count: conflicts.size })}
         </p>
       ) : null}
 
-      {GROUPS.map(({ group, commands }) => (
-        <div className="shortcut-group" key={group}>
-          <div className="settings-subtitle">{group}</div>
+      {GROUPS.map(({ groupKey, commands }) => (
+        <div className="shortcut-group" key={groupKey}>
+          <div className="settings-subtitle">{t(groupKey)}</div>
           {commands.map((command) => {
             const spec = resolved[command.id] ?? null;
             const active = recording === command.id;
             return (
               <div className="shortcut-row" key={command.id} data-testid={`shortcut-row-${command.id}`}>
-                <span className="shortcut-row__title">{command.title}</span>
+                <span className="shortcut-row__title">{t(command.titleKey)}</span>
                 <button
                   className="shortcut-key"
                   type="button"
@@ -89,7 +90,7 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
                     setRecording(active ? null : command.id);
                   }}
                 >
-                  {active ? '按下新组合…' : spec ? shortcutLabel(spec) : '未绑定'}
+                  {active ? t('settings.shortcuts.recording') : spec ? shortcutLabel(spec) : t('settings.shortcuts.unbound')}
                 </button>
                 <button
                   className="link-button"
@@ -98,7 +99,7 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
                   disabled={!spec}
                   onClick={() => onChange({ ...overrides, [command.id]: null })}
                 >
-                  解绑
+                  {t('settings.shortcuts.unbind')}
                 </button>
               </div>
             );

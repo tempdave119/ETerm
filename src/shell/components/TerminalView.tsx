@@ -4,6 +4,7 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import type { RightClickAction } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
 
@@ -188,8 +189,8 @@ export function TerminalView({
       onExit: (info) => {
         const line =
           info.reason === 'network'
-            ? '\r\n\x1b[2m[连接断开，正在重连…]\x1b[0m\r\n'
-            : `\r\n\x1b[2m[进程已退出，代码 ${info.code ?? '未知'}]\x1b[0m\r\n`;
+            ? `\r\n\x1b[2m${t('terminal.disconnected')}\x1b[0m\r\n`
+            : `\r\n\x1b[2m${t('terminal.exited', { code: info.code ?? t('terminal.unknownCode') })}\x1b[0m\r\n`;
         term.write(line);
       },
     });
@@ -287,7 +288,7 @@ export function TerminalView({
                   setMenu(null);
                 }}
               >
-                复制
+                {t('common.copy')}
               </button>
               <button
                 className="terminal-menu__item"
@@ -298,7 +299,7 @@ export function TerminalView({
                   setMenu(null);
                 }}
               >
-                粘贴
+                {t('common.paste')}
               </button>
               <button
                 className="terminal-menu__item"
@@ -309,7 +310,7 @@ export function TerminalView({
                   setMenu(null);
                 }}
               >
-                全选
+                {t('common.selectAll')}
               </button>
               <button
                 className="terminal-menu__item"
@@ -320,7 +321,7 @@ export function TerminalView({
                   setMenu(null);
                 }}
               >
-                清屏
+                {t('terminal.clear')}
               </button>
             </div>,
             document.body,

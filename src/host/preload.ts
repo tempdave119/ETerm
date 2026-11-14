@@ -13,6 +13,7 @@ import {
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
   MENU_IPC,
+  SERIAL_IPC,
   SYSTEM_IPC,
   TRANSFERS_IPC,
   type AppConfig,
@@ -34,6 +35,7 @@ import {
   type OpenedSession,
   type PanelLayout,
   type SecretKind,
+  type SerialDevice,
   type SystemStats,
   type TransferView,
 } from '../shared/ipc.ts';
@@ -170,6 +172,7 @@ const api: EtermApi = {
   },
 
   listComponents: () => ipcRenderer.invoke(COMPONENTS_IPC.list) as Promise<IpcResult<ComponentDescriptor[]>>,
+  listSerialDevices: () => ipcRenderer.invoke(SERIAL_IPC.list) as Promise<IpcResult<SerialDevice[]>>,
 };
 
 contextBridge.exposeInMainWorld('eterm', api);

@@ -11,6 +11,7 @@ const CWD_MAX = 4096;
 const DATA_MAX = 1_000_000;
 const ENV_ENTRIES_MAX = 64;
 const ENV_VALUE_MAX = 8192;
+const TARGET_MAX = 8192;
 
 function success<T>(value: T): IpcResult<T> {
   return { ok: true, value };
@@ -36,6 +37,13 @@ function readOpenOptions(raw: unknown): SessionOpenOptions {
     options.env = Object.fromEntries(
       entries.map(([key, envValue]) => [key, readString(envValue, `env.${key}`, ENV_VALUE_MAX)]),
     );
+  }
+
+  // target 是协议私有参数，边界层不解释字段；只要求是对象并限制体积。
+  if (value.target !== undefined) {
+    const target = readRecord(value.target, 'target');
+    if (JSON.stringify(target).length > TARGET_MAX) throw new Error('target 参数过大');
+    options.target = target;
   }
 
   return options;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { DockId } from '../../shared/panels.ts';
 import type { SystemStats } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 import { PanelFrame } from './PanelFrame.tsx';
 
 interface MonitorPanelProps {
@@ -76,7 +77,7 @@ export function MonitorPanel({
   return (
     <PanelFrame
       panelId="monitor"
-      title="系统资源"
+      title={t('panel.monitor')}
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
@@ -86,13 +87,13 @@ export function MonitorPanel({
       <div className="monitor-panel__body">
         <div className={`monitor-source ${sessionId ? 'monitor-source--remote' : ''}`} data-testid="monitor-source">
           <span className="monitor-source__badge" data-testid="monitor-source-badge">
-            {sessionId ? '远端' : '本机'}
+            {sessionId ? t('monitor.remote') : t('monitor.local')}
           </span>
           <span className="monitor-source__name" title={connectionName ?? targetLabel} data-testid="monitor-source-name">
-            {connectionName ?? (sessionId ? '远端主机' : '这台 Mac')}
+            {connectionName ?? (sessionId ? t('app.remoteHost') : t('app.thisMac'))}
           </span>
           <span className="monitor-source__host" data-testid="monitor-hostname">
-            {stats?.hostname ?? '—'}
+            {stats?.hostname ?? t('common.notAvailable')}
           </span>
           {sessionId ? (
             <span className="monitor-source__target" title={targetLabel}>
@@ -106,7 +107,7 @@ export function MonitorPanel({
             {error}
           </div>
         ) : !stats ? (
-          <div className="monitor-loading">正在采样…</div>
+          <div className="monitor-loading">{t('monitor.sampling')}</div>
         ) : (
           <>
             <section className="monitor-section">
@@ -122,14 +123,14 @@ export function MonitorPanel({
                     <span className="monitor-meter__fill" style={{ width: `${stats.cpuPercent}%` }} />
                   </div>
                   <div className="monitor-metric__sub">
-                    <span>{stats.cpus} 核</span>
+                    <span>{t('monitor.cores', { count: stats.cpus })}</span>
                     <span data-testid="monitor-uptime">{formatUptime(stats.uptime)}</span>
                   </div>
                 </div>
 
                 <div className="monitor-metric">
                   <div className="monitor-metric__head">
-                    <span className="monitor-metric__label">内存</span>
+                    <span className="monitor-metric__label">{t('monitor.memory')}</span>
                     <strong className="monitor-metric__value" data-testid="monitor-memory-percent">
                       {memoryPercent}%
                     </strong>
@@ -146,7 +147,7 @@ export function MonitorPanel({
               </div>
 
               <div className="monitor-fact-row">
-                <span>负载</span>
+                <span>{t('monitor.load')}</span>
                 <span className="monitor-row__value" data-testid="monitor-load">
                   {stats.load.map((value) => value.toFixed(2)).join(' / ')}
                 </span>
@@ -155,7 +156,7 @@ export function MonitorPanel({
 
             {stats.filesystems?.length ? (
               <section className="monitor-section" data-testid="monitor-filesystems">
-                <div className="monitor-section-title">文件系统</div>
+                <div className="monitor-section-title">{t('monitor.filesystems')}</div>
                 {stats.filesystems.map((item) => {
                   const percent = item.total > 0 ? Math.min(100, Math.round((item.used / item.total) * 100)) : 0;
                   const tone = percent >= 90 ? 'danger' : percent >= 80 ? 'warning' : null;
@@ -182,26 +183,26 @@ export function MonitorPanel({
             {processList.length ? (
               <section className="monitor-section" data-testid="monitor-processes" data-sort={processSort}>
                 <div className="monitor-section-head">
-                  <div className="monitor-section-title">占用最高进程</div>
+                  <div className="monitor-section-title">{t('monitor.processes')}</div>
                   <div className="monitor-sort-wrap">
-                    <span className="monitor-sort__label">排序</span>
-                    <div className="monitor-sort" role="group" aria-label="进程排序">
+                    <span className="monitor-sort__label">{t('monitor.sortBy')}</span>
+                    <div className="monitor-sort" role="group" aria-label={t('monitor.sortGroup')}>
                       <button
                         type="button"
                         className={processSort === 'memory' ? 'is-active' : ''}
                         data-testid="process-sort-memory"
                         aria-pressed={processSort === 'memory'}
-                        title="按内存占用排序"
+                        title={t('monitor.sortMemory')}
                         onClick={() => onProcessSortChange('memory')}
                       >
-                        内存
+                        {t('monitor.sort.memory')}
                       </button>
                       <button
                         type="button"
                         className={processSort === 'cpu' ? 'is-active' : ''}
                         data-testid="process-sort-cpu"
                         aria-pressed={processSort === 'cpu'}
-                        title="按 CPU 占用排序"
+                        title={t('monitor.sortCpu')}
                         onClick={() => onProcessSortChange('cpu')}
                       >
                         CPU

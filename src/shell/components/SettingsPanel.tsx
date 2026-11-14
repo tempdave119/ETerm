@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
-import { defaultConfig, type AppConfig, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
+import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import { panelById } from '../panels/registry.ts';
 import { findConflictIds, resolveShortcuts } from '../commands/resolve.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 import { ShortcutEditor } from './ShortcutEditor.tsx';
 import { isDirty } from '../settings-draft.ts';
 
@@ -23,13 +24,13 @@ interface SettingsPanelProps {
 
 type SectionId = 'appearance' | 'terminal' | 'connection' | 'transfer' | 'shortcuts' | 'layout';
 
-const SECTIONS: { id: SectionId; title: string }[] = [
-  { id: 'appearance', title: '外观' },
-  { id: 'terminal', title: '终端' },
-  { id: 'connection', title: '连接' },
-  { id: 'transfer', title: '传输' },
-  { id: 'shortcuts', title: '快捷键' },
-  { id: 'layout', title: '面板布局' },
+const SECTIONS: { id: SectionId; titleKey: MessageKey }[] = [
+  { id: 'appearance', titleKey: 'settings.nav.appearance' },
+  { id: 'terminal', titleKey: 'settings.nav.terminal' },
+  { id: 'connection', titleKey: 'settings.nav.connection' },
+  { id: 'transfer', titleKey: 'settings.nav.transfer' },
+  { id: 'shortcuts', titleKey: 'settings.nav.shortcuts' },
+  { id: 'layout', titleKey: 'settings.nav.layout' },
 ];
 
 const FONT_SIZES = Array.from({ length: 10 }, (_, index) => 11 + index);
@@ -98,10 +99,10 @@ export function SettingsPanel({
   return (
     <div className="modal-backdrop" role="presentation">
       <div className="modal modal--settings" role="dialog" aria-modal="true" aria-label="设置" data-testid="settings-panel">
-        <h2 className="modal__title">设置</h2>
+        <h2 className="modal__title">{t('settings.title')}</h2>
 
         <div className="settings-layout">
-          <nav className="settings-nav" aria-label="设置分类">
+          <nav className="settings-nav" aria-label={t('settings.title')}>
             {SECTIONS.map((item) => (
               <button
                 key={item.id}
@@ -111,7 +112,7 @@ export function SettingsPanel({
                 data-testid={`settings-nav-${item.id}`}
                 onClick={() => setSection(item.id)}
               >
-                {item.title}
+                {t(item.titleKey)}
               </button>
             ))}
           </nav>
@@ -119,9 +120,26 @@ export function SettingsPanel({
           <div className="settings-panel__body" data-testid="settings-body">
             {section === 'appearance' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">外观</h3>
+                <h3 className="settings-group__title">{t('settings.nav.appearance')}</h3>
                 <div className="form-row">
-                  <label htmlFor="settings-theme">主题</label>
+                  <label htmlFor="settings-language">{t('settings.language')}</label>
+                  <select
+                    id="settings-language"
+                    data-testid="settings-language"
+                    value={config.ui.language}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.ui.language = event.target.value as LanguagePreference;
+                      })
+                    }
+                  >
+                    <option value="system">{t('settings.language.system')}</option>
+                    <option value="zh-CN">简体中文</option>
+                    <option value="en-US">English</option>
+                  </select>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="settings-theme">{t('settings.theme')}</label>
                   <select
                     id="settings-theme"
                     data-testid="settings-theme"
@@ -132,13 +150,13 @@ export function SettingsPanel({
                       })
                     }
                   >
-                    <option value="system">跟随系统</option>
-                    <option value="dark">深色</option>
-                    <option value="light">浅色</option>
+                    <option value="system">{t('settings.theme.system')}</option>
+                    <option value="dark">{t('settings.theme.dark')}</option>
+                    <option value="light">{t('settings.theme.light')}</option>
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="settings-density">密度</label>
+                  <label htmlFor="settings-density">{t('settings.density')}</label>
                   <select
                     id="settings-density"
                     data-testid="settings-density"
@@ -149,19 +167,19 @@ export function SettingsPanel({
                       })
                     }
                   >
-                    <option value="comfortable">舒适</option>
-                    <option value="compact">紧凑</option>
+                    <option value="comfortable">{t('settings.density.comfortable')}</option>
+                    <option value="compact">{t('settings.density.compact')}</option>
                   </select>
                 </div>
-                <p className="form-hint">主题与密度改动即时预览，点「保存」才写入配置。</p>
+                <p className="form-hint">{t('settings.appearanceHint')}</p>
               </section>
             ) : null}
 
             {section === 'terminal' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">终端</h3>
+                <h3 className="settings-group__title">{t('settings.nav.terminal')}</h3>
                 <div className="form-row">
-                  <label htmlFor="settings-font-size">字号</label>
+                  <label htmlFor="settings-font-size">{t('settings.fontSize')}</label>
                   <select
                     id="settings-font-size"
                     data-testid="settings-font-size"
@@ -180,7 +198,23 @@ export function SettingsPanel({
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="settings-right-click">右键点击</label>
+                  <label htmlFor="settings-local-command">{t('settings.localCommand')}</label>
+                  <input
+                    id="settings-local-command"
+                    data-testid="settings-local-command"
+                    value={config.terminal.localCommand}
+                    maxLength={200}
+                    placeholder={t('settings.localCommandPlaceholder')}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.terminal.localCommand = event.target.value;
+                      })
+                    }
+                  />
+                </div>
+                <p className="form-hint">{t('settings.localCommandHint')}</p>
+                <div className="form-row">
+                  <label htmlFor="settings-right-click">{t('settings.rightClick')}</label>
                   <select
                     id="settings-right-click"
                     data-testid="settings-right-click"
@@ -191,9 +225,9 @@ export function SettingsPanel({
                       })
                     }
                   >
-                    <option value="paste">粘贴</option>
-                    <option value="menu">右键菜单</option>
-                    <option value="off">关闭</option>
+                    <option value="paste">{t('settings.rightClick.paste')}</option>
+                    <option value="menu">{t('settings.rightClick.menu')}</option>
+                    <option value="off">{t('settings.rightClick.off')}</option>
                   </select>
                 </div>
                 <label className="settings-check">
@@ -208,16 +242,16 @@ export function SettingsPanel({
                       })
                     }
                   />
-                  有选中内容时复制，否则粘贴
+                  {t('settings.rightClickCopy')}
                 </label>
               </section>
             ) : null}
 
             {section === 'connection' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">连接</h3>
+                <h3 className="settings-group__title">{t('settings.nav.connection')}</h3>
                 <div className="form-row">
-                  <label htmlFor="settings-keepalive">保活间隔</label>
+                  <label htmlFor="settings-keepalive">{t('settings.keepalive')}</label>
                   <select
                     id="settings-keepalive"
                     data-testid="settings-keepalive"
@@ -230,13 +264,13 @@ export function SettingsPanel({
                   >
                     {KEEPALIVE_INTERVALS.map((seconds) => (
                       <option key={seconds} value={seconds}>
-                        {seconds < 60 ? `${seconds} 秒` : `${seconds / 60} 分钟`}
+                        {seconds < 60 ? t('common.seconds', { count: seconds }) : t('common.minutes', { count: seconds / 60 })}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="form-row">
-                  <label htmlFor="settings-keepalive-count">无响应重试</label>
+                  <label htmlFor="settings-keepalive-count">{t('settings.keepaliveCount')}</label>
                   <select
                     id="settings-keepalive-count"
                     data-testid="settings-keepalive-count"
@@ -249,20 +283,20 @@ export function SettingsPanel({
                   >
                     {KEEPALIVE_COUNTS.map((count) => (
                       <option key={count} value={count}>
-                        {count} 次
+                        {t('common.times', { count })}
                       </option>
                     ))}
                   </select>
                 </div>
-                <p className="form-hint">每 N 秒发一次保活请求；连续无响应达到上限才断开。对新连接生效。</p>
+                <p className="form-hint">{t('settings.keepaliveHint')}</p>
               </section>
             ) : null}
 
             {section === 'transfer' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">传输</h3>
+                <h3 className="settings-group__title">{t('settings.nav.transfer')}</h3>
                 <div className="form-row">
-                  <label htmlFor="settings-concurrency">同时传输</label>
+                  <label htmlFor="settings-concurrency">{t('settings.concurrency')}</label>
                   <select
                     id="settings-concurrency"
                     data-testid="settings-concurrency"
@@ -275,12 +309,12 @@ export function SettingsPanel({
                   >
                     {CONCURRENCY.map((value) => (
                       <option key={value} value={value}>
-                        {value} 个
+                        {value}
                       </option>
                     ))}
                   </select>
                 </div>
-                <p className="form-hint">保存后立即生效：正在跑的任务不受影响，排队任务按新并发补位。</p>
+                <p className="form-hint">{t('settings.concurrencyHint')}</p>
                 <label className="settings-check">
                   <input
                     type="checkbox"
@@ -292,14 +326,14 @@ export function SettingsPanel({
                       })
                     }
                   />
-                  连接时默认展开文件面板
+                  {t('settings.filesDefault')}
                 </label>
               </section>
             ) : null}
 
             {section === 'shortcuts' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">快捷键</h3>
+                <h3 className="settings-group__title">{t('settings.nav.shortcuts')}</h3>
                 <ShortcutEditor
                   resolved={resolveShortcuts(config.shortcuts.overrides)}
                   overrides={config.shortcuts.overrides}
@@ -314,30 +348,38 @@ export function SettingsPanel({
 
             {section === 'layout' ? (
               <section className="settings-group">
-                <h3 className="settings-group__title">面板布局</h3>
-                {DOCKABLE_PANEL_IDS.map((id) => (
-                  <div className="form-row" key={id}>
-                    <label htmlFor={`settings-dock-${id}`}>{panelById(id)?.title ?? id}</label>
-                    <select
-                      id={`settings-dock-${id}`}
-                      data-testid={`settings-dock-${id}`}
-                      value={panelDockOf(panelLayout, id) ?? 'closed'}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        onPanelDockChange(id, value === 'closed' ? null : (value as DockId));
-                      }}
-                    >
-                      <option value="left">左侧</option>
-                      <option value="right">右侧</option>
-                      <option value="bottom">底部</option>
-                      <option value="closed">关闭</option>
-                    </select>
-                  </div>
-                ))}
-                <div className="settings-subtitle">停靠区尺寸</div>
+                <h3 className="settings-group__title">{t('settings.nav.layout')}</h3>
+                {DOCKABLE_PANEL_IDS.map((id) => {
+                  const panel = panelById(id);
+                  return (
+                    <div className="form-row" key={id}>
+                      <label htmlFor={`settings-dock-${id}`}>{panel ? t(panel.titleKey) : id}</label>
+                      <select
+                        id={`settings-dock-${id}`}
+                        data-testid={`settings-dock-${id}`}
+                        value={panelDockOf(panelLayout, id) ?? 'closed'}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          onPanelDockChange(id, value === 'closed' ? null : (value as DockId));
+                        }}
+                      >
+                        <option value="left">{t('panel.dock.left')}</option>
+                        <option value="right">{t('panel.dock.right')}</option>
+                        <option value="bottom">{t('panel.dock.bottom')}</option>
+                        <option value="closed">{t('settings.rightClick.off')}</option>
+                      </select>
+                    </div>
+                  );
+                })}
+                <div className="settings-subtitle">{t('settings.dockSize')}</div>
                 {(['left', 'right', 'bottom'] as const).map((dock) => {
                   const limit = DOCK_SIZE_LIMITS[dock];
-                  const label = dock === 'left' ? '左栏宽度' : dock === 'right' ? '右栏宽度' : '底栏高度';
+                  const label =
+                    dock === 'left'
+                      ? t('settings.leftWidth')
+                      : dock === 'right'
+                        ? t('settings.rightWidth')
+                        : t('settings.bottomHeight');
                   const value = panelLayout.sizes[dock];
                   return (
                     <div className="form-row" key={dock}>
@@ -353,12 +395,12 @@ export function SettingsPanel({
                           value={value}
                           onChange={(event) => onDockSizeChange(dock, Number(event.target.value))}
                         />
-                        <span className="settings-range__value">{value} px</span>
+                        <span className="settings-range__value">{t('common.px', { count: value })}</span>
                       </div>
                     </div>
                   );
                 })}
-                <p className="form-hint">布局改动即时生效并写入 layout.json，不参与设置草稿。</p>
+                <p className="form-hint">{t('settings.layoutHint')}</p>
               </section>
             ) : null}
           </div>
@@ -380,7 +422,7 @@ export function SettingsPanel({
                 })
               }
             >
-              {confirming === 'settings' ? '再点一次确认' : '恢复默认设置'}
+              {confirming === 'settings' ? t('settings.confirmAgain') : t('settings.reset')}
             </button>
             <button
               className="button"
@@ -388,12 +430,12 @@ export function SettingsPanel({
               data-testid="settings-reset-layout"
               onClick={() => confirmThen('layout', onResetLayout)}
             >
-              {confirming === 'layout' ? '再点一次确认' : '恢复默认布局'}
+              {confirming === 'layout' ? t('settings.confirmAgain') : t('settings.resetLayout')}
             </button>
           </div>
           <div className="settings-footer__group">
             <button className="button" type="button" data-testid="settings-cancel" onClick={onCancel}>
-              取消
+              {t('common.cancel')}
             </button>
             <button
               className="button button--primary"
@@ -402,7 +444,7 @@ export function SettingsPanel({
               disabled={(!dirty && !error) || shortcutConflicts.size > 0}
               onClick={onSave}
             >
-              保存
+              {t('settings.save')}
             </button>
           </div>
         </div>

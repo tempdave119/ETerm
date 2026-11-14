@@ -1,6 +1,7 @@
 import type { EtermApi } from '../shared/ipc.ts';
 
 interface TerminalDebugApi {
+  list(): string[];
   read(sessionId: string): string;
   size(sessionId: string): { cols: number; rows: number } | null;
   type(sessionId: string, data: string): boolean;

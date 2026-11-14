@@ -1,4 +1,5 @@
 import { Activity, ArrowLeftRight, Columns2, FolderOpen, Rows2, Settings } from 'lucide-react';
+import { t } from '../../shared/i18n/index.ts';
 
 interface TabInfo {
   id: string;
@@ -51,8 +52,8 @@ export function TabBar({
             <button
               className="tab__close"
               type="button"
-              title={`关闭 ${tab.title}`}
-              aria-label={`关闭 ${tab.title}`}
+              title={t('tab.closeAria', { name: tab.title })}
+              aria-label={t('tab.closeAria', { name: tab.title })}
               onClick={() => onClose(tab.id)}
             >
               ×
@@ -64,8 +65,8 @@ export function TabBar({
       <button
         className="tabbar__action"
         type="button"
-        title="左右分屏（⌘D）"
-        aria-label="左右分屏"
+        title={t('menu.splitRow')}
+        aria-label={t('menu.splitRow')}
         data-testid="split-row"
         disabled={!canSplit}
         onClick={() => onSplit('row')}
@@ -75,8 +76,8 @@ export function TabBar({
       <button
         className="tabbar__action"
         type="button"
-        title="上下分屏（⌘⇧D）"
-        aria-label="上下分屏"
+        title={t('menu.splitColumn')}
+        aria-label={t('menu.splitColumn')}
         data-testid="split-column"
         disabled={!canSplit}
         onClick={() => onSplit('column')}
@@ -88,8 +89,8 @@ export function TabBar({
           className="tabbar__action"
           type="button"
           data-active={filesOpen}
-          title={filesOpen ? '收起文件面板' : '展开文件面板'}
-          aria-label={filesOpen ? '收起文件面板' : '展开文件面板'}
+          title={filesOpen ? t('files.collapse') : t('files.expand')}
+          aria-label={filesOpen ? t('files.collapse') : t('files.expand')}
           onClick={onToggleFiles}
         >
           <FolderOpen size={16} strokeWidth={1.5} />
@@ -99,8 +100,8 @@ export function TabBar({
         <button
           className="tabbar__action"
           type="button"
-          title="端口转发"
-          aria-label="端口转发"
+          title={t('command.forward.open')}
+          aria-label={t('command.forward.open')}
           data-testid="open-forwards"
           onClick={onOpenForward}
         >
@@ -111,8 +112,8 @@ export function TabBar({
         className="tabbar__action"
         type="button"
         data-active={monitorOpen}
-        title="系统资源（⌘⇧M）"
-        aria-label="系统资源"
+        title={t('panel.monitor')}
+        aria-label={t('panel.monitor')}
         data-testid="toggle-monitor"
         onClick={onToggleMonitor}
       >
@@ -121,14 +122,14 @@ export function TabBar({
       <button
         className="tabbar__action"
         type="button"
-        title="设置（⌘,）"
-        aria-label="设置"
+        title={t('settings.title')}
+        aria-label={t('settings.title')}
         data-testid="open-settings"
         onClick={onOpenSettings}
       >
         <Settings size={16} strokeWidth={1.5} />
       </button>
-      <button className="tabbar__new" type="button" title="新建终端" aria-label="新建终端" onClick={onNew}>
+      <button className="tabbar__new" type="button" title={t('menu.newTerminal')} aria-label={t('menu.newTerminal')} onClick={onNew}>
         +
       </button>
     </header>

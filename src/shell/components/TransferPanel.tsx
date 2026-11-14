@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, RotateCcw, X } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { TransferView } from '../../shared/ipc.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
 import { PanelFrame } from './PanelFrame.tsx';
 
@@ -16,12 +17,12 @@ interface TransferPanelProps {
   onPanelReorder?(delta: -1 | 1): void;
 }
 
-const STATUS_LABEL: Record<TransferView['status'], string> = {
-  queued: '排队中',
-  running: '传输中',
-  done: '已完成',
-  failed: '失败',
-  canceled: '已取消',
+const STATUS_LABEL: Record<TransferView['status'], MessageKey> = {
+  queued: 'transfer.queued',
+  running: 'transfer.running',
+  done: 'transfer.done',
+  failed: 'transfer.failed',
+  canceled: 'transfer.cancelled',
 };
 
 export function TransferPanel({
@@ -38,7 +39,7 @@ export function TransferPanel({
   return (
     <PanelFrame
       panelId="transfers"
-      title="传输队列"
+      title={t('panel.transfers')}
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
@@ -49,16 +50,16 @@ export function TransferPanel({
       <div className="transfer-panel__list">
         {tasks.length === 0 ? (
           <div className="panel-empty panel-empty--stacked" data-testid="transfer-empty">
-            <p className="panel-empty__title">还没有传输任务</p>
+            <p className="panel-empty__title">{t('transfer.empty')}</p>
             <button
               className="button"
               type="button"
               data-testid="transfer-open-files"
               onClick={onOpenFiles}
             >
-              打开文件面板
+              {t('transfer.openFiles')}
             </button>
-            <p className="panel-empty__hint">在文件面板选择上传或下载后，任务会出现在这里</p>
+            <p className="panel-empty__hint">{t('transfer.emptyHint')}</p>
           </div>
         ) : null}
         {tasks.map((task) => {
@@ -77,7 +78,7 @@ export function TransferPanel({
                   <ArrowDown size={14} strokeWidth={1.5} className="transfer-row__icon" />
                 )}
                 <span className="transfer-row__name">{task.name}</span>
-                <span className="transfer-row__status">{STATUS_LABEL[task.status]}</span>
+                <span className="transfer-row__status">{t(STATUS_LABEL[task.status])}</span>
                 <span className="transfer-row__bar">
                   <span className="transfer-row__bar-fill" style={{ width: `${percent}%` }} />
                 </span>
@@ -88,8 +89,9 @@ export function TransferPanel({
                   <button
                     className="icon-button"
                     type="button"
-                    title="取消传输"
-                    aria-label="取消传输"
+                    title={t('transfer.cancel')}
+                    aria-label={t('transfer.cancel')}
+                    data-testid={`transfer-cancel-${task.id}`}
                     onClick={() => onCancel(task.id)}
                   >
                     <X size={14} strokeWidth={1.5} />
@@ -99,8 +101,9 @@ export function TransferPanel({
                   <button
                     className="icon-button"
                     type="button"
-                    title="重试"
-                    aria-label="重试"
+                    title={t('transfer.retry')}
+                    aria-label={t('transfer.retry')}
+                    data-testid={`transfer-retry-${task.id}`}
                     onClick={() => onRetry(task.id)}
                   >
                     <RotateCcw size={14} strokeWidth={1.5} />

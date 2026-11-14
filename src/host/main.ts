@@ -15,6 +15,7 @@ import { LayoutStore } from '../services/layouts/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
 import { IPC, MENU_IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
 import type { MenuCommand } from '../shared/ipc.ts';
+import { normalizeLocale, setLocale } from '../shared/i18n/index.ts';
 import { resolveShortcuts } from '../shared/shortcut.ts';
 import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
@@ -22,6 +23,7 @@ import { registerComponentsIpc } from './components-ipc.ts';
 import { loadComponents } from './components.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
 import { registerConfigIpc } from './config-ipc.ts';
+import { registerSerialIpc } from './serial-ipc.ts';
 import { registerConnectionsIpc } from './connections-ipc.ts';
 import { registerCredentialsIpc } from './credentials-ipc.ts';
 import { registerFilesIpc } from './files-ipc.ts';
@@ -33,7 +35,7 @@ import { createSafeStorageCodec } from './secret-codec.ts';
 import { registerSystemIpc } from './system-ipc.ts';
 import { registerTransfersIpc } from './transfers-ipc.ts';
 import { buildMenuTemplate } from './menu.ts';
-import { createAppTray } from './tray.ts';
+import { buildTrayMenu, createAppTray, type TrayActions } from './tray.ts';
 
 interface AppServices {
   connections: ConnectionStore;
@@ -70,6 +72,7 @@ let disposeComponentsIpc: (() => void) | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
+let disposeSerialIpc: (() => void) | null = null;
 let disposeClipboardIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
@@ -83,8 +86,26 @@ function sendMenuCommand(command: MenuCommand): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(MENU_IPC.command, command);
 }
 
-/** 重建应用菜单：accelerator 跟随用户改键，改完即时同步。 */
+/** 托盘菜单与主菜单共用同一个命令入口。 */
+function trayActions(): TrayActions {
+  return {
+    showWindow: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+        return;
+      }
+      createWindow();
+    },
+    run: sendMenuCommand,
+  };
+}
+
+/** 重建应用菜单：accelerator 跟随用户改键，文案跟随界面语言，改完即时同步。 */
 function applyMenu(config: AppConfig): void {
+  // 主进程的 i18n 与渲染层独立，这里同步一次语言再生成菜单文案。
+  setLocale(normalizeLocale(config.ui.language, app.getLocale()));
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
       buildMenuTemplate(resolveShortcuts(config.shortcuts.overrides), {
@@ -98,6 +119,7 @@ function applyMenu(config: AppConfig): void {
       }),
     ),
   );
+  if (tray) tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenu(trayActions())));
   // 冒烟证据：证明原生菜单在真实 Electron 里装配成功（后续重建不重复打）。
   if (!menuLogged && process.env.ETERM_SMOKE === '1') {
     menuLogged = true;
@@ -142,6 +164,7 @@ function createWindow(): void {
   disposeFilesIpc = registerFilesIpc(service);
   disposeForwardsIpc = registerForwardsIpc(service);
   disposeSystemIpc = registerSystemIpc(service);
+  disposeSerialIpc = registerSerialIpc();
   disposeClipboardIpc = registerClipboardIpc();
   transferQueue = new TransferQueue({
     getPort: (sessionId) => service.transferPort(sessionId),
@@ -173,6 +196,8 @@ function createWindow(): void {
     disposeForwardsIpc = null;
     disposeSystemIpc?.();
     disposeSystemIpc = null;
+    disposeSerialIpc?.();
+    disposeSerialIpc = null;
     disposeClipboardIpc?.();
     disposeClipboardIpc = null;
     disposeTransfersIpc?.();
@@ -238,18 +263,7 @@ void app.whenReady().then(async () => {
     copyright: 'Kevin',
   });
   applyMenu(await services.config.get());
-  tray = createAppTray({
-    showWindow: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-        return;
-      }
-      createWindow();
-    },
-    run: sendMenuCommand,
-  });
+  tray = createAppTray(trayActions());
   if (process.env.ETERM_SMOKE === '1') {
     console.log(`[tray] ${tray ? '已创建（模板图）' : '未创建（缺图标或图片为空）'}`);
   }
@@ -281,6 +295,8 @@ app.on('will-quit', () => {
   disposeForwardsIpc = null;
   disposeSystemIpc?.();
   disposeSystemIpc = null;
+  disposeSerialIpc?.();
+  disposeSerialIpc = null;
   disposeCredentialsIpc?.();
   disposeCredentialsIpc = null;
   sessions?.dispose();

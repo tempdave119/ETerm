@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import type { ForwardDirection, ForwardView } from '../../shared/ipc.ts';
+import { t, type MessageKey } from '../../shared/i18n/index.ts';
 
 interface ForwardDialogProps {
   sessionId: string;
   onClose(): void;
 }
 
-const DIRECTION_LABEL: Record<ForwardDirection, string> = {
-  local: '本地转发',
-  remote: '远程转发',
+const DIRECTION_LABEL: Record<ForwardDirection, MessageKey> = {
+  local: 'forward.local',
+  remote: 'forward.remote',
 };
 
 /** 端口转发挂在当前会话上：关闭会话即释放，不写入配置文件。 */
@@ -46,15 +47,15 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
     const targetPortNumber = Number(targetPort);
     const minBind = direction === 'local' ? 0 : 1;
     if (!Number.isInteger(bindPortNumber) || bindPortNumber < minBind || bindPortNumber > 65535) {
-      setError(`监听端口必须是 ${minBind}–65535 的整数`);
+      setError(t('forward.bindPortInvalid', { min: minBind }));
       return;
     }
     if (!Number.isInteger(targetPortNumber) || targetPortNumber < 1 || targetPortNumber > 65535) {
-      setError('目标端口必须是 1–65535 的整数');
+      setError(t('forward.targetPortInvalid'));
       return;
     }
     if (!targetHost.trim()) {
-      setError('请填写目标主机');
+      setError(t('forward.targetHostRequired'));
       return;
     }
 
@@ -89,24 +90,24 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label="端口转发" data-testid="forward-dialog">
-        <h2 className="modal__title">端口转发</h2>
+      <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label={t('forward.title')} data-testid="forward-dialog">
+        <h2 className="modal__title">{t('forward.title')}</h2>
 
         <div className="forward-list" data-testid="forward-list">
           {forwards.length === 0 ? (
-            <p className="form-hint">这个会话还没有转发规则。</p>
+            <p className="form-hint">{t('forward.emptyHint')}</p>
           ) : (
             forwards.map((item) => (
               <div className="forward-row" key={item.id} data-testid={`forward-row-${item.id}`}>
-                <span className="forward-row__direction">{DIRECTION_LABEL[item.direction]}</span>
+                <span className="forward-row__direction">{t(DIRECTION_LABEL[item.direction])}</span>
                 <span className="forward-row__path">
                   {item.bindHost}:{item.bindPort} → {item.targetHost}:{item.targetPort}
                 </span>
                 <button
                   className="icon-button"
                   type="button"
-                  title="停止转发"
-                  aria-label="停止转发"
+                  title={t('forward.stop')}
+                  aria-label={t('forward.stop')}
                   data-testid={`forward-close-${item.id}`}
                   onClick={() => void remove(item.id)}
                 >
@@ -118,21 +119,21 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
         </div>
 
         <div className="form-row">
-          <label htmlFor="forward-direction">方向</label>
+          <label htmlFor="forward-direction">{t('forward.direction')}</label>
           <select
             id="forward-direction"
             data-testid="forward-direction"
             value={direction}
             onChange={(event) => setDirection(event.target.value as ForwardDirection)}
           >
-            <option value="local">本地转发（本机监听 → 远端目标）</option>
-            <option value="remote">远程转发（远端监听 → 本机目标）</option>
+            <option value="local">{t('forward.localLong')}</option>
+            <option value="remote">{t('forward.remoteLong')}</option>
           </select>
         </div>
 
         <div className="form-grid">
           <div className="form-row">
-            <label htmlFor="forward-bind-port">监听端口</label>
+            <label htmlFor="forward-bind-port">{t('forward.bindPort')}</label>
             <input
               id="forward-bind-port"
               data-testid="forward-bind-port"
@@ -142,7 +143,7 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
             />
           </div>
           <div className="form-row">
-            <label htmlFor="forward-target-port">目标端口</label>
+            <label htmlFor="forward-target-port">{t('forward.targetPort')}</label>
             <input
               id="forward-target-port"
               data-testid="forward-target-port"
@@ -154,7 +155,7 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
         </div>
 
         <div className="form-row">
-          <label htmlFor="forward-target-host">目标主机</label>
+          <label htmlFor="forward-target-host">{t('forward.targetHost')}</label>
           <input
             id="forward-target-host"
             data-testid="forward-target-host"
@@ -164,16 +165,14 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
         </div>
 
         <p className="form-hint">
-          {direction === 'local'
-            ? '监听地址固定 127.0.0.1；监听端口填 0 由系统分配。'
-            : '在服务器侧监听 127.0.0.1，需要服务器允许端口转发。'}
+          {direction === 'local' ? t('forward.localHint') : t('forward.remoteHint')}
         </p>
 
         {error ? <p className="form-error">{error}</p> : null}
 
         <div className="modal__actions">
           <button className="button" type="button" onClick={onClose}>
-            关闭
+            {t('common.close')}
           </button>
           <button
             className="button button--primary"
@@ -182,7 +181,7 @@ export function ForwardDialog({ sessionId, onClose }: ForwardDialogProps) {
             disabled={busy}
             onClick={() => void add()}
           >
-            添加转发
+            {t('forward.add')}
           </button>
         </div>
       </div>

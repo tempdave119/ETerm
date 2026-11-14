@@ -1,40 +1,43 @@
 /**
  * 产品错误码：底层异常在边界层翻译成人话，原始错误只进 detail。
  * INTERNAL 是兜底码——没有它，未分类异常只能吞掉或把英文原文抛给用户。
+ * 文案本身在 shared/i18n，这里只存 key，保证主进程与渲染层跟随界面语言。
  */
+
+import { t } from '../shared/i18n/index.ts';
 
 export const PRODUCT_ERRORS = {
   AUTH_FAILED: {
-    message: '认证失败：用户名、密码或私钥不匹配',
-    next: '核对用户名与密码 / 私钥后重试',
+    message: 'error.auth.message',
+    next: 'error.auth.next',
   },
   HOST_UNREACHABLE: {
-    message: '连不上主机：网络不通或端口未开放',
-    next: '确认主机地址与端口，再试一次',
+    message: 'error.unreachable.message',
+    next: 'error.unreachable.next',
   },
   HOST_KEY_CHANGED: {
-    message: '主机指纹变了，可能是重装或劫持',
-    next: '确认主机身份后，再决定是否继续连接',
+    message: 'error.hostKey.message',
+    next: 'error.hostKey.next',
   },
   TIMEOUT: {
-    message: '超时：服务器无响应',
-    next: '检查网络后重试',
+    message: 'error.timeout.message',
+    next: 'error.timeout.next',
   },
   PERMISSION_DENIED: {
-    message: '权限不足：这个操作被拒绝',
-    next: '换有权限的账号，或调整目标文件权限',
+    message: 'error.permission.message',
+    next: 'error.permission.next',
   },
   FILE_NOT_FOUND: {
-    message: '文件不存在',
-    next: '刷新目录后重新选择',
+    message: 'error.notFound.message',
+    next: 'error.notFound.next',
   },
   UNSUPPORTED: {
-    message: '当前会话不支持这个操作',
-    next: '换一个支持该操作的连接',
+    message: 'error.unsupported.message',
+    next: 'error.unsupported.next',
   },
   INTERNAL: {
-    message: '操作没有完成',
-    next: '重试一次；仍然失败请查看详情',
+    message: 'error.internal.message',
+    next: 'error.internal.next',
   },
 } as const;
 
@@ -45,6 +48,8 @@ export interface ProductErrorInfo {
   message: string;
   next: string;
   detail?: string;
+  /** 同一错误码下的细分原因（如指纹首次 / 变更），供界面做分支判断。 */
+  reason?: string;
   /** 指纹确认等场景需要知道是哪一跳主机失败；其余错误不带。 */
   host?: string;
   port?: number;
@@ -52,27 +57,42 @@ export interface ProductErrorInfo {
 
 export class ProductError extends Error {
   readonly code: ProductErrorCode;
-  readonly next: string;
   readonly detail?: string;
+  readonly reason?: string;
   readonly host?: string;
   readonly port?: number;
+  readonly #customMessage?: string;
+  readonly #customNext?: string;
 
   constructor(
     code: ProductErrorCode,
-    options: { message?: string; next?: string; detail?: string; host?: string; port?: number } = {},
+    options: { message?: string; next?: string; detail?: string; reason?: string; host?: string; port?: number } = {},
   ) {
-    super(options.message ?? PRODUCT_ERRORS[code].message);
+    super(options.message ?? t(PRODUCT_ERRORS[code].message));
     this.name = 'ProductError';
     this.code = code;
+    this.#customMessage = options.message;
     // 同一个码在不同场景下的下一步不同（首次确认指纹 vs 指纹变化），允许逐条覆盖。
-    this.next = options.next ?? PRODUCT_ERRORS[code].next;
+    this.#customNext = options.next;
     this.detail = options.detail;
+    this.reason = options.reason;
     this.host = options.host;
     this.port = options.port;
   }
 
+  /** 按当前语言取下一步；没有逐条覆盖时读字典。 */
+  get next(): string {
+    return this.#customNext ?? t(PRODUCT_ERRORS[this.code].next);
+  }
+
   toInfo(): ProductErrorInfo {
-    const info: ProductErrorInfo = { code: this.code, message: this.message, next: this.next, detail: this.detail };
+    const info: ProductErrorInfo = {
+      code: this.code,
+      message: this.#customMessage ?? t(PRODUCT_ERRORS[this.code].message),
+      next: this.next,
+      detail: this.detail,
+    };
+    if (this.reason !== undefined) info.reason = this.reason;
     if (this.host !== undefined) info.host = this.host;
     if (this.port !== undefined) info.port = this.port;
     return info;
@@ -130,7 +150,16 @@ export function normalizeError(raw: unknown): ProductError {
 
   const record =
     typeof raw === 'object' && raw !== null
-      ? (raw as { code?: unknown; level?: unknown; message?: unknown; next?: unknown; detail?: unknown; host?: unknown; port?: unknown })
+      ? (raw as {
+          code?: unknown;
+          level?: unknown;
+          message?: unknown;
+          next?: unknown;
+          detail?: unknown;
+          reason?: unknown;
+          host?: unknown;
+          port?: unknown;
+        })
       : {};
   const nodeCode = typeof record.code === 'string' ? record.code : undefined;
   const sftpStatus = typeof record.code === 'number' ? record.code : undefined;
@@ -145,6 +174,7 @@ export function normalizeError(raw: unknown): ProductError {
       ...(typeof record.message === 'string' ? { message: record.message } : {}),
       ...(typeof record.next === 'string' ? { next: record.next } : {}),
       ...(typeof record.detail === 'string' ? { detail: record.detail } : {}),
+      ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
       ...(typeof record.host === 'string' ? { host: record.host } : {}),
       ...(typeof record.port === 'number' ? { port: record.port } : {}),
     });

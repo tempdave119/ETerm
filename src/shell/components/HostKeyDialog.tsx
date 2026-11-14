@@ -1,4 +1,5 @@
 import type { ConnectionRecord } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 
 export interface HostKeyPrompt {
   connection: ConnectionRecord;
@@ -21,21 +22,21 @@ export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDial
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label="确认主机指纹">
-        <h2 className="modal__title">{prompt.first ? '首次连接，确认主机指纹' : '主机指纹已变化'}</h2>
+      <div className="modal modal--compact" role="dialog" aria-modal="true" aria-label={t('hostKey.title')}>
+        <h2 className="modal__title">
+          {prompt.first ? t('hostKey.firstTitle') : t('hostKey.changedTitle')}
+        </h2>
         <p className="form-hint">
           {prompt.connection.name} · {prompt.host}:{prompt.port}
         </p>
         <code className="fingerprint">{prompt.fingerprint}</code>
         <p className="form-hint">
-          {prompt.first
-            ? '确认这是目标主机后保存，之后连接不再询问。'
-            : '可能是主机重装，也可能是中间人劫持。确认无误后再保存新指纹。'}
+          {prompt.first ? t('hostKey.firstHint') : t('hostKey.changedHint')}
         </p>
-        {viaJump ? <p className="form-hint">这是跳板机的指纹，确认后再连目标主机。</p> : null}
+        {viaJump ? <p className="form-hint">{t('hostKey.viaJumpHint')}</p> : null}
         <div className="modal__actions">
           <button className="button" type="button" onClick={onCancel} disabled={busy}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             className="button button--primary"
@@ -44,7 +45,7 @@ export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDial
             onClick={onConfirm}
             disabled={busy}
           >
-            信任并保存并连接
+            {t('hostKey.trust')}
           </button>
         </div>
       </div>

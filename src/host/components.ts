@@ -113,7 +113,7 @@ function parseManifest(raw: unknown): ComponentManifest {
 
 function parseFields(raw: unknown): ComponentField[] {
   if (!Array.isArray(raw)) return [];
-  if (raw.length > 10) throw new Error('面板字段最多 10 个');
+  if (raw.length > 10) throw new Error('组件字段最多 10 个');
 
   const seen = new Set<string>();
   return raw.map((item) => {
@@ -126,7 +126,10 @@ function parseFields(raw: unknown): ComponentField[] {
     if (seen.has(key)) throw new Error(`字段 key 重复：${key}`);
     seen.add(key);
 
-    const type = record.type === 'select' || record.type === 'number' ? record.type : 'text';
+    const type =
+      record.type === 'select' || record.type === 'number' || record.type === 'boolean'
+        ? record.type
+        : 'text';
     const options = Array.isArray(record.options)
       ? record.options.filter((option): option is string => typeof option === 'string').slice(0, 20)
       : undefined;
@@ -137,6 +140,8 @@ function parseFields(raw: unknown): ComponentField[] {
       type,
       ...(typeof record.placeholder === 'string' ? { placeholder: record.placeholder } : {}),
       ...(options && options.length > 0 ? { options } : {}),
+      // 动态选项只认宿主支持的来源，未知值忽略（当普通 select 处理）。
+      ...(record.optionsSource === 'serial-devices' ? { optionsSource: 'serial-devices' as const } : {}),
       ...(typeof record.default === 'string' ? { default: record.default } : {}),
       ...(record.required === true ? { required: true } : {}),
     };

@@ -2,7 +2,13 @@ import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, ForwardDirection, ForwardRequest, ForwardView, SessionOpenOptions } from '../core/ports.ts';
 import type { CommandId } from './commands.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
-import type { AppConfig, RightClickAction, ThemePreference, UiDensity } from '../services/config/schema.ts';
+import type {
+  AppConfig,
+  LanguagePreference,
+  RightClickAction,
+  ThemePreference,
+  UiDensity,
+} from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
@@ -20,7 +26,7 @@ export type { Capability };
 export type { ForwardDirection, ForwardRequest, ForwardView };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
-export type { AppConfig, RightClickAction, ThemePreference, UiDensity };
+export type { AppConfig, RightClickAction, ThemePreference, UiDensity, LanguagePreference };
 // 渲染层的「恢复默认设置」要拿默认值做草稿，schema 是纯数据模块，可安全共用。
 export { defaultConfig } from '../services/config/schema.ts';
 export type { FileEntry };
@@ -156,6 +162,16 @@ export const COMPONENTS_IPC = {
   list: 'components:list',
 } as const;
 
+export const SERIAL_IPC = {
+  list: 'serial:list',
+} as const;
+
+/** 串口设备：path 为 /dev/cu.*，label 是去掉前缀后的短名。 */
+export interface SerialDevice {
+  path: string;
+  label: string;
+}
+
 export const CREDENTIALS_IPC = {
   set: 'credentials:set',
   has: 'credentials:has',
@@ -235,4 +251,5 @@ export interface EtermApi {
   onMenuCommand(handler: (command: MenuCommand) => void): () => void;
 
   listComponents(): Promise<IpcResult<ComponentDescriptor[]>>;
+  listSerialDevices(): Promise<IpcResult<SerialDevice[]>>;
 }

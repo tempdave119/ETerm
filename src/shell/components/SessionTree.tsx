@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Folder, FolderPlus, Pencil, Plus, Search, Server, Trash2 } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { ConnectionRecord, GroupRecord } from '../../shared/ipc.ts';
+import { t } from '../../shared/i18n/index.ts';
 import { PanelFrame } from './PanelFrame.tsx';
 
 interface SessionTreeProps {
@@ -106,7 +107,7 @@ export function SessionTree({
   return (
     <PanelFrame
       panelId="sessions"
-      title="会话"
+      title={t('panel.sessions')}
       dock={dock}
       onMove={onMove}
       canMoveUp={canPanelMoveUp}
@@ -114,14 +115,14 @@ export function SessionTree({
       onReorder={onPanelReorder}
       actions={
         <>
-          <button className="icon-button" type="button" title="新建连接" aria-label="新建连接" onClick={onNew}>
+          <button className="icon-button" type="button" title={t('tree.new')} aria-label={t('tree.new')} onClick={onNew}>
             <Plus size={15} strokeWidth={1.5} />
           </button>
           <button
             className="icon-button"
             type="button"
-            title="新建分组"
-            aria-label="新建分组"
+            title={t('tree.newGroup')}
+            aria-label={t('tree.newGroup')}
             onClick={() => setAddingGroup((value) => !value)}
           >
             <FolderPlus size={15} strokeWidth={1.5} />
@@ -134,7 +135,7 @@ export function SessionTree({
         <input
           className="search-input"
           type="search"
-          placeholder="搜索主机"
+          placeholder={t('tree.search')}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
@@ -144,7 +145,7 @@ export function SessionTree({
         <input
           className="search-input session-tree__group-input"
           autoFocus
-          placeholder="分组名称，回车确认"
+          placeholder={t('tree.groupPlaceholder')}
           value={groupName}
           onChange={(event) => setGroupName(event.target.value)}
           onKeyDown={(event) => {
@@ -158,14 +159,14 @@ export function SessionTree({
       <div className="session-tree__list">
         {connections.length === 0 ? (
           <div className="tree-empty">
-            <span>还没有连接</span>
+            <span>{t('tree.empty')}</span>
             <button className="button button--primary" type="button" onClick={onNew}>
-              新建连接
+              {t('tree.new')}
             </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="tree-empty">
-            <span>没有匹配的连接</span>
+            <span>{t('tree.noMatch')}</span>
           </div>
         ) : (
           <>
@@ -206,7 +207,7 @@ export function SessionTree({
 
             {(byGroup.get(null) ?? []).length > 0 ? (
               <div className="tree-group">
-                {groups.length > 0 ? <div className="tree-group__header tree-group__header--static">未分组</div> : null}
+                {groups.length > 0 ? <div className="tree-group__header tree-group__header--static">{t('tree.ungrouped')}</div> : null}
                 {(byGroup.get(null) ?? []).map((connection) => (
                   <ConnectionRow
                     key={connection.id}
@@ -303,7 +304,7 @@ function ConnectionRow({
       >
         <span className="tree-connection__name">{connection.name}</span>
         {connecting ? (
-          <span className="tree-connection__pending">连接中…</span>
+          <span className="tree-connection__pending">{t('tree.connecting')}</span>
         ) : connection.host ? (
           <span className="tree-connection__host">{connection.host}</span>
         ) : null}
@@ -312,8 +313,8 @@ function ConnectionRow({
         <button
           className="icon-button"
           type="button"
-          title="编辑"
-          aria-label={`编辑 ${connection.name}`}
+          title={t('tree.editConnection')}
+          aria-label={t('tree.editAria', { name: connection.name })}
           onClick={() => onEdit(connection)}
         >
           <Pencil size={14} strokeWidth={1.5} />
@@ -321,8 +322,8 @@ function ConnectionRow({
         <button
           className="icon-button"
           type="button"
-          title="删除"
-          aria-label={`删除 ${connection.name}`}
+          title={t('tree.deleteConnection')}
+          aria-label={t('tree.deleteAria', { name: connection.name })}
           onClick={() => onDelete(connection)}
         >
           <Trash2 size={14} strokeWidth={1.5} />

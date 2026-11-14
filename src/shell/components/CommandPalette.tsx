@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { filterCommands, shortcutLabel, type CommandId } from '../commands/registry.ts';
+import { t } from '../../shared/i18n/index.ts';
 
 interface CommandPaletteProps {
   onRun(id: CommandId): void;
@@ -83,8 +84,8 @@ export function CommandPalette({ onRun, onClose }: CommandPaletteProps) {
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => run(index)}
               >
-                <span className="palette__title">{command.title}</span>
-                <span className="palette__group">{command.group}</span>
+                <span className="palette__title">{t(command.titleKey)}</span>
+                <span className="palette__group">{t(command.groupKey)}</span>
                 {command.shortcut ? (
                   <span className="palette__shortcut">{shortcutLabel(command.shortcut)}</span>
                 ) : null}

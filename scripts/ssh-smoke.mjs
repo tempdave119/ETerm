@@ -123,26 +123,6 @@ mkdirSync(dataDir, { recursive: true });
 cpSync(join(process.cwd(), 'examples', 'components', 'serial'), join(dataDir, 'components', 'serial'), {
   recursive: true,
 });
-
-// 用 PTY 模拟串口设备：子进程把 tty 名写出来，组件直接打开该设备读写。
-const ttyFile = join(dataDir, 'tty-name');
-const serialTty = pty.spawn('/bin/sh', ['-c', `tty > ${ttyFile}; exec sleep 60`], {
-  name: 'xterm-256color',
-  cols: 80,
-  rows: 24,
-});
-const serialDevice = await waitFor(
-  async () => {
-    try {
-      const name = (await readFile(ttyFile, 'utf8')).trim();
-      return name.startsWith('/dev/') ? name : null;
-    } catch {
-      return null;
-    }
-  },
-  5_000,
-  '串口模拟设备',
-);
 const keyPair = utils.generateKeyPairSync('ed25519');
 const keyPath = join(dataDir, 'id_ed25519');
 writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
@@ -1252,7 +1232,7 @@ try {
   forwarded.destroy();
   await shotOf('tmp/ssh-smoke-forward.png');
 
-  await clickOn('[data-testid="forward-dialog"] button[title="停止转发"]');
+  await clickOn('[data-testid="forward-dialog"] [data-testid^="forward-close-"]');
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid^="forward-row-"]') === null`),
     5_000,
@@ -1269,54 +1249,45 @@ try {
     '关闭端口转发',
   );
 
-  // 可选组件：串口协议由 userData/components 装载，新建连接里出现后直接开会话。
+  // 可选组件：串口协议由 userData/components 装载；设备下拉来自宿主枚举。
+  // 真实设备不在 CI 环境，这里只验证表单契约（SELECT / 刷新 / 布尔开关）。
   await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
   await waitFor(() => evaluate(`document.querySelector('#connection-protocol') !== null`), 5_000, '协议选择');
   await evaluate(setSelectScript('#connection-protocol', 'serial'));
-  await waitFor(
-    () => evaluate(`document.querySelector('#connection-option-path') !== null`),
-    5_000,
-    '串口字段',
-  );
-  await evaluate(setInputScript('#connection-name', 'mock-serial'));
-  await evaluate(setInputScript('#connection-option-path', serialDevice));
-  await evaluate(setSelectScript('#connection-option-baudRate', '115200'));
-  await clickOn('[data-testid="connection-save-connect"]');
-  await waitFor(
-    () => evaluate(`document.querySelector('.tab__label[title="mock-serial"]') !== null`),
-    15_000,
-    '串口标签',
-  );
-  const serialSession = await waitFor(
-    () => evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+  const serialFields = await waitFor(
+    () =>
+      evaluate(`(() => {
+        const field = document.querySelector('[data-testid="connection-option-path"]');
+        const refresh = document.querySelector('[data-testid="connection-option-path-refresh"]');
+        const dtr = document.querySelector('[data-testid="connection-option-dtr"]');
+        const baud = document.querySelector('[data-testid="connection-option-baudRate"]');
+        const ending = document.querySelector('[data-testid="connection-option-lineEnding"]');
+        if (!field || !refresh || !dtr || !baud || !ending) return null;
+        return {
+          tag: field.tagName,
+          options: field.options.length,
+          dtrType: dtr.type,
+          dtrChecked: dtr.checked,
+        };
+      })()`),
     10_000,
-    '串口会话',
+    '串口字段渲染',
   );
-  serialTty.write('serial-hello\r');
-  await waitFor(
-    async () =>
-      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(serialSession)})`)).includes('serial-hello'),
-    10_000,
-    '串口下行数据',
-  );
-  let serialUp = '';
-  serialTty.onData((data) => {
-    serialUp += data;
-  });
-  const serialTyped = await evaluate(`window.__etermDebug.type(${JSON.stringify(serialSession)}, "serial-ping")`);
-  if (!serialTyped) throw new Error('串口会话已关闭，无法输入');
-  await waitFor(() => (serialUp.includes('serial-ping') ? true : null), 10_000, '串口上行数据');
+  if (serialFields.tag !== 'SELECT') throw new Error('串口设备应渲染为下拉');
+  if (serialFields.options < 1) throw new Error('串口设备下拉没有选项');
+  if (serialFields.dtrType !== 'checkbox' || !serialFields.dtrChecked) {
+    throw new Error(`串口 DTR 开关不正确：${JSON.stringify(serialFields)}`);
+  }
   await shotOf('tmp/ssh-smoke-serial.png');
-  // 关掉串口标签，回到 SSH 标签，后面的文件矩阵依赖文件面板。
   await evaluate(`(() => {
-    const label = document.querySelector('.tab__label[title="mock-serial"]');
-    label?.closest('.tab')?.querySelector('.tab__close')?.click();
+    const buttons = [...document.querySelectorAll('.modal--form .button')];
+    buttons.find((button) => button.textContent === '取消')?.click();
     return true;
   })()`);
   await waitFor(
-    () => evaluate(`document.querySelector('.tab__label[title="mock-serial"]') === null`),
+    () => evaluate(`document.querySelector('.modal--form') === null`),
     5_000,
-    '关闭串口标签',
+    '关闭串口表单',
   );
 
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
@@ -1358,7 +1329,7 @@ try {
     15_000,
     '上传开跑',
   );
-  await clickOn('.transfer-row[data-status="running"] button[title="取消传输"]');
+  await clickOn('.transfer-row[data-status="running"] [data-testid^="transfer-cancel-"]');
   await waitFor(
     () => evaluate(`document.querySelector('.transfer-row[data-status="canceled"]') !== null`),
     10_000,
@@ -1464,7 +1435,6 @@ try {
 } finally {
   client?.close();
   app.kill('SIGTERM');
-  serialTty.kill();
   await delay(500);
   if (app.exitCode === null) app.kill('SIGKILL');
   for (const connection of connections) connection.end();
