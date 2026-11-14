@@ -968,6 +968,40 @@ try {
     '取消回滚字号',
   );
 
+  // 即时保存字段（插件总开关）必须同步进草稿：点「保存」不能把打开设置时的旧值写回。
+  await openSettings();
+  await openSection('plugins');
+  await evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]')?.checked === true`),
+    5_000,
+    '总开关打开',
+  );
+  // 总开关属于即时保存字段，草稿已同步 → 此时「保存」应为禁用（旧实现会启错误启用并把旧值写回）。
+  const saveDisabled = await evaluate(`document.querySelector('[data-testid="settings-save"]')?.disabled`);
+  if (saveDisabled !== true) throw new Error('总开关切换后草稿未同步：保存按钮仍可点击');
+  const enabledOnDisk = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')).config.plugins?.enabled;
+  if (enabledOnDisk !== true) throw new Error('总开关未即时落盘');
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '保存关闭设置',
+  );
+  await openSettings();
+  await openSection('plugins');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]')?.checked === true`),
+    5_000,
+    '重开设置后总开关保持',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '关闭设置继续后续验证',
+  );
+
   // 保存：真正写盘。
   await openSettings();
   await openSection('terminal');

@@ -600,14 +600,27 @@ export function App() {
       });
   }, []);
 
+  /**
+   * 即时保存的字段（插件总开关、进程排序）不走草稿，但必须同步进草稿，
+   * 否则点「保存」时会把打开设置那一刻的旧值写回去，表现为「关掉又自己打开」。
+   */
+  const patchDraft = useCallback((patch: (draft: AppConfig) => AppConfig): void => {
+    const draft = settingsDraftRef.current;
+    if (!draft) return;
+    const next = patch(draft);
+    settingsDraftRef.current = next;
+    setSettingsDraft(next);
+  }, []);
+
   /** 插件总开关即时保存：不参与设置草稿，关掉后所有插件能力立刻失效。 */
   const setPluginsEnabled = useCallback(
     (enabled: boolean): void => {
       const current = configRef.current;
       if (!current || current.plugins.enabled === enabled) return;
       saveConfig({ ...current, plugins: { enabled } });
+      patchDraft((draft) => ({ ...draft, plugins: { enabled } }));
     },
-    [saveConfig],
+    [saveConfig, patchDraft],
   );
 
   // 首次启动引导只看一次：关闭或执行任一动作后写标记。
@@ -622,8 +635,9 @@ export function App() {
       const current = configRef.current;
       if (!current || current.ui.monitorProcessSort === sort) return;
       saveConfig({ ...current, ui: { ...current.ui, monitorProcessSort: sort } });
+      patchDraft((draft) => ({ ...draft, ui: { ...draft.ui, monitorProcessSort: sort } }));
     },
-    [saveConfig],
+    [saveConfig, patchDraft],
   );
 
   const previewSettings = useCallback((next: AppConfig): void => {
