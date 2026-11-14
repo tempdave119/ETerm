@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
+import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import type { AppConfig, ThemePreference, UiDensity } from '../../shared/ipc.ts';
 import { panelById } from '../panels/registry.ts';
 
@@ -9,6 +9,7 @@ interface SettingsPanelProps {
   panelLayout: PanelLayout;
   onChange(next: AppConfig): void;
   onPanelDockChange(id: PanelId, dock: DockId | null): void;
+  onDockSizeChange(dock: 'left' | 'right' | 'bottom', size: number): void;
   onReset(): void;
   onClose(): void;
 }
@@ -17,7 +18,7 @@ const FONT_SIZES = Array.from({ length: 10 }, (_, index) => 11 + index);
 const CONCURRENCY = [1, 2, 3, 4];
 
 /** 设置在主窗口内即时生效：每次改动直接提交，不做「保存」按钮。 */
-export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDockChange, onReset, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDockChange, onDockSizeChange, onReset, onClose }: SettingsPanelProps) {
   const configRef = useRef(config);
 
   useEffect(() => {
@@ -236,6 +237,30 @@ export function SettingsPanel({ config, error, panelLayout, onChange, onPanelDoc
               </select>
             </div>
           ))}
+          <div className="settings-subtitle">停靠区尺寸</div>
+          {(['left', 'right', 'bottom'] as const).map((dock) => {
+            const limit = DOCK_SIZE_LIMITS[dock];
+            const label = dock === 'left' ? '左栏宽度' : dock === 'right' ? '右栏宽度' : '底栏高度';
+            const value = panelLayout.sizes[dock];
+            return (
+              <div className="form-row" key={dock}>
+                <label htmlFor={`settings-dock-size-${dock}`}>{label}</label>
+                <div className="settings-range">
+                  <input
+                    id={`settings-dock-size-${dock}`}
+                    data-testid={`settings-dock-size-${dock}`}
+                    type="range"
+                    min={limit.min}
+                    max={limit.max}
+                    step={1}
+                    value={value}
+                    onChange={(event) => onDockSizeChange(dock, Number(event.target.value))}
+                  />
+                  <span className="settings-range__value">{value} px</span>
+                </div>
+              </div>
+            );
+          })}
         </section>
         </div>
 

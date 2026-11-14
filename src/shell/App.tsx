@@ -1112,6 +1112,7 @@ export function App() {
             if (panelDockOf(panelLayoutRef.current, id) === dock) return;
             movePanelTo(id, dock);
           }}
+          onDockSizeChange={finishDockResize}
           onReset={() => void resetConfig()}
           onClose={() => setSettingsOpen(false)}
         />

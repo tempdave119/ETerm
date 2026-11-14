@@ -433,6 +433,25 @@ try {
     5_000,
     '字号恢复',
   );
+  // 设置面板也能调停靠区尺寸；只写 layout，不参与配置恢复默认。
+  await evaluate(`(() => {
+    const input = document.querySelector('[data-testid="settings-dock-size-left"]');
+    if (!input) return;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '260');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.sizes.left : null))`,
+      )) === 260,
+    5_000,
+    '设置面板调整左栏',
+  );
+  await evaluate(`document.querySelector('.settings-panel__body').scrollTop = 9999`);
+  const settingsDockShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/settings-dock-size.png', Buffer.from(settingsDockShot.data, 'base64'));
   await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
 
   // 右键菜单模式：配置切到 menu，验证菜单出现与粘贴动作。
