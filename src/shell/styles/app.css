@@ -1408,7 +1408,7 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-tight);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .monitor-process__name {

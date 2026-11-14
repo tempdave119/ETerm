@@ -594,19 +594,19 @@ try {
   await dragDockResizer('left', 200);
   await waitFor(async () => (await dockSizes())?.left === 360, 5_000, '左栏拖到上限');
   await dragDockResizer('left', -300);
-  await waitFor(async () => (await dockSizes())?.left === 200, 5_000, '左栏拖到下限');
+  await waitFor(async () => (await dockSizes())?.left === 220, 5_000, '左栏拖到下限');
   await dragDockResizer('bottom', 0, -200);
-  await waitFor(async () => (await dockSizes())?.bottom === 250, 5_000, '底栏拖到上限');
-  await dragDockResizer('bottom', 0, 300);
-  await waitFor(async () => (await dockSizes())?.bottom === 150, 5_000, '底栏拖到下限');
+  await waitFor(async () => (await dockSizes())?.bottom === 360, 5_000, '底栏拖到上限');
+  await dragDockResizer('bottom', 0, 260);
+  await waitFor(async () => (await dockSizes())?.bottom === 120, 5_000, '底栏拖到下限');
   await waitFor(
     async () => {
       try {
         const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
         return (
-          parsed.panels?.sizes?.left === 200 &&
+          parsed.panels?.sizes?.left === 220 &&
           parsed.panels?.sizes?.right === 260 &&
-          parsed.panels?.sizes?.bottom === 150
+          parsed.panels?.sizes?.bottom === 120
         );
       } catch {
         return false;

@@ -28,12 +28,12 @@ const MAX_DIVIDER = 0.85;
 
 /** 停靠区拖动边界；右栏下限保留监控面板两列指标卡所需的宽度。 */
 export const DOCK_SIZE_LIMITS = {
-  left: { min: 200, max: 360 },
+  left: { min: 220, max: 360 },
   right: { min: 260, max: 450 },
-  bottom: { min: 150, max: 250 },
+  bottom: { min: 120, max: 360 },
 } as const;
 
-const DEFAULT_DOCK_SIZES = { left: 240, right: 300, bottom: 160 } as const;
+const DEFAULT_DOCK_SIZES = { left: 220, right: 300, bottom: 160 } as const;
 
 export function defaultPanelLayout(): PanelLayout {
   return {
