@@ -118,6 +118,14 @@ export class PluginStore {
     }
   }
 
+  /** 已启用插件的目录；主题加载器据此扫描 themes/ 子目录。 */
+  async themeDirs(): Promise<{ pluginId: string; directory: string }[]> {
+    const records = await this.list();
+    return records
+      .filter((record) => record.enabled)
+      .map((record) => ({ pluginId: record.id, directory: join(this.#pluginsDir, record.id) }));
+  }
+
   /** 读并校验插件 manifest；字段错误带上具体原因，安装时直接展示给用户。 */
   async #readManifest(directory: string): Promise<PluginManifest> {
     const file = join(directory, 'manifest.json');

@@ -120,12 +120,24 @@ writeFileSync(
     entry: 'index.cjs',
     permissions: ['panel'],
     panels: [{ id: 'smoke', title: 'Smoke Panel', defaultDock: 'right' }],
+    themes: [{ id: 'plugin-ocean', title: 'Plugin Ocean' }],
   }),
 );
 writeFileSync(join(dataDir, 'plugins', 'smoke-plugin', 'index.cjs'), 'module.exports = {};\n');
 writeFileSync(
   join(dataDir, 'plugins', 'smoke-plugin', 'panel.html'),
   '<!doctype html><meta charset="utf-8"><body style="font:13px sans-serif;padding:12px">smoke panel</body>',
+);
+mkdirSync(join(dataDir, 'plugins', 'smoke-plugin', 'themes'), { recursive: true });
+writeFileSync(
+  join(dataDir, 'plugins', 'smoke-plugin', 'themes', 'ocean.json'),
+  JSON.stringify({
+    id: 'plugin-ocean',
+    name: 'Plugin Ocean',
+    base: 'dark',
+    ui: { '--bg-canvas': '#0b2530' },
+    terminal: { background: '#0b2530', foreground: '#e6f1f5' },
+  }),
 );
 
 const appLogs = [];
@@ -548,6 +560,11 @@ try {
     () => evaluate(`document.querySelector('#settings-theme option[value="ext:nord"]') !== null`),
     5_000,
     '外部主题出现在下拉',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('#settings-theme option[value="ext:plugin-ocean"]') !== null`),
+    5_000,
+    '插件主题出现在下拉',
   );
   const brokenThemeVisible = await evaluate(
     `document.querySelector('#settings-theme option[value="ext:broken"]') !== null`,

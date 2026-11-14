@@ -97,6 +97,66 @@ test('themes_store_rejects_reserved_id', async () => {
   });
 });
 
+test('themes_store_merges_plugin_themes', async () => {
+  await withTempDir(async (directory) => {
+    await mkdir(join(directory, 'themes'), { recursive: true });
+    await writeFile(join(directory, 'themes', 'nord.json'), JSON.stringify(validTheme), 'utf8');
+    const pluginDir = join(directory, 'plugins', 'demo');
+    await mkdir(join(pluginDir, 'themes'), { recursive: true });
+    await writeFile(
+      join(pluginDir, 'themes', 'ocean.json'),
+      JSON.stringify({ ...validTheme, id: 'plugin-ocean', name: 'Plugin Ocean' }),
+      'utf8',
+    );
+
+    const store = new ThemeStore({
+      baseDir: directory,
+      logger: () => {},
+      pluginThemeDirs: async () => [{ pluginId: 'demo', directory: pluginDir }],
+    });
+    const themes = await store.list();
+
+    assert.deepEqual(themes.map((theme) => theme.id).sort(), ['nord', 'plugin-ocean']);
+    assert.equal(themes.find((theme) => theme.id === 'plugin-ocean')?.name, 'Plugin Ocean');
+  });
+});
+
+test('themes_store_plugin_conflict_keeps_external', async () => {
+  await withTempDir(async (directory) => {
+    await mkdir(join(directory, 'themes'), { recursive: true });
+    await writeFile(join(directory, 'themes', 'nord.json'), JSON.stringify(validTheme), 'utf8');
+    const pluginDir = join(directory, 'plugins', 'demo');
+    await mkdir(join(pluginDir, 'themes'), { recursive: true });
+    await writeFile(
+      join(pluginDir, 'themes', 'nord.json'),
+      JSON.stringify({ ...validTheme, name: 'Plugin Nord' }),
+      'utf8',
+    );
+
+    const store = new ThemeStore({
+      baseDir: directory,
+      logger: () => {},
+      pluginThemeDirs: async () => [{ pluginId: 'demo', directory: pluginDir }],
+    });
+    const themes = await store.list();
+
+    assert.equal(themes.length, 1);
+    assert.equal(themes[0]?.name, 'Nord');
+  });
+});
+
+test('themes_store_skips_missing_plugin_theme_dir', async () => {
+  await withTempDir(async (directory) => {
+    const store = new ThemeStore({
+      baseDir: directory,
+      logger: () => {},
+      pluginThemeDirs: async () => [{ pluginId: 'demo', directory: join(directory, 'plugins', 'demo') }],
+    });
+
+    assert.deepEqual(await store.list(), []);
+  });
+});
+
 test('themes_color_validation_only_accepts_plain_colors', () => {
   assert.equal(isThemeColor('#101820'), true);
   assert.equal(isThemeColor('#abc'), true);

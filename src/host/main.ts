@@ -304,13 +304,17 @@ void app.whenReady().then(async () => {
   }
   // 冒烟可用 ETERM_USER_DATA 指向临时目录，避免污染真实配置与 known_hosts。
   const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
+  const pluginStore = new PluginStore({
+    baseDir,
+    logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
+  });
   const services: AppServices = {
     connections: new ConnectionStore({ baseDir }),
     config: new ConfigStore({ baseDir }),
     credentials: new CredentialStore({ baseDir, codec: createSafeStorageCodec() }),
     knownHosts: new KnownHostsStore({ baseDir }),
     layouts: new LayoutStore({ baseDir }),
-    themes: new ThemeStore({ baseDir }),
+    themes: new ThemeStore({ baseDir, pluginThemeDirs: () => pluginStore.themeDirs() }),
     windowState: new WindowStateStore({ baseDir }),
   };
   appServices = services;
@@ -341,10 +345,6 @@ void app.whenReady().then(async () => {
     sampleDirs: { bundledDir: bundledComponentsDir, userDir: path.join(baseDir, 'components') },
   });
 
-  const pluginStore = new PluginStore({
-    baseDir,
-    logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
-  });
   disposePluginsIpc = registerPluginsIpc({
     store: pluginStore,
     pluginsDir: path.join(baseDir, 'plugins'),
