@@ -1,0 +1,12 @@
+{
+  "id": "s3-browser",
+  "kind": "plugin",
+  "apiVersion": "^1.0.0",
+  "version": "0.1.0",
+  "description": "浏览 S3 / 兼容对象存储，下载对象",
+  "author": "ETerm",
+  "entry": "index.cjs",
+  "permissions": ["panel", "config"],
+  "panels": [{ "id": "browser", "title": "S3", "defaultDock": "bottom" }],
+  "commands": [{ "id": "selftest", "title": "S3 自检" }]
+}

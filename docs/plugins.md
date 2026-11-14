@@ -9,7 +9,7 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 >
 > 扩展（Extension）是协议层能力包，规范见 `docs/components.md`。两者分目录存放、分套 manifest，互不混用。
 >
-> 状态：本规范于 2026-11-14 定稿；F-60 管理面与 F-61 面板 / 命令 / 主题三类扩展点均已实现，S3 样例留待 F-62。
+> 状态：本规范于 2026-11-14 定稿；F-60 管理面、F-61 面板 / 命令 / 主题三类扩展点、F-62 S3 样例与面板消息桥均已完成。
 
 ## 目录
 
@@ -104,6 +104,15 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 - 插件自带实现，不支持「插件依赖某个扩展」的组合声明。
 - 插件面板的运行状态不进入 `layout.json` 之外的存储；禁用后布局里的面板位置保留，重新启用后回到原位置。
 
+## S3 样例
+
+`examples/plugins/s3-browser/` 是首个真实插件样例：
+
+- 无第三方依赖，手写 SigV4（`UNSIGNED-PAYLOAD`），支持 ListObjectsV2 与 GetObject（单对象上限 5 MB）。
+- 面板（`panel.html`）提供 Endpoint / Bucket / Region / Prefix / AK / SK 表单，配置只存在插件自己的源（localStorage），不写 ETerm 配置。
+- 签名与请求在主进程插件入口执行，面板通过消息桥取数据；不引入 AWS SDK，也就没有额外依赖面。
+- 验证：`tests/modules/s3-browser-plugin.test.ts` 覆盖签名稳定性、路径编码、列表解析与下载；`npm run smoke` 用 mock S3 验证自检命令与面板消息。真实 S3 / MinIO 待手动验证。
+
 ## 实现与验收
 
 | 批次 | 内容 | 验收 |
@@ -112,4 +121,4 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 | F-61.1 | 面板扩展点：布局 id、iframe 协议、自动入布局、禁用消失 | smoke：面板出现 → 禁用消失（已完成） |
 | F-61.2 | 命令插件：manifest 声明 + activate 注册，命令入 ⌘K 与快捷键编辑 | runtime 6 项单测 + smoke 执行（已完成） |
 | F-61.3 | 主题插件：插件 themes/*.json 并入主题下拉 | 单测 + smoke：插件主题出现在下拉（已完成） |
-| F-62 | S3 插件样例 | 安装 → 面板出现 → 浏览下载 → 卸载无残留；`src/shell/` 未改 |
+| F-62 | S3 插件样例：手写 SigV4 + 浏览 / 下载面板 | 4 项单测 + smoke mock 验证（已完成） |

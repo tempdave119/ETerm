@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import http from 'node:http';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import electronPath from 'electron';
@@ -88,6 +89,40 @@ await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 // 每轮用独立数据目录：配置与布局从上一次跑剩的值会干扰断言。
 const dataDir = join(process.cwd(), 'tmp', 'smoke', randomUUID());
 mkdirSync(dataDir, { recursive: true });
+
+// S3 插件样例：mock 对象存储 + 预置插件目录，自检命令通过环境变量拿配置。
+const s3Server = http.createServer((request, response) => {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  if (url.pathname === '/demo' && url.searchParams.get('list-type') === '2') {
+    response.writeHead(200, { 'content-type': 'application/xml' });
+    response.end(
+      '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult>' +
+        '<Contents><Key>docs/a.txt</Key><Size>9</Size><LastModified>2026-11-14T00:00:00.000Z</LastModified></Contents>' +
+        '<Contents><Key>readme.txt</Key><Size>3</Size><LastModified>2026-11-14T00:00:00.000Z</LastModified></Contents>' +
+        '</ListBucketResult>',
+    );
+    return;
+  }
+  if (url.pathname === '/demo/docs/a.txt') {
+    response.writeHead(200, { 'content-type': 'text/plain' });
+    response.end('s3-hello');
+    return;
+  }
+  response.writeHead(404);
+  response.end('not found');
+});
+await new Promise((resolve) => s3Server.listen(0, '127.0.0.1', resolve));
+const s3Endpoint = `http://127.0.0.1:${s3Server.address().port}`;
+cpSync(join(process.cwd(), 'examples', 'plugins', 's3-browser'), join(dataDir, 'plugins', 's3-browser'), {
+  recursive: true,
+});
+process.env.ETERM_S3_SELFTEST = JSON.stringify({
+  endpoint: s3Endpoint,
+  bucket: 'demo',
+  region: 'us-east-1',
+  accessKey: 'AK',
+  secretKey: 'SK',
+});
 
 // 外部主题：一份合法、一份带未知 token；后者应被跳过且不出现在下拉里。
 mkdirSync(join(dataDir, 'themes'), { recursive: true });
@@ -664,6 +699,27 @@ try {
     5_000,
     '插件面板消息桥',
   );
+
+  // S3 插件：自检命令与面板消息桥打 mock 对象存储。
+  const s3Run = await evaluate(`window.eterm.runPluginCommand('plugin:s3-browser:selftest')`);
+  if (!s3Run?.ok) throw new Error(`S3 自检命令失败：${s3Run?.error?.message}`);
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 's3-selftest.json'), 'utf8')).includes('docs/a.txt');
+      } catch {
+        return false;
+      }
+    },
+    10_000,
+    'S3 自检落盘',
+  );
+  const s3List = await evaluate(
+    `window.eterm.sendPluginPanelMessage('s3-browser','browser',{ action: 'list', config: { endpoint: ${JSON.stringify(s3Endpoint)}, bucket: 'demo', accessKey: 'AK', secretKey: 'SK' } })`,
+  );
+  if (!s3List?.ok || !JSON.stringify(s3List.value).includes('docs/a.txt')) {
+    throw new Error('S3 面板消息未返回对象');
+  }
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),
     5_000,
@@ -1524,7 +1580,7 @@ try {
   writeFileSync(SCREENSHOT, Buffer.from(shot.data, 'base64'));
 
   // 全部面板可关闭：停靠区不再渲染，工作区自己撑满。
-  for (const panelId of ['sessions', 'files', 'transfers']) {
+  for (const panelId of ['sessions', 'files', 'transfers', 'plugin:s3-browser:browser']) {
     await evaluate(`document.querySelector('[data-testid="panel-close-${panelId}"]')?.click()`);
   }
   await waitFor(() => evaluate(`document.querySelectorAll('.dock').length === 0`), 5_000, '关闭全部面板');
@@ -1563,4 +1619,5 @@ try {
   app.kill('SIGTERM');
   await delay(500);
   if (app.exitCode === null) app.kill('SIGKILL');
+  s3Server.close();
 }

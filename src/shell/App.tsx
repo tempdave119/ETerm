@@ -77,6 +77,21 @@ let tabSequence = 0;
 let paneSequence = 0;
 let splitSequence = 0;
 
+const PLUGIN_PANEL_INIT_KEY = 'eterm.plugins.panels.initialized';
+
+function readPanelInitSet(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PLUGIN_PANEL_INIT_KEY) ?? '[]');
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writePanelInitSet(ids: string[]): void {
+  localStorage.setItem(PLUGIN_PANEL_INIT_KEY, JSON.stringify(ids));
+}
+
 const RECONNECT_MAX = 3;
 
 export function App() {
@@ -591,19 +606,23 @@ export function App() {
     setNotice(t('settings.resetLayoutDone'));
   }, [applyPanelLayout]);
 
-  // 已启用插件的面板默认进入布局；已存在或插件被禁用时不动。
+  // 已启用插件的面板只在第一次见到时并入布局；用户主动关闭后重开应用不再强行加回。
   useEffect(() => {
     if (!layoutReady || plugins.length === 0) return;
+    const initialized = readPanelInitSet();
     const current = panelLayoutRef.current;
     let next = current;
+    const added: string[] = [];
     for (const plugin of plugins) {
       if (!plugin.enabled) continue;
       for (const panel of plugin.panels) {
         const id = pluginPanelId(plugin.id, panel.id);
-        if (panelDockOf(next, id)) continue;
+        if (initialized.has(id) || panelDockOf(next, id)) continue;
         next = movePanel(next, id, panel.defaultDock ?? 'right');
+        added.push(id);
       }
     }
+    if (added.length > 0) writePanelInitSet([...initialized, ...added]);
     if (next !== current) applyPanelLayout(next, true);
   }, [plugins, layoutReady, applyPanelLayout]);
 

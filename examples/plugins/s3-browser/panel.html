@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>S3</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1f2328;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --hover: #f3f4f6;
+        --accent: #2563eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1b1d21;
+          --fg: #e6e8eb;
+          --muted: #9aa0a6;
+          --border: #33373d;
+          --hover: #262a30;
+          --accent: #7aa2ff;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 10px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, sans-serif;
+      }
+      form { display: grid; gap: 6px; margin-bottom: 10px; }
+      .row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; }
+      .row--pair { grid-template-columns: 64px minmax(0, 1fr) 64px minmax(0, 1fr); }
+      label { color: var(--muted); }
+      input {
+        min-width: 0;
+        padding: 4px 6px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+      }
+      .actions { display: flex; gap: 8px; margin-bottom: 8px; }
+      button {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover { background: var(--hover); }
+      button.primary { border-color: var(--accent); color: var(--accent); }
+      .status { min-height: 16px; color: var(--muted); margin-bottom: 6px; }
+      .status[data-error='true'] { color: #e5484d; }
+      .objects { display: flex; flex-direction: column; gap: 2px; }
+      .object {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 64px 56px;
+        gap: 8px;
+        align-items: center;
+        padding: 4px 6px;
+        border-radius: 4px;
+      }
+      .object:hover { background: var(--hover); }
+      .object__key { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .object__size { color: var(--muted); text-align: right; }
+      .hint { color: var(--muted); font-size: 11px; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <form id="config">
+      <div class="row">
+        <label for="endpoint">Endpoint</label>
+        <input id="endpoint" placeholder="https://s3.example.com" required />
+      </div>
+      <div class="row--pair">
+        <label for="bucket">Bucket</label>
+        <input id="bucket" required />
+        <label for="region">Region</label>
+        <input id="region" placeholder="us-east-1" />
+      </div>
+      <div class="row">
+        <label for="prefix">Prefix</label>
+        <input id="prefix" placeholder="可选，只列某前缀" />
+      </div>
+      <div class="row--pair">
+        <label for="accessKey">AK</label>
+        <input id="accessKey" autocomplete="off" required />
+        <label for="secretKey">SK</label>
+        <input id="secretKey" type="password" autocomplete="off" required />
+      </div>
+    </form>
+    <div class="actions">
+      <button class="primary" id="list" type="button">浏览</button>
+      <button id="clear" type="button">清空</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="objects" id="objects"></div>
+    <p class="hint">配置只保存在本面板（插件自己的源），不会写入 ETerm 配置；SigV4 签名在主进程完成。</p>
+    <script>
+      const STORAGE_KEY = 'eterm.s3.config';
+      const pending = new Map();
+      let requestSeq = 0;
+
+      function request(payload) {
+        const requestId = `s3-${++requestSeq}-${Date.now()}`;
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            pending.delete(requestId);
+            reject(new Error('请求超时'));
+          }, 15000);
+          pending.set(requestId, { resolve, reject, timer });
+          parent.postMessage({ type: 'eterm-plugin:request', requestId, payload }, '*');
+        });
+      }
+
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || data.type !== 'eterm-plugin:response' || typeof data.requestId !== 'string') return;
+        const entry = pending.get(data.requestId);
+        if (!entry) return;
+        pending.delete(data.requestId);
+        clearTimeout(entry.timer);
+        if (data.ok) entry.resolve(data.value);
+        else entry.reject(new Error(data.error?.message ?? '请求失败'));
+      });
+
+      const fields = ['endpoint', 'bucket', 'region', 'prefix', 'accessKey', 'secretKey'];
+      const status = document.getElementById('status');
+      const objects = document.getElementById('objects');
+
+      function setStatus(text, isError) {
+        status.textContent = text;
+        status.dataset.error = isError ? 'true' : 'false';
+      }
+
+      function readConfig() {
+        return {
+          endpoint: document.getElementById('endpoint').value.trim(),
+          bucket: document.getElementById('bucket').value.trim(),
+          region: document.getElementById('region').value.trim(),
+          prefix: document.getElementById('prefix').value.trim(),
+          accessKey: document.getElementById('accessKey').value.trim(),
+          secretKey: document.getElementById('secretKey').value,
+        };
+      }
+
+      function saveConfig() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(readConfig()));
+      }
+
+      function restoreConfig() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+          for (const field of fields) {
+            if (typeof saved[field] === 'string') document.getElementById(field).value = saved[field];
+          }
+        } catch {
+          // 坏配置忽略，保持空表单。
+        }
+      }
+
+      function formatSize(size) {
+        if (!Number.isFinite(size)) return '';
+        if (size < 1024) return `${size} B`;
+        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+        return `${(size / 1024 / 1024).toFixed(1)} MB`;
+      }
+
+      function renderObjects(list) {
+        objects.textContent = '';
+        if (list.length === 0) {
+          setStatus('没有对象', false);
+          return;
+        }
+        setStatus(`共 ${list.length} 个对象`, false);
+        for (const item of list) {
+          const row = document.createElement('div');
+          row.className = 'object';
+          const key = document.createElement('span');
+          key.className = 'object__key';
+          key.textContent = item.key;
+          key.title = item.key;
+          const size = document.createElement('span');
+          size.className = 'object__size';
+          size.textContent = formatSize(item.size);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = '下载';
+          button.addEventListener('click', () => download(item.key));
+          row.append(key, size, button);
+          objects.append(row);
+        }
+      }
+
+      async function browse() {
+        setStatus('加载中…', false);
+        try {
+          const result = await request({ action: 'list', config: readConfig() });
+          renderObjects(Array.isArray(result?.objects) ? result.objects : []);
+          saveConfig();
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      }
+
+      async function download(key) {
+        setStatus(`下载 ${key} …`, false);
+        try {
+          const result = await request({ action: 'download', config: readConfig(), key });
+          const binary = atob(result.base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+          const blob = new Blob([bytes], { type: result.contentType || 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = result.name || key.split('/').at(-1) || 'object';
+          anchor.click();
+          URL.revokeObjectURL(url);
+          setStatus(`已下载 ${result.name}`, false);
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      }
+
+      document.getElementById('list').addEventListener('click', browse);
+      document.getElementById('clear').addEventListener('click', () => {
+        for (const field of fields) document.getElementById(field).value = '';
+        localStorage.removeItem(STORAGE_KEY);
+        renderObjects([]);
+        setStatus('已清空', false);
+      });
+      restoreConfig();
+    </script>
+  </body>
+</html>
