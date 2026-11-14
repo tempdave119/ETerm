@@ -13,6 +13,7 @@ import type { TransferDirection, TransferView } from '../services/transfers/queu
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
 import type { ComponentDescriptor, ComponentSample } from './components.ts';
+import type { PluginRecord } from './plugins.ts';
 import type { ThemeDefinition } from './theme.ts';
 import type {
   ConnectionInput,
@@ -61,6 +62,14 @@ export const FILES_IPC = {
   mkdir: 'files:mkdir',
   rename: 'files:rename',
   remove: 'files:remove',
+} as const;
+
+export const PLUGINS_IPC = {
+  list: 'plugins:list',
+  install: 'plugins:install',
+  setEnabled: 'plugins:set-enabled',
+  uninstall: 'plugins:uninstall',
+  openDir: 'plugins:open-dir',
 } as const;
 
 export const TRANSFERS_IPC = {
@@ -231,6 +240,13 @@ export interface EtermApi {
   createDirectory(sessionId: string, path: string): Promise<IpcResult<null>>;
   renameEntry(sessionId: string, path: string, nextPath: string): Promise<IpcResult<null>>;
   deleteFile(sessionId: string, path: string): Promise<IpcResult<null>>;
+
+  listPlugins(): Promise<IpcResult<PluginRecord[]>>;
+  /** 弹目录选择框；取消时返回 null。 */
+  installPlugin(): Promise<IpcResult<PluginRecord | null>>;
+  setPluginEnabled(id: string, enabled: boolean): Promise<IpcResult<null>>;
+  uninstallPlugin(id: string): Promise<IpcResult<null>>;
+  openPluginsDir(): Promise<IpcResult<null>>;
 
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;

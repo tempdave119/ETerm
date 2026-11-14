@@ -1,11 +1,13 @@
 ---
-name: "ETerm 可选组件规范"
-description: "F-19 交付物：组件目录、manifest 字段、入口契约与串口样例说明"
+name: "ETerm 扩展规范"
+description: "扩展（原能力包 / 可选组件）的目录、manifest 字段、入口契约与串口 / Telnet 样例；插件规范见 docs/plugins.md"
 ---
 
-# ETerm 可选组件规范
+# ETerm 扩展规范
 
-> 可选组件是外挂能力包：设置「扩展」里可安装随包示例，或手动放进用户数据目录；宿主不为某个组件改代码。首版只支持 CJS 入口。
+> 扩展（Extension）是协议层能力包：实现会话 / 执行 / 文件 / 传输 / 转发端口，不提供自有界面，连接表单由宿主按字段表渲染。设置「扩展」里可安装随包示例，或手动放进用户数据目录；宿主不为某个扩展改代码。首版只支持 CJS 入口。
+>
+> 带界面、命令或主题的功能包叫插件（Plugin），规范见 `docs/plugins.md`，与扩展分目录存放。
 
 ## 目录与装载
 
@@ -51,7 +53,7 @@ description: "F-19 交付物：组件目录、manifest 字段、入口契约与�
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 组件唯一 id，与模块导出的 `id` 一致 |
-| `kind` | 目前只接受 `capability`；`panel` / `theme` / `command` 为预留，未实现，写入即被拒绝 |
+| `kind` | 扩展固定为 `capability`；`panel` / `theme` / `command` 属于插件形态，不在本文档范围（见 `docs/plugins.md`） |
 | `apiVersion` | `^1.0.0` 形式，只校验主版本 |
 | `entry` | 相对组件目录的入口文件，必须在目录内 |
 | `activation.onProtocol` | 协议名（1–32 位小写），新建连接的下拉里出现 |
@@ -102,7 +104,7 @@ module.exports = {
 
 ## Telnet 样例
 
-`examples/components/telnet/` 是第二个外挂能力包样例：
+`examples/components/telnet/` 是第二个外部扩展样例：
 
 - 把整个目录复制到 `<用户数据目录>/components/telnet`，重启后新建连接的协议下拉出现「Telnet」。
 - 表单字段：`host`（主机）与 `port`（端口，默认 23）；连接记录把两项存在 `options` 里，宿主不解释。
@@ -114,9 +116,9 @@ module.exports = {
 
 `examples/components/serial/` 是随仓库提供的样例：
 
-- 直接打开设备文件做原始读写；`baudRate` 只保存不生效（设置波特率需要平台 ioctl，首版不引原生依赖）。
-- 适合验证装载链路与 115200 默认速率的设备；真实串口建议后续换 `serialport` 实现。
-- 装载后新建连接出现「串口」，填设备路径即可开会话。
+- 基于 `serialport` 13（宿主依赖，asarUnpack），打开设备时应用波特率 / 数据位 / 停止位 / 校验 / 流控，并设 DTR / RTS；设备枚举 cu 优先。
+- 适合验证装载链路与真实串口设备；PTY 模拟设备双向收发已在 `npm run ssh-smoke` 覆盖。
+- 装载后新建连接出现「串口」，选设备与参数即可开会话。
 
 ## 验证
 

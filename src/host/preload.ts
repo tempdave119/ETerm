@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+import type { PluginRecord } from '../shared/plugins.ts';
 import {
   CLIPBOARD_IPC,
   COMPONENTS_IPC,
@@ -13,6 +14,7 @@ import {
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
   MENU_IPC,
+  PLUGINS_IPC,
   SERIAL_IPC,
   SYSTEM_IPC,
   THEMES_IPC,
@@ -101,6 +103,13 @@ const api: EtermApi = {
     ipcRenderer.invoke(FILES_IPC.rename, { sessionId, path, nextPath }) as Promise<IpcResult<null>>,
   deleteFile: (sessionId: string, path: string) =>
     ipcRenderer.invoke(FILES_IPC.remove, { sessionId, path }) as Promise<IpcResult<null>>,
+
+  listPlugins: () => ipcRenderer.invoke(PLUGINS_IPC.list) as Promise<IpcResult<PluginRecord[]>>,
+  installPlugin: () => ipcRenderer.invoke(PLUGINS_IPC.install) as Promise<IpcResult<PluginRecord | null>>,
+  setPluginEnabled: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke(PLUGINS_IPC.setEnabled, { id, enabled }) as Promise<IpcResult<null>>,
+  uninstallPlugin: (id: string) => ipcRenderer.invoke(PLUGINS_IPC.uninstall, id) as Promise<IpcResult<null>>,
+  openPluginsDir: () => ipcRenderer.invoke(PLUGINS_IPC.openDir) as Promise<IpcResult<null>>,
 
   listTransfers: () => ipcRenderer.invoke(TRANSFERS_IPC.list) as Promise<IpcResult<TransferView[]>>,
   cancelTransfer: (id: string) =>

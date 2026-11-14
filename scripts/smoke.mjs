@@ -106,6 +106,23 @@ writeFileSync(
   JSON.stringify({ id: 'broken', name: 'Broken', base: 'dark', ui: { '--font-body': '13px' } }),
 );
 
+// 插件：预置一个有效插件，管理面板需要它才能验证禁用 / 卸载。
+mkdirSync(join(dataDir, 'plugins', 'smoke-plugin'), { recursive: true });
+writeFileSync(
+  join(dataDir, 'plugins', 'smoke-plugin', 'manifest.json'),
+  JSON.stringify({
+    id: 'smoke-plugin',
+    kind: 'plugin',
+    apiVersion: '^1.0.0',
+    version: '0.1.0',
+    description: 'smoke plugin',
+    author: 'smoke',
+    entry: 'index.cjs',
+    permissions: ['panel'],
+  }),
+);
+writeFileSync(join(dataDir, 'plugins', 'smoke-plugin', 'index.cjs'), 'module.exports = {};\n');
+
 const appLogs = [];
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -554,6 +571,43 @@ try {
 
   // 能力包：示例组件默认未安装；一键安装后状态变化并落到临时 userData。
   await openSection('extensions');
+
+  // 插件：预置插件应出现在列表，可禁用（状态落盘）与卸载（目录删除）。
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),
+    5_000,
+    '插件列表',
+  );
+  const pluginEnabled = await evaluate(
+    `document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled`,
+  );
+  if (pluginEnabled !== 'true') throw new Error(`插件初始状态异常：${pluginEnabled}`);
+  await evaluate(`document.querySelector('[data-testid="plugin-toggle-smoke-plugin"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled === 'false'`),
+    5_000,
+    '插件禁用',
+  );
+  const pluginState = JSON.parse(await readFile(join(dataDir, 'plugins.json'), 'utf8'));
+  if (!pluginState.disabled.includes('smoke-plugin')) throw new Error('插件禁用状态未落盘');
+
+  await evaluate(`window.confirm = () => true`);
+  await evaluate(`document.querySelector('[data-testid="plugin-uninstall-smoke-plugin"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') === null`),
+    5_000,
+    '插件卸载',
+  );
+  await evaluate(`delete window.confirm`);
+  let pluginRemoved = false;
+  try {
+    await stat(join(dataDir, 'plugins', 'smoke-plugin'));
+  } catch {
+    pluginRemoved = true;
+  }
+  if (!pluginRemoved) throw new Error('卸载后插件目录仍存在');
+
   const beforeInstall = await evaluate(
     `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed`,
   );

@@ -11,6 +11,7 @@ import type {
   TransferView,
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
+import type { PluginRecord } from '../shared/plugins.ts';
 import type { ThemeDefinition } from '../shared/theme.ts';
 import { applyUiTheme, resolveTheme, terminalThemeFor } from './theme.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
@@ -120,6 +121,9 @@ export function App() {
   const [componentSamples, setComponentSamples] = useState<ComponentSample[]>([]);
   const [componentsBusy, setComponentsBusy] = useState(false);
   const [componentsNotice, setComponentsNotice] = useState<string | null>(null);
+  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [pluginsBusy, setPluginsBusy] = useState(false);
+  const [pluginsNotice, setPluginsNotice] = useState<string | null>(null);
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -196,6 +200,15 @@ export function App() {
     const result = await window.eterm.listComponentSamples();
     if (result.ok) setComponentSamples(result.value);
   }, []);
+
+  const loadPlugins = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.listPlugins();
+    if (result.ok) setPlugins(result.value);
+  }, []);
+
+  useEffect(() => {
+    void loadPlugins();
+  }, [loadPlugins]);
 
   useEffect(() => {
     void loadComponentSamples();
@@ -414,6 +427,70 @@ export function App() {
 
   const openComponentsDir = useCallback(async (): Promise<void> => {
     const result = await window.eterm.openComponentsDir();
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const installPlugin = useCallback(async (): Promise<void> => {
+    setPluginsBusy(true);
+    setPluginsNotice(null);
+    try {
+      const result = await window.eterm.installPlugin();
+      if (!result.ok) {
+        setSettingsError(result.error.message);
+        return;
+      }
+      if (!result.value) return;
+      await loadPlugins();
+      setPluginsNotice(t('settings.plugins.installDone', { name: result.value.id }));
+    } finally {
+      setPluginsBusy(false);
+    }
+  }, [loadPlugins]);
+
+  const setPluginEnabled = useCallback(
+    async (id: string, enabled: boolean): Promise<void> => {
+      setPluginsBusy(true);
+      setPluginsNotice(null);
+      try {
+        const result = await window.eterm.setPluginEnabled(id, enabled);
+        if (!result.ok) {
+          setSettingsError(result.error.message);
+          return;
+        }
+        await loadPlugins();
+        setPluginsNotice(
+          t(enabled ? 'settings.plugins.enableDone' : 'settings.plugins.disableDone', { name: id }),
+        );
+      } finally {
+        setPluginsBusy(false);
+      }
+    },
+    [loadPlugins],
+  );
+
+  const uninstallPlugin = useCallback(
+    async (id: string): Promise<void> => {
+      const confirmed = window.confirm(t('settings.plugins.confirmUninstall', { name: id }));
+      if (!confirmed) return;
+      setPluginsBusy(true);
+      setPluginsNotice(null);
+      try {
+        const result = await window.eterm.uninstallPlugin(id);
+        if (!result.ok) {
+          setSettingsError(result.error.message);
+          return;
+        }
+        await loadPlugins();
+        setPluginsNotice(t('settings.plugins.uninstallDone', { name: id }));
+      } finally {
+        setPluginsBusy(false);
+      }
+    },
+    [loadPlugins],
+  );
+
+  const openPluginsDir = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.openPluginsDir();
     if (!result.ok) setError(result.error);
   }, []);
 
@@ -1407,6 +1484,13 @@ export function App() {
           onInstallComponentSample={(id) => void installComponentSample(id)}
           onUninstallComponentSample={(id) => void uninstallComponentSample(id)}
           onOpenComponentsDir={() => void openComponentsDir()}
+          plugins={plugins}
+          pluginsBusy={pluginsBusy}
+          pluginsNotice={pluginsNotice}
+          onInstallPlugin={() => void installPlugin()}
+          onSetPluginEnabled={(id, enabled) => void setPluginEnabled(id, enabled)}
+          onUninstallPlugin={(id) => void uninstallPlugin(id)}
+          onOpenPluginsDir={() => void openPluginsDir()}
         />
       ) : null}
 

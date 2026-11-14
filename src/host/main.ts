@@ -29,6 +29,8 @@ import {
 import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
+import { registerPluginsIpc } from './plugins-ipc.ts';
+import { PluginStore } from '../services/plugins/store.ts';
 import { loadComponents } from './components.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
 import { registerConfigIpc } from './config-ipc.ts';
@@ -81,6 +83,7 @@ let disposeTransfersIpc: (() => void) | null = null;
 let transferQueue: TransferQueue | null = null;
 let disposeKnownHostsIpc: (() => void) | null = null;
 let disposeComponentsIpc: (() => void) | null = null;
+let disposePluginsIpc: (() => void) | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
@@ -333,6 +336,15 @@ void app.whenReady().then(async () => {
     sampleDirs: { bundledDir: bundledComponentsDir, userDir: path.join(baseDir, 'components') },
   });
 
+  const pluginStore = new PluginStore({
+    baseDir,
+    logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
+  });
+  disposePluginsIpc = registerPluginsIpc({
+    store: pluginStore,
+    pluginsDir: path.join(baseDir, 'plugins'),
+  });
+
   disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);
   disposeLayoutsIpc = registerLayoutsIpc(services.layouts);
@@ -368,6 +380,8 @@ app.on('will-quit', () => {
   disposeConnectionsIpc = null;
   disposeComponentsIpc?.();
   disposeComponentsIpc = null;
+  disposePluginsIpc?.();
+  disposePluginsIpc = null;
   disposeConfigIpc?.();
   disposeConfigIpc = null;
   disposeKnownHostsIpc?.();

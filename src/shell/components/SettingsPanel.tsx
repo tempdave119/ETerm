@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
+import type { PluginPermission, PluginRecord } from '../../shared/plugins.ts';
 import { commandForShellPreset, detectShellPreset, type LocalShellPreset } from '../../shared/local-shell.ts';
 import {
   TERMINAL_FONT_FAMILIES,
@@ -39,6 +40,13 @@ interface SettingsPanelProps {
   onInstallComponentSample(id: string): void;
   onUninstallComponentSample(id: string): void;
   onOpenComponentsDir(): void;
+  plugins: PluginRecord[];
+  pluginsBusy: boolean;
+  pluginsNotice: string | null;
+  onInstallPlugin(): void;
+  onSetPluginEnabled(id: string, enabled: boolean): void;
+  onUninstallPlugin(id: string): void;
+  onOpenPluginsDir(): void;
 }
 
 type SectionId = 'appearance' | 'terminal' | 'connection' | 'extensions' | 'transfer' | 'shortcuts' | 'layout';
@@ -60,6 +68,13 @@ const FONT_FAMILY_LABELS: Record<string, string> = {
   'sf-mono': 'SF Mono',
   menlo: 'Menlo',
   monaco: 'Monaco',
+};
+
+const PLUGIN_PERMISSION_LABELS: Record<PluginPermission, MessageKey> = {
+  panel: 'settings.plugins.permission.panel',
+  command: 'settings.plugins.permission.command',
+  theme: 'settings.plugins.permission.theme',
+  config: 'settings.plugins.permission.config',
 };
 const CONCURRENCY = [1, 2, 3, 4];
 const KEEPALIVE_INTERVALS = [10, 30, 60, 120, 300];
@@ -88,6 +103,13 @@ export function SettingsPanel({
   onInstallComponentSample,
   onUninstallComponentSample,
   onOpenComponentsDir,
+  plugins,
+  pluginsBusy,
+  pluginsNotice,
+  onInstallPlugin,
+  onSetPluginEnabled,
+  onUninstallPlugin,
+  onOpenPluginsDir,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>('appearance');
   const [confirmUninstallId, setConfirmUninstallId] = useState<string | null>(null);
@@ -683,6 +705,84 @@ export function SettingsPanel({
                 </div>
                 <p className="form-hint">{t('settings.extensions.restartHint')}</p>
                 {componentsNotice ? <p className="form-hint">{componentsNotice}</p> : null}
+
+                <h4 className="settings-subtitle">{t('settings.plugins.title')}</h4>
+                <p className="form-hint">{t('settings.plugins.intro')}</p>
+                {plugins.length === 0 ? (
+                  <p className="form-hint" data-testid="plugins-empty">
+                    {t('settings.plugins.empty')}
+                  </p>
+                ) : (
+                  <div className="component-sample-list">
+                    {plugins.map((plugin) => (
+                      <div
+                        className="component-sample"
+                        key={plugin.id}
+                        data-testid={`plugin-row-${plugin.id}`}
+                        data-enabled={plugin.enabled}
+                      >
+                        <span className="component-sample__name">{plugin.id}</span>
+                        <span className="component-sample__protocol">
+                          v{plugin.version}
+                          {plugin.author ? ` · ${plugin.author}` : ''}
+                        </span>
+                        <span className="component-sample__status">
+                          {plugin.enabled ? t('settings.plugins.enabled') : t('settings.plugins.disabled')}
+                        </span>
+                        <span className="component-sample__actions">
+                          <button
+                            className="link-button"
+                            type="button"
+                            disabled={pluginsBusy}
+                            data-testid={`plugin-toggle-${plugin.id}`}
+                            onClick={() => onSetPluginEnabled(plugin.id, !plugin.enabled)}
+                          >
+                            {plugin.enabled ? t('settings.plugins.disable') : t('settings.plugins.enable')}
+                          </button>
+                          <button
+                            className="link-button"
+                            type="button"
+                            disabled={pluginsBusy}
+                            data-testid={`plugin-uninstall-${plugin.id}`}
+                            onClick={() => onUninstallPlugin(plugin.id)}
+                          >
+                            {t('settings.plugins.uninstall')}
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {plugins.length > 0 ? (
+                  <p className="form-hint">
+                    {plugins
+                      .map((plugin) =>
+                        `${plugin.id} · ${plugin.permissions.length > 0 ? plugin.permissions.map((item) => t(PLUGIN_PERMISSION_LABELS[item])).join(' / ') : t('settings.plugins.permissionNone')}`,
+                      )
+                      .join('；')}
+                  </p>
+                ) : null}
+                <div className="settings-theme-actions">
+                  <button
+                    className="button"
+                    type="button"
+                    data-testid="plugins-install"
+                    disabled={pluginsBusy}
+                    onClick={onInstallPlugin}
+                  >
+                    {t('settings.plugins.install')}
+                  </button>
+                  <button
+                    className="button"
+                    type="button"
+                    data-testid="plugins-open-dir"
+                    onClick={onOpenPluginsDir}
+                  >
+                    {t('settings.plugins.openDir')}
+                  </button>
+                </div>
+                <p className="form-hint">{t('settings.plugins.restartHint')}</p>
+                {pluginsNotice ? <p className="form-hint">{pluginsNotice}</p> : null}
               </section>
             ) : null}
 

@@ -956,6 +956,12 @@ button {
   font-size: var(--font-aux);
 }
 
+.component-sample__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+}
+
 .component-sample__name {
   overflow: hidden;
   color: var(--text-primary);
