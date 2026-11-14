@@ -187,6 +187,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(COMPONENTS_IPC.installSamples) as Promise<
       IpcResult<{ installed: string[]; skipped: string[] }>
     >,
+  uninstallComponentSample: (id: string) =>
+    ipcRenderer.invoke(COMPONENTS_IPC.uninstallSample, id) as Promise<
+      IpcResult<{ removed: string[]; skipped: string[] }>
+    >,
   openComponentsDir: () =>
     ipcRenderer.invoke(COMPONENTS_IPC.openDir) as Promise<IpcResult<null>>,
   listSerialDevices: () => ipcRenderer.invoke(SERIAL_IPC.list) as Promise<IpcResult<SerialDevice[]>>,

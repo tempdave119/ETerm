@@ -4,10 +4,12 @@ import { normalizeError } from '../core/errors.ts';
 import {
   installComponentSamples,
   listComponentSamples,
+  uninstallComponentSamples,
   type ComponentSampleDirs,
 } from '../services/components/samples.ts';
 import type { ComponentDescriptor, ComponentSample } from '../shared/components.ts';
 import { COMPONENTS_IPC, type IpcResult } from '../shared/ipc.ts';
+import { readString } from './validate.ts';
 
 export interface ComponentsIpcOptions {
   getDescriptors: () => ComponentDescriptor[];
@@ -43,6 +45,18 @@ export function registerComponentsIpc(options: ComponentsIpcOptions): () => void
     },
   );
 
+  ipcMain.handle(
+    COMPONENTS_IPC.uninstallSample,
+    async (_event, rawId): Promise<IpcResult<{ removed: string[]; skipped: string[] }>> => {
+      try {
+        const id = readString(rawId, '组件 id', 64);
+        return { ok: true, value: await uninstallComponentSamples(options.sampleDirs, [id]) };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
   ipcMain.handle(COMPONENTS_IPC.openDir, async (): Promise<IpcResult<null>> => {
     try {
       await mkdir(options.sampleDirs.userDir, { recursive: true });
@@ -59,6 +73,7 @@ export function registerComponentsIpc(options: ComponentsIpcOptions): () => void
       COMPONENTS_IPC.list,
       COMPONENTS_IPC.samples,
       COMPONENTS_IPC.installSamples,
+      COMPONENTS_IPC.uninstallSample,
       COMPONENTS_IPC.openDir,
     ]) {
       ipcMain.removeHandler(channel);

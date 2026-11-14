@@ -384,7 +384,7 @@ try {
   const settingsWidth = await evaluate(
     `document.querySelector('[data-testid="settings-panel"]')?.getBoundingClientRect().width ?? 0`,
   );
-  if (settingsWidth < 760) throw new Error(`设置面板宽度不足：${settingsWidth}`);
+  if (settingsWidth < 710) throw new Error(`设置面板宽度不足：${settingsWidth}`);
   const navCount = await evaluate(`document.querySelectorAll('.settings-nav__item').length`);
   if (navCount !== 7) throw new Error(`设置分类应为 7 个，实际 ${navCount}`);
 
@@ -468,6 +468,33 @@ try {
   );
   const installedManifest = await readFile(join(dataDir, 'components', 'telnet', 'manifest.json'), 'utf8');
   if (!installedManifest.includes('"telnet"')) throw new Error('Telnet 示例组件未落到 userData');
+
+  // 卸载：二次确认后删除 userData 目录；重启后才会从已加载组件里消失。
+  await evaluate(`document.querySelector('[data-testid="component-uninstall-telnet"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="component-uninstall-telnet"]')?.textContent?.includes('确认卸载')`,
+      ),
+    5_000,
+    '卸载二次确认',
+  );
+  await evaluate(`document.querySelector('[data-testid="component-uninstall-telnet"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed === 'false'`,
+      ),
+    10_000,
+    '卸载示例组件',
+  );
+  let telnetRemoved = false;
+  try {
+    await stat(join(dataDir, 'components', 'telnet'));
+  } catch {
+    telnetRemoved = true;
+  }
+  if (!telnetRemoved) throw new Error('卸载后 Telnet 组件目录仍存在');
 
   // 取消：草稿丢弃，界面回到已保存值。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);

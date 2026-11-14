@@ -679,7 +679,7 @@ button {
 }
 
 .modal--settings {
-  width: 760px;
+  width: 710px;
   /* 固定高度：切分类时不跳变，内容多的分类在右侧滚动 */
   height: 520px;
   max-height: calc(100vh - 96px);
@@ -802,13 +802,17 @@ button {
 
 .component-sample {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px auto;
+  grid-template-columns: minmax(0, 1fr) 88px auto auto;
   align-items: center;
   gap: var(--space-base);
   padding: var(--space-tight) var(--space-base);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-canvas);
+}
+
+.component-sample .link-button {
+  font-size: var(--font-aux);
 }
 
 .component-sample__name {

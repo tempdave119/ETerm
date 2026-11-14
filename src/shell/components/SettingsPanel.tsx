@@ -31,6 +31,7 @@ interface SettingsPanelProps {
   componentsBusy: boolean;
   componentsNotice: string | null;
   onInstallComponentSamples(): void;
+  onUninstallComponentSample(id: string): void;
   onOpenComponentsDir(): void;
 }
 
@@ -71,9 +72,11 @@ export function SettingsPanel({
   componentsBusy,
   componentsNotice,
   onInstallComponentSamples,
+  onUninstallComponentSample,
   onOpenComponentsDir,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>('appearance');
+  const [confirmUninstallId, setConfirmUninstallId] = useState<string | null>(null);
   // 恢复默认是破坏性动作，用「再点一次确认」替代额外弹窗。
   const [confirming, setConfirming] = useState<'settings' | 'layout' | null>(null);
   const configRef = useRef(config);
@@ -95,6 +98,12 @@ export function SettingsPanel({
     const timer = window.setTimeout(() => setConfirming(null), 3000);
     return () => window.clearTimeout(timer);
   }, [confirming]);
+
+  useEffect(() => {
+    if (!confirmUninstallId) return;
+    const timer = window.setTimeout(() => setConfirmUninstallId(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [confirmUninstallId]);
 
   const update = useCallback(
     (patch: (draft: AppConfig) => void): void => {
@@ -378,7 +387,9 @@ export function SettingsPanel({
                     {componentSamples.map((sample) => {
                       const loaded = loadedComponentIds.has(sample.id);
                       const status = !sample.installed
-                        ? t('settings.extensions.notInstalled')
+                        ? loaded
+                          ? t('settings.extensions.pendingRemoval')
+                          : t('settings.extensions.notInstalled')
                         : loaded
                           ? t('settings.extensions.installed')
                           : t('settings.extensions.pendingRestart');
@@ -393,6 +404,28 @@ export function SettingsPanel({
                           <span className="component-sample__name">{sample.label}</span>
                           <span className="component-sample__protocol">{sample.protocol}</span>
                           <span className="component-sample__status">{status}</span>
+                          {sample.installed ? (
+                            <button
+                              className="link-button"
+                              type="button"
+                              disabled={componentsBusy}
+                              data-testid={`component-uninstall-${sample.id}`}
+                              onClick={() => {
+                                if (confirmUninstallId === sample.id) {
+                                  setConfirmUninstallId(null);
+                                  onUninstallComponentSample(sample.id);
+                                } else {
+                                  setConfirmUninstallId(sample.id);
+                                }
+                              }}
+                            >
+                              {confirmUninstallId === sample.id
+                                ? t('settings.extensions.confirmUninstall')
+                                : t('settings.extensions.uninstall')}
+                            </button>
+                          ) : (
+                            <span />
+                          )}
                         </div>
                       );
                     })}

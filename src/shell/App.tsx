@@ -366,6 +366,30 @@ export function App() {
     }
   }, [loadComponentSamples]);
 
+  const uninstallComponentSample = useCallback(
+    async (id: string): Promise<void> => {
+      setComponentsBusy(true);
+      setComponentsNotice(null);
+      try {
+        const result = await window.eterm.uninstallComponentSample(id);
+        if (!result.ok) {
+          setSettingsError(result.error.message);
+          return;
+        }
+        await loadComponentSamples();
+        const count = result.value.removed.length;
+        setComponentsNotice(
+          count > 0
+            ? t('settings.extensions.uninstallDone', { count })
+            : t('settings.extensions.uninstallNone'),
+        );
+      } finally {
+        setComponentsBusy(false);
+      }
+    },
+    [loadComponentSamples],
+  );
+
   const openComponentsDir = useCallback(async (): Promise<void> => {
     const result = await window.eterm.openComponentsDir();
     if (!result.ok) setError(result.error);
@@ -1287,6 +1311,7 @@ export function App() {
           componentsBusy={componentsBusy}
           componentsNotice={componentsNotice}
           onInstallComponentSamples={() => void installComponentSamples()}
+          onUninstallComponentSample={(id) => void uninstallComponentSample(id)}
           onOpenComponentsDir={() => void openComponentsDir()}
         />
       ) : null}

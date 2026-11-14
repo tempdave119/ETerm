@@ -3,7 +3,7 @@
  * 只做「缺什么补什么」，不覆盖用户已经改过的组件目录。
  */
 
-import { cp, mkdir, readdir, readFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ComponentSample } from '../../shared/components.ts';
 
@@ -73,6 +73,33 @@ async function exists(path: string): Promise<boolean> {
 
 export async function listComponentSamples(dirs: ComponentSampleDirs): Promise<ComponentSample[]> {
   return (await readBundledSamples(dirs)).map((item) => item.sample);
+}
+
+/** 卸载只允许随包示例 id；已不存在的目录记为 skipped。 */
+export async function uninstallComponentSamples(
+  dirs: ComponentSampleDirs,
+  ids: readonly string[],
+): Promise<{ removed: string[]; skipped: string[] }> {
+  const allowed = new Map((await readBundledSamples(dirs)).map((item) => [item.sample.id, item.entry]));
+  const removed: string[] = [];
+  const skipped: string[] = [];
+
+  for (const id of ids) {
+    const entry = allowed.get(id);
+    if (!entry) {
+      skipped.push(id);
+      continue;
+    }
+    const target = join(dirs.userDir, entry);
+    if (!(await exists(join(target, 'manifest.json')))) {
+      skipped.push(id);
+      continue;
+    }
+    await rm(target, { recursive: true, force: true });
+    removed.push(id);
+  }
+
+  return { removed, skipped };
 }
 
 /** 返回 installed / skipped；目标目录已存在时跳过，避免覆盖用户修改。 */

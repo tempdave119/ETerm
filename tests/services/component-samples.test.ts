@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   installComponentSamples,
   listComponentSamples,
+  uninstallComponentSamples,
   type ComponentSampleDirs,
 } from '../../src/services/components/samples.ts';
 
@@ -66,6 +67,19 @@ test('component_samples_installs_and_is_idempotent', async () => {
     assert.deepEqual(second.installed, []);
     assert.deepEqual(second.skipped, ['serial', 'telnet']);
     assert.ok((await listComponentSamples(dirs)).every((sample) => sample.installed));
+  });
+});
+
+test('component_samples_uninstalls_only_bundled_and_installed_ids', async () => {
+  await withDirs(async (dirs) => {
+    await installComponentSamples(dirs);
+
+    const result = await uninstallComponentSamples(dirs, ['serial', 'unknown', '../serial']);
+    assert.deepEqual(result.removed, ['serial']);
+    assert.deepEqual(result.skipped, ['unknown', '../serial']);
+    assert.ok((await listComponentSamples(dirs)).find((sample) => sample.id === 'serial')?.installed === false);
+    assert.ok((await listComponentSamples(dirs)).find((sample) => sample.id === 'telnet')?.installed === true);
+    await assert.rejects(readFile(join(dirs.userDir, 'serial', 'manifest.json')));
   });
 });
 
