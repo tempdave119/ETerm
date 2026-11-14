@@ -72,6 +72,7 @@ export const PLUGINS_IPC = {
   openDir: 'plugins:open-dir',
   listCommands: 'plugins:list-commands',
   runCommand: 'plugins:run-command',
+  panelMessage: 'plugins:panel-message',
 } as const;
 
 export const TRANSFERS_IPC = {
@@ -251,6 +252,8 @@ export interface EtermApi {
   openPluginsDir(): Promise<IpcResult<null>>;
   listPluginCommands(): Promise<IpcResult<PluginCommandInfo[]>>;
   runPluginCommand(id: string): Promise<IpcResult<null>>;
+  /** 插件面板 → 宿主 → 插件主进程的请求；返回值需可 JSON 序列化。 */
+  sendPluginPanelMessage(pluginId: string, panelId: string, payload: unknown): Promise<IpcResult<unknown>>;
 
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;

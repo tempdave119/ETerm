@@ -133,13 +133,25 @@ module.exports = {
     api.registerCommand('hello', () => {
       writeFileSync(join(process.env.ETERM_USER_DATA ?? '', 'plugin-command-ran.txt'), 'ok');
     });
+    api.registerPanelHandler('smoke', (payload) => {
+      writeFileSync(join(process.env.ETERM_USER_DATA ?? '', 'panel-message-ran.txt'), JSON.stringify(payload));
+      return { pong: true };
+    });
   },
 };
 `,
 );
 writeFileSync(
   join(dataDir, 'plugins', 'smoke-plugin', 'panel.html'),
-  '<!doctype html><meta charset="utf-8"><body style="font:13px sans-serif;padding:12px">smoke panel</body>',
+  `<!doctype html><meta charset="utf-8"><body style="font:13px sans-serif;padding:12px">smoke panel
+<script>
+  let attempts = 0;
+  function send() {
+    parent.postMessage({ type: 'eterm-plugin:request', requestId: 'smoke-1', payload: { ping: true } }, '*');
+    if (++attempts < 5) setTimeout(send, 300);
+  }
+  send();
+</script>`,
 );
 mkdirSync(join(dataDir, 'plugins', 'smoke-plugin', 'themes'), { recursive: true });
 writeFileSync(
@@ -640,6 +652,17 @@ try {
     () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`),
     5_000,
     '插件面板出现',
+  );
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 'panel-message-ran.txt'), 'utf8')).includes('"ping":true');
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '插件面板消息桥',
   );
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),

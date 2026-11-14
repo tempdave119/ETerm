@@ -114,6 +114,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(PLUGINS_IPC.listCommands) as Promise<IpcResult<PluginCommandInfo[]>>,
   runPluginCommand: (id: string) =>
     ipcRenderer.invoke(PLUGINS_IPC.runCommand, id) as Promise<IpcResult<null>>,
+  sendPluginPanelMessage: (pluginId: string, panelId: string, payload: unknown) =>
+    ipcRenderer.invoke(PLUGINS_IPC.panelMessage, { pluginId, panelId, payload }) as Promise<
+      IpcResult<unknown>
+    >,
 
   listTransfers: () => ipcRenderer.invoke(TRANSFERS_IPC.list) as Promise<IpcResult<TransferView[]>>,
   cancelTransfer: (id: string) =>

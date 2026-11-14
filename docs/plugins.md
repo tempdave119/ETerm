@@ -59,6 +59,13 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 - 插件自行负责面板内样式与滚动；宿主只提供面板头、停靠、尺寸与分隔。
 - 已启用插件的面板按 manifest `panels[].defaultDock`（默认 `right`）自动并入布局；禁用后从界面移除，布局位置保留，重新启用后回到原位。
 
+### 面板通信
+
+- iframe 发起：`parent.postMessage({ type: 'eterm-plugin:request', requestId, payload }, '*')`。
+- 宿主校验消息来源必须是该面板 iframe，再转给主进程插件的 `registerPanelHandler(panelId, handler)`；回传格式 `{ type: 'eterm-plugin:response', requestId, ok, value | error }`。
+- `panelId` 必须是 manifest `panels` 里声明过的 id；payload 上限 256 KB，返回值必须可 JSON 序列化。
+- 插件拿不到宿主 DOM 与 IPC，只能通过这条桥请求数据。
+
 ## 主题约定
 
 - 插件目录下放 `themes/*.json`，格式与外部主题一致（`ui` 颜色 token + `terminal` 调色板）；安装后出现在设置 → 外观的主题下拉，value 为 `ext:<主题 id>`。

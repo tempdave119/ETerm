@@ -22,6 +22,8 @@ function readId(raw: unknown): string {
   return readString(raw, '插件 id', 64);
 }
 
+const PANEL_MESSAGE_MAX = 256 * 1024;
+
 /** 插件的安装 / 启停 / 卸载；安装走系统目录选择框，不接受渲染层传路径。 */
 export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
   ipcMain.handle(PLUGINS_IPC.list, async (): Promise<IpcResult<PluginRecord[]>> => {
@@ -97,6 +99,22 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
     }
   });
 
+  ipcMain.handle(PLUGINS_IPC.panelMessage, async (_event, raw): Promise<IpcResult<unknown>> => {
+    try {
+      const value = readRecord(raw, '插件面板消息');
+      const pluginId = readString(value.pluginId, 'pluginId', 64);
+      const panelId = readString(value.panelId, 'panelId', 64);
+      const payload = value.payload ?? null;
+      const serialized = JSON.stringify(payload);
+      if (serialized.length > PANEL_MESSAGE_MAX) {
+        throw new Error(`面板消息超过 ${PANEL_MESSAGE_MAX} 字节`);
+      }
+      return { ok: true, value: await options.runtime.handlePanelMessage(pluginId, panelId, payload) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   return () => {
     for (const channel of [
       PLUGINS_IPC.list,
@@ -106,6 +124,7 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
       PLUGINS_IPC.openDir,
       PLUGINS_IPC.listCommands,
       PLUGINS_IPC.runCommand,
+      PLUGINS_IPC.panelMessage,
     ]) {
       ipcMain.removeHandler(channel);
     }

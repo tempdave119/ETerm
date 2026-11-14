@@ -13,6 +13,7 @@ export type PluginRuntimeLogger = (message: string, detail?: unknown) => void;
 interface LoadedPlugin {
   id: string;
   commands: Map<string, () => void | Promise<void>>;
+  panelHandlers: Map<string, (payload: unknown) => unknown | Promise<unknown>>;
   titles: Map<string, string>;
   dispose: (() => void) | null;
 }
@@ -20,6 +21,11 @@ interface LoadedPlugin {
 interface PluginApi {
   /** 注册 manifest 已声明的命令；未声明或 handler 不是函数直接抛错。 */
   registerCommand(commandId: string, run: () => void | Promise<void>): void;
+  /** 注册面板消息处理器；面板通过宿主桥调用，返回值需可 JSON 序列化。 */
+  registerPanelHandler(
+    panelId: string,
+    handler: (payload: unknown) => unknown | Promise<unknown>,
+  ): void;
 }
 
 export interface PluginRuntimeOptions {
@@ -76,6 +82,14 @@ export class PluginRuntime {
     await handler();
   }
 
+  /** 面板 → 宿主 → 插件主进程的请求；返回值由宿主原样回传给 iframe。 */
+  async handlePanelMessage(pluginId: string, panelId: string, payload: unknown): Promise<unknown> {
+    const plugin = this.#loaded.find((item) => item.id === pluginId);
+    const handler = plugin?.panelHandlers.get(panelId);
+    if (!handler) throw new Error(`插件 ${pluginId} 未注册面板处理器：${panelId}`);
+    return handler(payload);
+  }
+
   dispose(): void {
     for (const plugin of this.#loaded) {
       try {
@@ -98,12 +112,19 @@ export class PluginRuntime {
     }
 
     const declared = new Map(manifest.commands.map((command) => [command.id, command]));
+    const declaredPanels = new Set(manifest.panels.map((panel) => panel.id));
     const commands = new Map<string, () => void | Promise<void>>();
+    const panelHandlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>();
     const api: PluginApi = {
       registerCommand(commandId, run) {
         if (!declared.has(commandId)) throw new Error(`命令未在 manifest 声明：${commandId}`);
         if (typeof run !== 'function') throw new Error(`命令 handler 必须是函数：${commandId}`);
         commands.set(commandId, run);
+      },
+      registerPanelHandler(panelId, handler) {
+        if (!declaredPanels.has(panelId)) throw new Error(`面板未在 manifest 声明：${panelId}`);
+        if (typeof handler !== 'function') throw new Error(`面板 handler 必须是函数：${panelId}`);
+        panelHandlers.set(panelId, handler);
       },
     };
 
@@ -118,6 +139,7 @@ export class PluginRuntime {
     return {
       id: manifest.id,
       commands,
+      panelHandlers,
       titles: new Map(manifest.commands.map((command) => [command.id, command.title])),
       dispose,
     };

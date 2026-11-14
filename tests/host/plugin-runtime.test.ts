@@ -17,6 +17,7 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
     author: 'tester',
     entry: 'index.cjs',
     commands: [{ id: 'hello', title: 'Hello' }],
+    panels: [{ id: 'main', title: 'Main' }],
     ...overrides,
   };
 }
@@ -121,4 +122,33 @@ test('plugin_runtime_lists_nothing_when_plugin_disabled', async () => {
   await runtime.start();
 
   assert.deepEqual(runtime.listCommands(), []);
+});
+
+test('plugin_runtime_routes_panel_messages', async () => {
+  const { runtime } = await createRuntime(`
+    module.exports = {
+      activate(api) {
+        api.registerPanelHandler('main', (payload) => ({ pong: payload.ping === true }));
+      },
+    };
+  `);
+
+  await runtime.start();
+
+  assert.deepEqual(await runtime.handlePanelMessage('demo', 'main', { ping: true }), { pong: true });
+  await assert.rejects(runtime.handlePanelMessage('demo', 'missing', {}), /未注册面板处理器/);
+});
+
+test('plugin_runtime_rejects_undeclared_panel_handler', async () => {
+  const { logs, runtime } = await createRuntime(`
+    module.exports = {
+      activate(api) {
+        api.registerPanelHandler('nope', () => null);
+      },
+    };
+  `);
+
+  await runtime.start();
+
+  assert.ok(logs.some((line) => line.includes('命令未加载')));
 });
