@@ -149,6 +149,7 @@ export function SettingsPanel({
                     <option value="en-US">English</option>
                   </select>
                 </div>
+                <p className="form-hint">{t('settings.languageHint')}</p>
                 <div className="form-row">
                   <label htmlFor="settings-theme">{t('settings.theme')}</label>
                   <select
