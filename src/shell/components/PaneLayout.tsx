@@ -2,7 +2,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 import type { RightClickAction } from '../../shared/ipc.ts';
 import type { LayoutNode, SplitNode } from '../layout.ts';
-import { TerminalView, type TerminalTheme } from './TerminalView.tsx';
+import { TerminalView, type TerminalHandle, type TerminalTheme } from './TerminalView.tsx';
 
 interface PaneLayoutProps {
   node: LayoutNode;
@@ -17,6 +17,8 @@ interface PaneLayoutProps {
   onClose(paneId: string): void;
   onResize(splitId: string, ratio: number): void;
   onResizeEnd(splitId: string, ratio: number): void;
+  /** 终端的复制 / 粘贴 / 全选句柄按 pane 登记，菜单编辑动作作用于活动 pane。 */
+  onTerminalReady(paneId: string, handle: TerminalHandle | null): void;
 }
 
 export function PaneLayout({
@@ -32,6 +34,7 @@ export function PaneLayout({
   onClose,
   onResize,
   onResizeEnd,
+  onTerminalReady,
 }: PaneLayoutProps) {
   if (node.type === 'leaf') {
     const active = node.paneId === activePaneId;
@@ -68,6 +71,7 @@ export function PaneLayout({
             theme={theme}
             rightClick={rightClick}
             rightClickCopySelection={rightClickCopySelection}
+            onReady={(handle) => onTerminalReady(node.paneId, handle)}
           />
         </div>
       </section>
@@ -120,6 +124,7 @@ export function PaneLayout({
           onClose={onClose}
           onResize={onResize}
           onResizeEnd={onResizeEnd}
+          onTerminalReady={onTerminalReady}
         />
       </div>
       <div
@@ -143,6 +148,7 @@ export function PaneLayout({
           onClose={onClose}
           onResize={onResize}
           onResizeEnd={onResizeEnd}
+          onTerminalReady={onTerminalReady}
         />
       </div>
     </div>

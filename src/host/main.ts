@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, shell, type Tray } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ModuleRegistry } from '../core/registry.ts';
@@ -8,11 +8,14 @@ import { localTerminalModule } from '../modules/local-terminal/index.ts';
 import { sshModule } from '../modules/ssh/index.ts';
 import { ConnectionStore } from '../services/connections/store.ts';
 import { ConfigStore } from '../services/config/store.ts';
+import type { AppConfig } from '../services/config/schema.ts';
 import { CredentialStore } from '../services/credentials/store.ts';
 import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { LayoutStore } from '../services/layouts/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
-import { IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
+import { IPC, MENU_IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
+import type { MenuCommand } from '../shared/ipc.ts';
+import { resolveShortcuts } from '../shared/shortcut.ts';
 import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
@@ -29,6 +32,8 @@ import { registerLayoutsIpc } from './layouts-ipc.ts';
 import { createSafeStorageCodec } from './secret-codec.ts';
 import { registerSystemIpc } from './system-ipc.ts';
 import { registerTransfersIpc } from './transfers-ipc.ts';
+import { buildMenuTemplate } from './menu.ts';
+import { createAppTray } from './tray.ts';
 
 interface AppServices {
   connections: ConnectionStore;
@@ -69,6 +74,37 @@ let disposeClipboardIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
 let sessions: SessionService | null = null;
 let appServices: AppServices | null = null;
+let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let menuLogged = false;
+
+/** 菜单项点击统一下发给渲染层；命令分发与快捷键共用一套实现。 */
+function sendMenuCommand(command: MenuCommand): void {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(MENU_IPC.command, command);
+}
+
+/** 重建应用菜单：accelerator 跟随用户改键，改完即时同步。 */
+function applyMenu(config: AppConfig): void {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildMenuTemplate(resolveShortcuts(config.shortcuts.overrides), {
+        run: sendMenuCommand,
+        // 配置、凭据密文与 known_hosts 都在用户数据目录，帮助菜单直接带过去方便排查。
+        openDataDir: () => {
+          const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
+          void shell.openPath(baseDir);
+        },
+        showAbout: () => app.showAboutPanel(),
+      }),
+    ),
+  );
+  // 冒烟证据：证明原生菜单在真实 Electron 里装配成功（后续重建不重复打）。
+  if (!menuLogged && process.env.ETERM_SMOKE === '1') {
+    menuLogged = true;
+    const labels = Menu.getApplicationMenu()?.items.map((item) => item.label).join(' / ') ?? '空';
+    console.log(`[menu] 已装配：${labels}`);
+  }
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -88,6 +124,7 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  mainWindow = window;
 
   const service = new SessionService(registry, {
     onData: (sessionId, data) => {
@@ -117,12 +154,15 @@ function createWindow(): void {
     const settings = appServices.config;
     disposeConfigIpc = registerConfigIpc(settings, window, (config) => {
       transferQueue?.setMaxConcurrent(config.transfer.concurrency);
+      // 改键后菜单提示同步；不动已打开的面板。
+      applyMenu(config);
     });
     void settings.get().then((config) => transferQueue?.setMaxConcurrent(config.transfer.concurrency));
   }
 
   window.once('ready-to-show', () => window.show());
   window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
     disposeIpc?.();
     disposeIpc = null;
     disposeConnectionOpenIpc?.();
@@ -191,6 +231,29 @@ void app.whenReady().then(async () => {
   disposeLayoutsIpc = registerLayoutsIpc(services.layouts);
   disposeCredentialsIpc = registerCredentialsIpc(services.credentials);
 
+  // 菜单与托盘先于窗口就位：关窗后从托盘唤回窗口时不需要重启应用。
+  app.setAboutPanelOptions({
+    applicationName: 'ETerm',
+    applicationVersion: app.getVersion(),
+    copyright: 'Kevin',
+  });
+  applyMenu(await services.config.get());
+  tray = createAppTray({
+    showWindow: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+        return;
+      }
+      createWindow();
+    },
+    run: sendMenuCommand,
+  });
+  if (process.env.ETERM_SMOKE === '1') {
+    console.log(`[tray] ${tray ? '已创建（模板图）' : '未创建（缺图标或图片为空）'}`);
+  }
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -202,6 +265,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  tray?.destroy();
+  tray = null;
   disposeConnectionsIpc?.();
   disposeConnectionsIpc = null;
   disposeComponentsIpc?.();

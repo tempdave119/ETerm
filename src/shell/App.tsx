@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type {
   AppConfig,
@@ -28,7 +28,9 @@ import {
   type PaneLeaf,
   type SplitDirection,
 } from './layout.ts';
-import { findCommandByShortcut, type CommandId } from './commands/registry.ts';
+import { type CommandId } from './commands/registry.ts';
+import { findCommandByShortcut, resolveShortcuts } from './commands/resolve.ts';
+import { previewConfig } from './settings-draft.ts';
 import { panelById, panelsInDock } from './panels/registry.ts';
 import { ConnectionForm, type FormSecrets } from './components/ConnectionForm.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
@@ -41,6 +43,7 @@ import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { SettingsPanel } from './components/SettingsPanel.tsx';
+import type { TerminalHandle } from './components/TerminalView.tsx';
 import { DockColumn } from './components/DockColumn.tsx';
 import { DockResizer, dockSizeMax } from './components/DockResizer.tsx';
 import { PanelFrame } from './components/PanelFrame.tsx';
@@ -96,6 +99,14 @@ export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   // 同步保存最新配置：同一帧内连续切换排序时，后一次要基于前一次的值。
   const configRef = useRef<AppConfig | null>(null);
+  // 设置面板的草稿：面板内只改草稿，保存才写盘；取消回到已保存配置。
+  const [settingsDraft, setSettingsDraft] = useState<AppConfig | null>(null);
+  const settingsDraftRef = useRef<AppConfig | null>(null);
+  // 顶部短暂提示：给「已保存」「已恢复默认布局」这类没有视觉变化的动作一个反馈。
+  const [notice, setNotice] = useState<string | null>(null);
+  // 终端句柄与当前活动 pane：应用菜单的复制 / 粘贴 / 全选需要拿到终端实例。
+  const terminalHandlesRef = useRef<Map<string, TerminalHandle>>(new Map());
+  const activePaneRef = useRef<string | null>(null);
   // 配置保存要串行：连续改设置时，后一次保存必须基于前一次的结果，不能互相覆盖。
   const configQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingConfigSaves = useRef(0);
@@ -107,6 +118,14 @@ export function App() {
   const [forwardOpen, setForwardOpen] = useState(false);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  );
+
+  // 草稿优先：设置面板打开期间，只有外观类字段跟草稿走（即时预览），其余仍用已保存值。
+  const effectiveConfig = settingsDraft && config ? previewConfig(settingsDraft, config) : (settingsDraft ?? config);
+  // 快捷键生效表随草稿变化，设置面板里改完能立即预览冲突。
+  const shortcuts = useMemo(
+    () => resolveShortcuts(effectiveConfig?.shortcuts.overrides ?? {}),
+    [effectiveConfig?.shortcuts.overrides],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -133,6 +152,8 @@ export function App() {
     return window.eterm.onConfigChange((next) => {
       // 本地还有未完成的保存时忽略广播，避免旧广播覆盖刚改的值。
       if (pendingConfigSaves.current > 0) return;
+      // 设置面板有未保存草稿时也忽略，避免外部保存覆盖正在编辑的内容。
+      if (settingsDraftRef.current) return;
       configRef.current = next;
       setConfig(next);
     });
@@ -277,7 +298,7 @@ export function App() {
     if (!result.ok) setError(result.error);
   }, []);
 
-  const saveConfig = useCallback((next: AppConfig): void => {
+  const saveConfig = useCallback((next: AppConfig, onSaved?: () => void): void => {
     setSettingsError(null);
     // 乐观更新，下一次设置改动基于最新值克隆；保存本身串行执行。
     const version = ++configVersionRef.current;
@@ -291,6 +312,7 @@ export function App() {
         if (result.ok && version === configVersionRef.current) {
           configRef.current = result.value;
           setConfig(result.value);
+          onSaved?.();
         } else if (!result.ok) setSettingsError(result.error.message);
       })
       .catch((error: unknown) => {
@@ -310,28 +332,35 @@ export function App() {
     [saveConfig],
   );
 
-  const resetConfig = useCallback((): void => {
-    setSettingsError(null);
-    const version = ++configVersionRef.current;
-    pendingConfigSaves.current += 1;
-    configQueueRef.current = configQueueRef.current
-      .then(async () => {
-        const result = await window.eterm.resetConfig();
-        if (result.ok && version === configVersionRef.current) {
-          configRef.current = result.value;
-          setConfig(result.value);
-        } else if (!result.ok) setSettingsError(result.error.message);
-      })
-      .catch((error: unknown) => {
-        setSettingsError(error instanceof Error ? error.message : '重置配置失败');
-      })
-      .finally(() => {
-        pendingConfigSaves.current -= 1;
+  const previewSettings = useCallback((next: AppConfig): void => {
+    settingsDraftRef.current = next;
+    setSettingsDraft(next);
+  }, []);
+
+  const saveSettings = useCallback(
+    (next: AppConfig): void => {
+      // 草稿等保存成功再清：写盘失败时面板仍保留用户输入，可以重试。
+      saveConfig(next, () => {
+        settingsDraftRef.current = null;
+        setSettingsDraft(null);
+        setSettingsOpen(false);
+        setNotice('设置已保存');
       });
+    },
+    [saveConfig],
+  );
+
+  const cancelSettings = useCallback((): void => {
+    settingsDraftRef.current = null;
+    setSettingsDraft(null);
+    setSettingsOpen(false);
   }, []);
 
   const openSettings = useCallback((): void => {
     setSettingsError(null);
+    // 打开时以当前已保存配置作为草稿起点，后续改动都只写草稿。
+    settingsDraftRef.current = configRef.current;
+    setSettingsDraft(configRef.current);
     setSettingsOpen(true);
   }, []);
 
@@ -343,6 +372,18 @@ export function App() {
       if (!result.ok) console.warn(`[panels] 保存面板状态失败：${result.error.message}`);
     });
   }, []);
+
+  // 布局是即时模型，不走设置草稿；恢复后直接落盘。
+  const resetPanelLayout = useCallback((): void => {
+    applyPanelLayout(defaultPanelLayout(), true);
+    setNotice('已恢复默认布局');
+  }, [applyPanelLayout]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const togglePanel = useCallback(
     (id: PanelId): void => {
@@ -434,6 +475,16 @@ export function App() {
   const activeTabId = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs.at(-1)?.id ?? null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const activePane = activeTab ? (findLeaf(activeTab.layout, activeTab.activePaneId) ?? firstLeaf(activeTab.layout)) : null;
+
+  useEffect(() => {
+    activePaneRef.current = activePane?.paneId ?? null;
+  }, [activePane]);
+
+  const registerTerminalHandle = useCallback((paneId: string, handle: TerminalHandle | null): void => {
+    if (handle) terminalHandlesRef.current.set(paneId, handle);
+    else terminalHandlesRef.current.delete(paneId);
+  }, []);
+
   const monitorConnection = activeTab?.connectionId
     ? (connections.find((item) => item.id === activeTab.connectionId) ?? null)
     : null;
@@ -853,14 +904,33 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const command = findCommandByShortcut(event);
+      // 弹层打开时全局命令不分发：避免在设置 / 命令面板 / 连接表单里误触 ⌘W 这类动作。
+      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form) return;
+      const command = findCommandByShortcut(event, shortcuts);
       if (!command) return;
       event.preventDefault();
       runCommand(command.id);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [runCommand]);
+  }, [runCommand, shortcuts, settingsOpen, paletteOpen, forwardOpen, hostKey, form]);
+
+  useEffect(() => {
+    return window.eterm.onMenuCommand((command) => {
+      // 菜单命令与快捷键共用同一道弹层守卫。
+      if (settingsOpen || paletteOpen || forwardOpen || hostKey || form) return;
+      if (command === 'edit.copy' || command === 'edit.paste' || command === 'edit.selectAll') {
+        const paneId = activePaneRef.current;
+        const handle = paneId ? terminalHandlesRef.current.get(paneId) : null;
+        if (!handle) return;
+        if (command === 'edit.copy') handle.copy();
+        else if (command === 'edit.paste') handle.paste();
+        else handle.selectAll();
+        return;
+      }
+      runCommand(command);
+    });
+  }, [runCommand, settingsOpen, paletteOpen, forwardOpen, hostKey, form]);
 
   const canSplit = activeTab ? countLeaves(activeTab.layout) < 4 : false;
 
@@ -923,7 +993,7 @@ export function App() {
             sessionId={monitorRemote ? (activePane?.sessionId ?? null) : null}
             targetLabel={monitorTargetLabel}
             connectionName={monitorConnection?.name ?? null}
-            processSort={config?.ui.monitorProcessSort ?? 'memory'}
+            processSort={effectiveConfig?.ui.monitorProcessSort ?? 'memory'}
             onProcessSortChange={changeProcessSort}
             dock={dock}
             onMove={(target) => movePanelTo('monitor', target)}
@@ -955,11 +1025,11 @@ export function App() {
   const leftPanels = dockPanels('left');
   const rightPanels = dockPanels('right');
   const bottomPanels = dockPanels('bottom');
-  const fontSize = config?.terminal.fontSize ?? 13;
-  const rightClick = config?.terminal.rightClick ?? 'paste';
-  const rightClickCopySelection = config?.terminal.rightClickCopySelection ?? false;
-  const density = config?.ui.density ?? 'comfortable';
-  const themePreference = config?.ui.theme ?? 'system';
+  const fontSize = effectiveConfig?.terminal.fontSize ?? 13;
+  const rightClick = effectiveConfig?.terminal.rightClick ?? 'paste';
+  const rightClickCopySelection = effectiveConfig?.terminal.rightClickCopySelection ?? false;
+  const density = effectiveConfig?.ui.density ?? 'comfortable';
+  const themePreference = effectiveConfig?.ui.theme ?? 'system';
   const resolvedTheme = themePreference === 'system' ? systemTheme : themePreference;
 
   useEffect(() => {
@@ -1041,6 +1111,7 @@ export function App() {
                     onClose={(paneId) => closePane(tab.id, paneId)}
                     onResize={(splitId, ratio) => resizePane(tab.id, splitId, ratio)}
                     onResizeEnd={(splitId, ratio) => finishResize(tab.id, splitId, ratio)}
+                    onTerminalReady={registerTerminalHandle}
                   />
                 </section>
               ))
@@ -1104,17 +1175,19 @@ export function App() {
 
       {settingsOpen && config ? (
         <SettingsPanel
-          config={config}
+          config={settingsDraft ?? config}
+          savedConfig={config}
           error={settingsError}
           panelLayout={panelLayout}
-          onChange={(next) => void saveConfig(next)}
+          onChange={previewSettings}
+          onSave={() => saveSettings(settingsDraft ?? config)}
+          onCancel={cancelSettings}
+          onResetLayout={resetPanelLayout}
           onPanelDockChange={(id, dock) => {
             if (panelDockOf(panelLayoutRef.current, id) === dock) return;
             movePanelTo(id, dock);
           }}
           onDockSizeChange={finishDockResize}
-          onReset={() => void resetConfig()}
-          onClose={() => setSettingsOpen(false)}
         />
       ) : null}
 
@@ -1130,6 +1203,12 @@ export function App() {
 
       {forwardOpen && activePane && forwardAvailable ? (
         <ForwardDialog sessionId={activePane.sessionId} onClose={() => setForwardOpen(false)} />
+      ) : null}
+
+      {notice ? (
+        <div className="toast" role="status" data-testid="toast">
+          {notice}
+        </div>
       ) : null}
     </div>
   );

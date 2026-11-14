@@ -24,6 +24,8 @@ export interface ConnectionRecord {
   proxy?: ConnectionProxy;
   /** 可选组件的协议字段（如串口设备路径 / 波特率），宿主不解释内容。 */
   options?: Record<string, string>;
+  /** 备注，可选；会话树不展示，仅编辑时回填。 */
+  note?: string;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +55,7 @@ export interface ConnectionInput {
   jumpConnectionId?: string | null;
   proxy?: ConnectionProxy | null;
   options?: Record<string, string> | null;
+  note?: string | null;
 }
 
 export interface GroupInput {

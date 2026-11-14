@@ -68,6 +68,15 @@ interface TerminalViewProps {
   theme: TerminalTheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
+  /** 把复制 / 粘贴 / 全选句柄交给外壳，供应用菜单调用；卸载时传 null。 */
+  onReady?(handle: TerminalHandle | null): void;
+}
+
+/** 应用菜单的编辑动作：终端是 canvas 渲染，只能通过实例方法操作选区。 */
+export interface TerminalHandle {
+  copy(): void;
+  paste(): void;
+  selectAll(): void;
 }
 
 function copySelection(term: Terminal | null): void {
@@ -90,6 +99,7 @@ export function TerminalView({
   theme,
   rightClick,
   rightClickCopySelection,
+  onReady,
 }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -97,6 +107,12 @@ export function TerminalView({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const rightClickRef = useRef(rightClick);
   const copySelectionRef = useRef(rightClickCopySelection);
+  // 用 ref 保存回调：onReady 变化不应该重建终端实例。
+  const onReadyRef = useRef(onReady);
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
 
   useEffect(() => {
     rightClickRef.current = rightClick;
@@ -129,6 +145,12 @@ export function TerminalView({
     term.unicode.activeVersion = '11';
     term.open(host);
     fit.fit();
+
+    onReadyRef.current?.({
+      copy: () => copySelection(term),
+      paste: () => pasteClipboard(term),
+      selectAll: () => term.selectAll(),
+    });
 
     const onContextMenu = (event: MouseEvent): void => {
       event.preventDefault();
@@ -185,6 +207,7 @@ export function TerminalView({
     observer.observe(host);
 
     return () => {
+      onReadyRef.current?.(null);
       observer.disconnect();
       inputSubscription.dispose();
       host.removeEventListener('contextmenu', onContextMenu);

@@ -315,3 +315,45 @@ test('connections_proxy_persists_and_is_validated', async () => {
     /代理端口 必须是 1–65535 的整数/,
   );
 });
+
+test('connections_note_persists_and_is_optional', async () => {
+  const { dir, store } = await createStore();
+
+  const withNote = await store.saveConnection({
+    name: 'with-note',
+    protocol: 'ssh',
+    host: '127.0.0.1',
+    port: 22,
+    username: 'tester',
+    auth: 'password',
+    note: '生产环境，只读',
+  });
+  assert.equal(withNote.note, '生产环境，只读');
+
+  const plain = await store.saveConnection({
+    name: 'no-note',
+    protocol: 'ssh',
+    host: '127.0.0.1',
+    port: 22,
+    username: 'tester',
+    auth: 'password',
+  });
+  assert.equal(plain.note, undefined);
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  assert.equal(snapshot.connections.find((item) => item.id === withNote.id)?.note, '生产环境，只读');
+
+  await assert.rejects(
+    store.saveConnection({
+      name: 'too-long',
+      protocol: 'ssh',
+      host: '127.0.0.1',
+      port: 22,
+      username: 'tester',
+      auth: 'password',
+      note: 'x'.repeat(201),
+    }),
+    /备注/,
+  );
+});

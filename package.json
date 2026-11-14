@@ -1,6 +1,6 @@
 {
   "name": "eterm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "macOS 优先的 SSH / SFTP 工作台",
   "author": "Kevin",
@@ -13,6 +13,7 @@
     "build:renderer": "vite build",
     "typecheck": "tsc --noEmit",
     "icon": "electron scripts/make-icon.mjs",
+    "icon:tray": "electron scripts/make-tray-icon.mjs",
     "test": "node --test \"tests/**/*.test.ts\"",
     "smoke": "node scripts/smoke.mjs",
     "ssh-smoke": "node scripts/ssh-smoke.mjs",
@@ -29,6 +30,8 @@
     },
     "files": [
       "dist/**/*",
+      "assets/trayTemplate.png",
+      "assets/trayTemplate@2x.png",
       "package.json"
     ],
     "asarUnpack": [

@@ -15,6 +15,7 @@ import { readInteger, readOptionalInteger, readOptionalString, readRecord, readS
 
 const ID_MAX = 64;
 const NAME_MAX = 120;
+const NOTE_MAX = 200;
 const HOST_MAX = 255;
 const USER_MAX = 255;
 const PATH_MAX = 4096;
@@ -68,6 +69,7 @@ function readConnectionInput(raw: unknown): ConnectionInput {
       value.jumpConnectionId === null ? null : readOptionalString(value.jumpConnectionId, '跳板机', ID_MAX),
     proxy: readProxy(value.proxy),
     options: readOptions(value.options),
+    note: readOptionalString(value.note, '备注', NOTE_MAX),
   };
 }
 

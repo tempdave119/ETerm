@@ -546,6 +546,72 @@ try {
   await evaluate(`document.querySelector('[data-testid="new-connection"]').click()`);
   await waitFor(() => evaluate(`document.querySelector('#connection-name') !== null`), 5_000, '连接表单');
 
+  // 表单布局：640px 宽，label 在左、与输入框同行。
+  const formMetrics = await evaluate(`(() => {
+    const modal = document.querySelector('.modal--form');
+    const label = document.querySelector('label[for="connection-name"]');
+    const input = document.querySelector('#connection-name');
+    if (!modal || !label || !input) return null;
+    const labelRect = label.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const labelCenter = labelRect.top + labelRect.height / 2;
+    const inputCenter = inputRect.top + inputRect.height / 2;
+    return {
+      width: modal.getBoundingClientRect().width,
+      sameRow: Math.abs(labelCenter - inputCenter) < 4 && inputRect.left > labelRect.right,
+    };
+  })()`);
+  if (!formMetrics) throw new Error('连接表单缺少关键元素');
+  if (formMetrics.width < 600) throw new Error(`连接表单宽度不足：${formMetrics.width}`);
+  if (!formMetrics.sameRow) throw new Error('连接表单 label 未与输入框同行');
+  const formPairs = await evaluate(`(() => {
+    const nameLabel = document.querySelector('label[for="connection-name"]')?.getBoundingClientRect();
+    const groupLabel = document.querySelector('label[for="connection-group"]')?.getBoundingClientRect();
+    const hostLabel = document.querySelector('label[for="connection-host"]')?.getBoundingClientRect();
+    const portLabel = document.querySelector('label[for="connection-port"]')?.getBoundingClientRect();
+    const note = document.querySelector('[data-testid="connection-note"]');
+    if (!nameLabel || !groupLabel || !hostLabel || !portLabel) return null;
+    return {
+      nameGroupSameRow: Math.abs(nameLabel.top - groupLabel.top) < 2 && groupLabel.left > nameLabel.left + 200,
+      hostPortSameRow: Math.abs(hostLabel.top - portLabel.top) < 2 && portLabel.left > hostLabel.left + 200,
+      hasNote: Boolean(note),
+    };
+  })()`);
+  if (!formPairs || !formPairs.nameGroupSameRow || !formPairs.hostPortSameRow || !formPairs.hasNote) {
+    throw new Error(`连接表单成对字段排版不正确：${JSON.stringify(formPairs)}`);
+  }
+
+  // 切换认证方式不改变窗口尺寸；备注是多行文本框且高度至少两倍单行输入框。
+  const formHeight = () =>
+    evaluate(`document.querySelector('.modal--form')?.getBoundingClientRect().height ?? 0`);
+  const passwordHeight = await formHeight();
+  await evaluate(setSelectScript('#connection-auth', 'key'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-key') !== null`), 5_000, '私钥字段');
+  const keyHeight = await formHeight();
+  await evaluate(setSelectScript('#connection-auth', 'agent'));
+  const agentHeight = await formHeight();
+  await evaluate(setSelectScript('#connection-auth', 'password'));
+  await waitFor(() => evaluate(`document.querySelector('#connection-password') !== null`), 5_000, '密码字段');
+  const noteMetrics = await evaluate(`(() => {
+    const note = document.querySelector('[data-testid="connection-note"]');
+    const name = document.querySelector('#connection-name');
+    if (!note || !name) return null;
+    return {
+      tag: note.tagName,
+      noteHeight: note.getBoundingClientRect().height,
+      inputHeight: name.getBoundingClientRect().height,
+    };
+  })()`);
+  if (Math.abs(passwordHeight - keyHeight) > 1 || Math.abs(passwordHeight - agentHeight) > 1) {
+    throw new Error(`连接表单高度随认证方式变化：${passwordHeight}/${keyHeight}/${agentHeight}`);
+  }
+  if (!noteMetrics || noteMetrics.tag !== 'TEXTAREA') throw new Error('备注不是多行文本框');
+  if (noteMetrics.noteHeight < noteMetrics.inputHeight * 2) {
+    throw new Error(`备注高度不足：${noteMetrics.noteHeight} vs ${noteMetrics.inputHeight}`);
+  }
+  const formShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/ssh-smoke-form.png', Buffer.from(formShot.data, 'base64'));
+
   await evaluate(setInputScript('#connection-name', 'mock-host'));
   await evaluate(setInputScript('#connection-host', '127.0.0.1'));
   await evaluate(setInputScript('#connection-port', String(port)));
@@ -598,6 +664,64 @@ try {
     10_000,
     '文件列表',
   );
+
+  // 文件面板四列：名称 / 大小 / 日期 / 权限，列头可排序。
+  const fileTable = await evaluate(`(() => {
+    const head = document.querySelector('[data-testid="file-sort-mode"]');
+    const perm = document.querySelector('.file-row__perm')?.textContent ?? '';
+    const date = document.querySelector('.file-row__date')?.textContent ?? '';
+    return { hasHead: Boolean(head), perm, date };
+  })()`);
+  if (!fileTable.hasHead) throw new Error('文件面板缺少权限列头');
+  if (fileTable.perm !== '—' && !/^\d{3}$/.test(fileTable.perm)) {
+    throw new Error(`权限列格式不正确：${fileTable.perm}`);
+  }
+  if (fileTable.date !== '—' && !/^\d{4}-\d{2}-\d{2}$/.test(fileTable.date)) {
+    throw new Error(`日期列格式不正确：${fileTable.date}`);
+  }
+  await evaluate(`document.querySelector('[data-testid="file-sort-size"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="file-sort-size"]')?.dataset.active === 'true' && document.querySelector('[data-testid="file-toggle-hidden"]') !== null`,
+      ),
+    5_000,
+    '文件列排序与隐藏开关',
+  );
+  await evaluate(`document.querySelector('[data-testid="file-sort-name"]').click()`);
+
+  // 窄侧栏优先保住文件名：右栏缩到 260 后权限与日期列隐藏，名称仍可见。
+  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
+    5_000,
+    '设置面板',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-nav-layout"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-dock-size-right"]') !== null`),
+    5_000,
+    '设置布局分类',
+  );
+  await evaluate(`(() => {
+    const input = document.querySelector('[data-testid="settings-dock-size-right"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '260');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(`(() => {
+        const perm = document.querySelector('.file-row__perm');
+        const name = document.querySelector('.file-row__name');
+        return Boolean(perm) && getComputedStyle(perm).display === 'none' && Boolean(name) && name.getBoundingClientRect().width > 40;
+      })()`),
+    5_000,
+    '窄栏保留文件名',
+  );
+  const narrowShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/ssh-smoke-files-narrow.png', Buffer.from(narrowShot.data, 'base64'));
 
   await evaluate(`document.querySelector('[data-testid="file-row-docs"]').click()`);
   await waitFor(

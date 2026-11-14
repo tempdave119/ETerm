@@ -3,6 +3,8 @@
  * 磁盘文件按「字段非法回退默认值」容错；渲染层提交按「非法即拒绝」处理。
  */
 
+import type { ShortcutOverrides, ShortcutSpec } from '../../shared/shortcut.ts';
+
 export type UiDensity = 'comfortable' | 'compact';
 export type ThemePreference = 'system' | 'dark' | 'light';
 export type MonitorProcessSort = 'memory' | 'cpu';
@@ -33,6 +35,10 @@ export interface AppConfig {
   files: {
     openByDefault: boolean;
   };
+  shortcuts: {
+    /** 只存与命令注册表默认值的差异；null 为解绑。 */
+    overrides: ShortcutOverrides;
+  };
 }
 
 export const CONFIG_VERSION = 1;
@@ -53,6 +59,7 @@ export function defaultConfig(): AppConfig {
     transfer: { concurrency: 1 },
     ui: { density: 'comfortable', theme: 'system', monitorProcessSort: 'memory' },
     files: { openByDefault: true },
+    shortcuts: { overrides: {} },
   };
 }
 
@@ -82,6 +89,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
+  const shortcuts = asRecord(record.shortcuts);
 
   return {
     terminal: {
@@ -118,6 +126,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
       openByDefault:
         typeof files.openByDefault === 'boolean' ? files.openByDefault : defaults.files.openByDefault,
     },
+    shortcuts: { overrides: readShortcuts(shortcuts.overrides) },
   };
 }
 
@@ -132,6 +141,7 @@ export function parseConfigInput(value: unknown): AppConfig {
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
+  const shortcuts = asRecord(record.shortcuts);
 
   return {
     terminal: {
@@ -150,6 +160,7 @@ export function parseConfigInput(value: unknown): AppConfig {
       monitorProcessSort: requireMonitorProcessSort(ui.monitorProcessSort),
     },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
+    shortcuts: { overrides: requireShortcuts(shortcuts.overrides) },
   };
 }
 
@@ -175,6 +186,53 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readRightClick(value: unknown, fallback: RightClickAction): RightClickAction {
   return value === 'paste' || value === 'menu' || value === 'off' ? value : fallback;
+}
+
+/** 读磁盘：单条快捷键坏了就丢掉该条，不影响其他定制。 */
+function readShortcuts(value: unknown): ShortcutOverrides {
+  const record = asRecord(value);
+  const next: ShortcutOverrides = {};
+  for (const [id, spec] of Object.entries(record)) {
+    if (spec === null) {
+      next[id] = null;
+      continue;
+    }
+    const parsed = readShortcutSpec(spec);
+    if (parsed) next[id] = parsed;
+  }
+  return next;
+}
+
+function readShortcutSpec(value: unknown): ShortcutSpec | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.code !== 'string' || record.code.length === 0) return null;
+  if (record.shift !== undefined && typeof record.shift !== 'boolean') return null;
+  return record.shift ? { code: record.code, shift: true } : { code: record.code };
+}
+
+/** 渲染层提交：任何一条非法就整份拒绝，不静默改用户刚设的值。 */
+function requireShortcuts(value: unknown): ShortcutOverrides {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('快捷键配置必须是对象');
+  }
+  const next: ShortcutOverrides = {};
+  for (const [id, spec] of Object.entries(value as Record<string, unknown>)) {
+    if (spec === null) {
+      next[id] = null;
+      continue;
+    }
+    if (typeof spec !== 'object' || Array.isArray(spec)) throw new Error(`快捷键 ${id} 必须是对象或 null`);
+    const record = spec as Record<string, unknown>;
+    if (typeof record.code !== 'string' || record.code.length === 0) {
+      throw new Error(`快捷键 ${id} 缺少 code`);
+    }
+    if (record.shift !== undefined && typeof record.shift !== 'boolean') {
+      throw new Error(`快捷键 ${id} 的 shift 必须是布尔值`);
+    }
+    next[id] = record.shift ? { code: record.code, shift: true } : { code: record.code };
+  }
+  return next;
 }
 
 function requireRightClick(value: unknown): RightClickAction {

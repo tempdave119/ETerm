@@ -247,6 +247,7 @@ function normalizeConnection(
 ): Omit<ConnectionRecord, 'order' | 'createdAt' | 'updatedAt'> {
   const id = input.id ? requireString(input.id, '连接 id', 64) : randomUUID();
   const name = requireString(input.name, '连接名称', 120);
+  const note = optionalString(input.note, '备注', 200);
 
   const protocol = requireString(input.protocol, '连接协议', 32);
   if (!/^[a-z][a-z0-9-]*$/.test(protocol)) throw new Error(`连接协议无效：${protocol}`);
@@ -265,13 +266,13 @@ function normalizeConnection(
   if (protocol === 'local') {
     if (input.jumpConnectionId) throw new Error('本地终端不能设置跳板机');
     if (input.proxy) throw new Error('本地终端不能设置代理');
-    return { id, name, protocol, auth, groupId };
+    return { id, name, protocol, auth, groupId, note };
   }
 
   // 可选组件：宿主不解释字段内容，只做结构与长度校验。
   if (protocol !== 'ssh') {
     if (input.jumpConnectionId || input.proxy) throw new Error('可选组件连接不支持跳板或代理');
-    return { id, name, protocol, auth, groupId, options: normalizeOptions(input.options) };
+    return { id, name, protocol, auth, groupId, options: normalizeOptions(input.options), note };
   }
 
   const proxy = input.proxy ? normalizeProxy(input.proxy) : undefined;
@@ -296,6 +297,7 @@ function normalizeConnection(
     keyPath: optionalString(input.keyPath, '私钥路径', 4096),
     jumpConnectionId,
     proxy,
+    note,
   };
 }
 
@@ -381,6 +383,7 @@ function parseConnection(value: unknown): ConnectionRecord {
     protocol,
     auth: auth as AuthMethod,
     groupId: groupId as string | null,
+    note: optionalString(record.note, '备注', 200),
     order: requireInteger(record.order, '连接排序', 0, 1_000_000),
     createdAt: requireString(record.createdAt, '创建时间', 64),
     updatedAt: requireString(record.updatedAt, '更新时间', 64),

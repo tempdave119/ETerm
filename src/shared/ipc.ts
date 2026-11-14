@@ -1,5 +1,6 @@
 import type { ProductErrorInfo } from '../core/errors.ts';
 import type { Capability, ExitInfo, FileEntry, ForwardDirection, ForwardRequest, ForwardView, SessionOpenOptions } from '../core/ports.ts';
+import type { CommandId } from './commands.ts';
 import type { SecretKind } from '../services/credentials/store.ts';
 import type { AppConfig, RightClickAction, ThemePreference, UiDensity } from '../services/config/schema.ts';
 import type { TransferDirection, TransferView } from '../services/transfers/queue.ts';
@@ -20,6 +21,8 @@ export type { ForwardDirection, ForwardRequest, ForwardView };
 export type { ConnectionInput, ConnectionRecord, ConnectionsSnapshot, GroupInput, GroupRecord };
 export type { SecretKind };
 export type { AppConfig, RightClickAction, ThemePreference, UiDensity };
+// 渲染层的「恢复默认设置」要拿默认值做草稿，schema 是纯数据模块，可安全共用。
+export { defaultConfig } from '../services/config/schema.ts';
 export type { FileEntry };
 export type { TransferDirection, TransferView };
 export type { LayoutTemplate };
@@ -94,6 +97,13 @@ export const CONFIG_IPC = {
   reset: 'config:reset',
   changed: 'config:changed',
 } as const;
+
+export const MENU_IPC = {
+  command: 'menu:command',
+} as const;
+
+/** 应用菜单只能发起这些动作：命令注册表里的命令 + 终端编辑动作。 */
+export type MenuCommand = CommandId | 'edit.copy' | 'edit.paste' | 'edit.selectAll';
 
 export interface FilePreview {
   path: string;
@@ -221,6 +231,8 @@ export interface EtermApi {
   saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;
   resetConfig(): Promise<IpcResult<AppConfig>>;
   onConfigChange(handler: (config: AppConfig) => void): () => void;
+
+  onMenuCommand(handler: (command: MenuCommand) => void): () => void;
 
   listComponents(): Promise<IpcResult<ComponentDescriptor[]>>;
 }

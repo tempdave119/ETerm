@@ -83,6 +83,7 @@ test('config_file_keeps_valid_fields_when_one_field_is_bad', () => {
   assert.equal(file.config.ui.theme, 'system');
   assert.equal(file.config.ui.monitorProcessSort, 'memory');
   assert.equal(file.config.files.openByDefault, false);
+  assert.deepEqual(file.config.shortcuts.overrides, {});
 });
 
 test('config_file_rejects_unknown_version', () => {
@@ -124,9 +125,45 @@ test('config_input_accepts_valid_full_config', () => {
     transfer: { concurrency: 4 },
     ui: { density: 'compact', theme: 'light', monitorProcessSort: 'cpu' },
     files: { openByDefault: false },
+    shortcuts: { overrides: { 'files.toggle': { code: 'KeyG', shift: true }, 'panel.monitor': null } },
   };
 
   assert.deepEqual(parseConfigInput(input), input);
+});
+
+test('config_file_keeps_valid_shortcut_overrides_and_drops_broken_ones', () => {
+  const file = parseConfigFile({
+    version: 1,
+    config: {
+      shortcuts: {
+        overrides: {
+          'files.toggle': { code: 'KeyG', shift: true },
+          'panel.monitor': null,
+          'tab.close': { code: '' },
+          'tab.next': { code: 'KeyL', shift: 'yes' },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(file.config.shortcuts.overrides, {
+    'files.toggle': { code: 'KeyG', shift: true },
+    'panel.monitor': null,
+  });
+});
+
+test('config_input_rejects_broken_shortcut_overrides', () => {
+  const base = defaultConfig();
+
+  assert.throws(
+    () => parseConfigInput({ ...base, shortcuts: { overrides: { 'tab.close': { code: '' } } } }),
+    /快捷键 tab.close 缺少 code/,
+  );
+  assert.throws(
+    () => parseConfigInput({ ...base, shortcuts: { overrides: { 'tab.close': { code: 'KeyW', shift: 'yes' } } } }),
+    /shift 必须是布尔值/,
+  );
+  assert.throws(() => parseConfigInput({ ...base, shortcuts: { overrides: 'nope' } }), /快捷键配置必须是对象/);
 });
 
 test('config_save_writes_versioned_file', async () => {
@@ -149,4 +186,14 @@ test('config_persists_monitor_process_sort', async () => {
   await store.save(next);
 
   assert.equal((await store.get()).ui.monitorProcessSort, 'cpu');
+});
+
+test('config_persists_shortcut_overrides', async () => {
+  const { store } = await createStore();
+  const next = defaultConfig();
+  next.shortcuts.overrides = { 'files.toggle': { code: 'KeyG', shift: true }, 'panel.monitor': null };
+
+  await store.save(next);
+
+  assert.deepEqual((await store.get()).shortcuts.overrides, next.shortcuts.overrides);
 });

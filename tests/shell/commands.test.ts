@@ -4,11 +4,11 @@ import {
   COMMANDS,
   commandById,
   filterCommands,
-  findCommandByShortcut,
   matchesShortcut,
   shortcutLabel,
   type KeyEventLike,
 } from '../../src/shell/commands/registry.ts';
+import { findCommandByShortcut, resolveShortcuts } from '../../src/shell/commands/resolve.ts';
 
 function keyEvent(overrides: Partial<KeyEventLike> = {}): KeyEventLike {
   return { code: 'KeyA', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false, ...overrides };
@@ -45,12 +45,13 @@ test('commands_shortcut_matches_meta_and_ctrl_but_not_alt', () => {
 });
 
 test('commands_shortcut_finds_shift_and_symbol_combinations', () => {
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyD' }))?.id, 'pane.split-row');
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyD', shiftKey: true }))?.id, 'pane.split-column');
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'Comma' }))?.id, 'settings.open');
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'BracketLeft', shiftKey: true }))?.id, 'tab.prev');
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyT', shiftKey: true })), null);
-  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyT', metaKey: false })), null);
+  const defaults = resolveShortcuts({});
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyD' }), defaults)?.id, 'pane.split-row');
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyD', shiftKey: true }), defaults)?.id, 'pane.split-column');
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'Comma' }), defaults)?.id, 'settings.open');
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'BracketLeft', shiftKey: true }), defaults)?.id, 'tab.prev');
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyT', shiftKey: true }), defaults), null);
+  assert.equal(findCommandByShortcut(keyEvent({ code: 'KeyT', metaKey: false }), defaults), null);
 });
 
 test('commands_filter_matches_title_and_keywords', () => {

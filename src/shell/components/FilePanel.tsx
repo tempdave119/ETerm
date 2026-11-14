@@ -1,7 +1,27 @@
-import { useCallback, useEffect, useState, type DragEvent } from 'react';
-import { ArrowUp, Download, FileText, Folder, RefreshCw, Upload } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import {
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  Folder,
+  Link2,
+  RefreshCw,
+  Upload,
+} from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { FileEntry, FilePreview, ProductErrorInfo } from '../../shared/ipc.ts';
+import {
+  formatDate,
+  formatEntrySize,
+  formatPermission,
+  sortEntries,
+  type FileSort,
+  type FileSortKey,
+} from '../file-sort.ts';
 import { ErrorMessage } from './ErrorMessage.tsx';
 import { PanelFrame } from './PanelFrame.tsx';
 
@@ -14,6 +34,13 @@ interface FilePanelProps {
   onPanelReorder?(delta: -1 | 1): void;
 }
 
+const COLUMNS: { key: FileSortKey; title: string }[] = [
+  { key: 'name', title: '名称' },
+  { key: 'size', title: '大小' },
+  { key: 'mtime', title: '日期' },
+  { key: 'mode', title: '权限' },
+];
+
 export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMoveDown, onPanelReorder }: FilePanelProps) {
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -22,6 +49,9 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [previewError, setPreviewError] = useState<ProductErrorInfo | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [sort, setSort] = useState<FileSort>({ key: 'name', direction: 'asc' });
+  // 默认显示隐藏文件：运维场景常要改 .bashrc 这类点文件。
+  const [showHidden, setShowHidden] = useState(true);
 
   const load = useCallback(
     async (target: string): Promise<void> => {
@@ -33,7 +63,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           setError(result.error);
           return;
         }
-        setEntries([...result.value].sort(compareEntries));
+        setEntries(result.value);
         setPath(target);
       } finally {
         setLoading(false);
@@ -45,6 +75,17 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   useEffect(() => {
     void load('/');
   }, [load]);
+
+  const visibleEntries = useMemo(() => {
+    const filtered = showHidden ? entries : entries.filter((entry) => !entry.name.startsWith('.'));
+    return sortEntries(filtered, sort);
+  }, [entries, showHidden, sort]);
+
+  const toggleSort = useCallback((key: FileSortKey): void => {
+    setSort((current) =>
+      current.key === key ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' },
+    );
+  }, []);
 
   const openEntry = useCallback(
     async (entry: FileEntry): Promise<void> => {
@@ -152,11 +193,46 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           >
             <RefreshCw size={14} strokeWidth={1.5} />
           </button>
+          <button
+            className="icon-button"
+            type="button"
+            title={showHidden ? '隐藏点文件' : '显示隐藏文件'}
+            aria-label={showHidden ? '隐藏点文件' : '显示隐藏文件'}
+            aria-pressed={showHidden}
+            data-testid="file-toggle-hidden"
+            onClick={() => setShowHidden((current) => !current)}
+          >
+            {showHidden ? <Eye size={14} strokeWidth={1.5} /> : <EyeOff size={14} strokeWidth={1.5} />}
+          </button>
         </>
       }
     >
       <div className="file-panel__path" title={path}>
         {path}
+      </div>
+
+      <div className="file-panel__head" role="row">
+        {COLUMNS.map((column) => (
+          <button
+            key={column.key}
+            className="file-head__cell"
+            type="button"
+            data-testid={`file-sort-${column.key}`}
+            data-active={sort.key === column.key}
+            title={`按${column.title}排序`}
+            onClick={() => toggleSort(column.key)}
+          >
+            <span>{column.title}</span>
+            {sort.key === column.key ? (
+              sort.direction === 'asc' ? (
+                <ChevronUp size={11} strokeWidth={2} />
+              ) : (
+                <ChevronDown size={11} strokeWidth={2} />
+              )
+            ) : null}
+          </button>
+        ))}
+        <span aria-hidden="true" />
       </div>
 
       <div
@@ -183,10 +259,10 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
           <div className="file-panel__error">
             <ErrorMessage error={error} />
           </div>
-        ) : entries.length === 0 ? (
+        ) : visibleEntries.length === 0 ? (
           <div className="file-panel__hint">此目录为空</div>
         ) : (
-          entries.map((entry) => (
+          visibleEntries.map((entry) => (
             <div className="file-row" key={entry.path} title={entry.path}>
               <button
                 className="file-row__main"
@@ -195,13 +271,17 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
                 onClick={() => void openEntry(entry)}
               >
                 {entry.type === 'directory' ? (
-                  <Folder size={16} strokeWidth={1.5} className="file-row__icon" />
+                  <Folder size={15} strokeWidth={1.5} className="file-row__icon" />
+                ) : entry.type === 'symlink' ? (
+                  <Link2 size={15} strokeWidth={1.5} className="file-row__icon" />
                 ) : (
-                  <FileText size={16} strokeWidth={1.5} className="file-row__icon" />
+                  <FileText size={15} strokeWidth={1.5} className="file-row__icon" />
                 )}
                 <span className="file-row__name">{entry.name}</span>
-                <span className="file-row__meta">{entry.type === 'directory' ? '' : formatSize(entry.size)}</span>
               </button>
+              <span className="file-row__cell file-row__size">{formatEntrySize(entry)}</span>
+              <span className="file-row__cell file-row__date">{formatDate(entry.mtimeMs)}</span>
+              <span className="file-row__cell file-row__perm">{formatPermission(entry.mode)}</span>
               <button
                 className="icon-button file-row__action"
                 type="button"
@@ -212,7 +292,7 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
                   void (entry.type === 'directory' ? downloadDirectory(entry.path) : download(entry.path))
                 }
               >
-                <Download size={14} strokeWidth={1.5} />
+                <Download size={13} strokeWidth={1.5} />
               </button>
             </div>
           ))
@@ -256,12 +336,6 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   );
 }
 
-function compareEntries(left: FileEntry, right: FileEntry): number {
-  if (left.type === 'directory' && right.type !== 'directory') return -1;
-  if (left.type !== 'directory' && right.type === 'directory') return 1;
-  return left.name.localeCompare(right.name);
-}
-
 function parentOf(value: string): string {
   if (value === '/' || !value) return '/';
   const index = value.lastIndexOf('/');
@@ -271,10 +345,4 @@ function parentOf(value: string): string {
 function baseName(value: string): string {
   const index = value.lastIndexOf('/');
   return index < 0 ? value : value.slice(index + 1);
-}
-
-function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }

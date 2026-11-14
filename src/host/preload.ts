@@ -12,6 +12,7 @@ import {
   IPC,
   KNOWN_HOSTS_IPC,
   LAYOUTS_IPC,
+  MENU_IPC,
   SYSTEM_IPC,
   TRANSFERS_IPC,
   type AppConfig,
@@ -28,6 +29,7 @@ import {
   type GroupRecord,
   type IpcResult,
   type LayoutTemplate,
+  type MenuCommand,
   type OpenConnectionRequest,
   type OpenedSession,
   type PanelLayout,
@@ -159,6 +161,12 @@ const api: EtermApi = {
     const listener = (_event: IpcRendererEvent, config: AppConfig): void => handler(config);
     ipcRenderer.on(CONFIG_IPC.changed, listener);
     return () => ipcRenderer.removeListener(CONFIG_IPC.changed, listener);
+  },
+
+  onMenuCommand: (handler: (command: MenuCommand) => void) => {
+    const listener = (_event: IpcRendererEvent, command: MenuCommand): void => handler(command);
+    ipcRenderer.on(MENU_IPC.command, listener);
+    return () => ipcRenderer.removeListener(MENU_IPC.command, listener);
   },
 
   listComponents: () => ipcRenderer.invoke(COMPONENTS_IPC.list) as Promise<IpcResult<ComponentDescriptor[]>>,

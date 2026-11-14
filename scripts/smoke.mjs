@@ -89,10 +89,19 @@ await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 const dataDir = join(process.cwd(), 'tmp', 'smoke', randomUUID());
 mkdirSync(dataDir, { recursive: true });
 
+const appLogs = [];
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
-  stdio: 'inherit',
+  stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, ETERM_SMOKE: '1', ETERM_USER_DATA: dataDir },
 });
+// 主进程日志既转发到终端，也留一份用于断言（菜单与托盘装配证据）。
+for (const stream of [app.stdout, app.stderr]) {
+  stream.setEncoding('utf8');
+  stream.on('data', (chunk) => {
+    appLogs.push(chunk);
+    process.stdout.write(chunk);
+  });
+}
 
 let client;
 
@@ -322,40 +331,59 @@ try {
     5_000,
     '命令打开设置',
   );
-  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
 
-  // 设置：字号 / 密度 / 文件面板默认值即时生效，重开面板保持，可恢复默认。
+  // 设置：左侧分类导航；config 走草稿（即时预览、取消回滚、保存才落盘），layout 即时。
   const colsAtDefaultFont = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols;
-  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
-    5_000,
-    '设置面板',
-  );
+  const readConfig = () =>
+    evaluate(`window.eterm.getConfig().then((result) => (result.ok ? result.value : null))`);
+  const openSettings = async () => {
+    await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
+    await waitFor(
+      () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
+      5_000,
+      '设置面板',
+    );
+  };
+  const sectionMarkers = {
+    appearance: '#settings-theme',
+    terminal: '#settings-font-size',
+    connection: '#settings-keepalive',
+    transfer: '[data-testid="settings-files-default"]',
+    shortcuts: '[data-testid="shortcut-row-terminal.new"]',
+    layout: '[data-testid="settings-dock-size-left"]',
+  };
+  const openSection = async (section) => {
+    await evaluate(`document.querySelector('[data-testid="settings-nav-${section}"]').click()`);
+    await waitFor(
+      () => evaluate(`document.querySelector(${JSON.stringify(sectionMarkers[section])}) !== null`),
+      5_000,
+      `设置分类 ${section}`,
+    );
+  };
+  await openSettings();
 
   const settingsWidth = await evaluate(
     `document.querySelector('[data-testid="settings-panel"]')?.getBoundingClientRect().width ?? 0`,
   );
-  if (settingsWidth < 560) throw new Error(`设置面板宽度不足：${settingsWidth}`);
-  if ((await evaluate(`document.querySelector('[data-testid="settings-keepalive"]') === null`)) ) {
-    throw new Error('设置面板缺少保活间隔');
-  }
-  if ((await evaluate(`document.querySelector('[data-testid="settings-right-click"]') === null`)) ) {
-    throw new Error('设置面板缺少右键行为');
-  }
+  if (settingsWidth < 760) throw new Error(`设置面板宽度不足：${settingsWidth}`);
+  const navCount = await evaluate(`document.querySelectorAll('.settings-nav__item').length`);
+  if (navCount !== 6) throw new Error(`设置分类应为 6 个，实际 ${navCount}`);
 
+  await openSection('terminal');
   await evaluate(setSelectScript('#settings-font-size', '18'));
   await waitFor(
     async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols < colsAtDefaultFont,
     5_000,
-    '字号即时生效',
+    '字号草稿预览',
   );
 
+  await openSection('appearance');
   await evaluate(setSelectScript('#settings-density', 'compact'));
   await waitFor(
     () => evaluate(`document.querySelector('.app')?.dataset.density === 'compact'`),
     5_000,
-    '密度即时生效',
+    '密度草稿预览',
   );
 
   await evaluate(setSelectScript('#settings-theme', 'light'));
@@ -365,75 +393,102 @@ try {
         `document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(245, 246, 248)'`,
       ),
     5_000,
-    '主题即时切换',
+    '主题草稿预览',
   );
+  const previewConfig = await readConfig();
+  if (previewConfig?.terminal.fontSize !== 13 || previewConfig?.ui.density !== 'comfortable') {
+    throw new Error('草稿预览不应写入磁盘');
+  }
   const themeShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/theme-light-smoke.png', Buffer.from(themeShot.data, 'base64'));
 
-  await evaluate(`document.querySelector('[data-testid="settings-files-default"]').click()`);
-  await waitFor(
-    async () =>
-      (await evaluate(
-        `window.eterm.getConfig().then((result) => (result.ok ? result.value.files.openByDefault : null))`,
-      )) === false,
-    5_000,
-    '文件面板默认值写入',
-  );
-
-  await evaluate(setSelectScript('#settings-keepalive', '60'));
-  await waitFor(
-    async () =>
-      (await evaluate(
-        `window.eterm.getConfig().then((result) => (result.ok ? result.value.ssh.keepaliveInterval : null))`,
-      )) === 60,
-    5_000,
-    '保活间隔写入',
-  );
-  await evaluate(setSelectScript('#settings-right-click', 'menu'));
-  await waitFor(
-    async () =>
-      (await evaluate(
-        `window.eterm.getConfig().then((result) => (result.ok ? result.value.terminal.rightClick : null))`,
-      )) === 'menu',
-    5_000,
-    '右键行为写入',
-  );
-
-  const settingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
-  writeFileSync('tmp/settings-smoke.png', Buffer.from(settingsShot.data, 'base64'));
-
-  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+  // 取消：草稿丢弃，界面回到已保存值。
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
     5_000,
-    '关闭设置',
+    '取消关闭设置',
   );
-
-  // 重开面板：值必须还在（写入磁盘后读回）。
-  await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
   await waitFor(
     () =>
       evaluate(
-        `document.querySelector('#settings-font-size')?.value === '18' && document.querySelector('#settings-density')?.value === 'compact' && document.querySelector('#settings-theme')?.value === 'light' && document.querySelector('#settings-keepalive')?.value === '60' && document.querySelector('#settings-right-click')?.value === 'menu'`,
+        `document.querySelector('.app')?.dataset.density === 'comfortable' && document.documentElement.dataset.theme === (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')`,
       ),
     5_000,
-    '设置重开后保持',
-  );
-  await evaluate(`document.querySelector('[data-testid="settings-reset"]').click()`);
-  await waitFor(
-    () =>
-      evaluate(
-        `document.querySelector('#settings-font-size')?.value === '13' && document.querySelector('#settings-density')?.value === 'comfortable' && document.querySelector('.app')?.dataset.density === 'comfortable' && document.querySelector('#settings-theme')?.value === 'system' && document.querySelector('#settings-keepalive')?.value === '30' && document.querySelector('#settings-right-click')?.value === 'paste'`,
-      ),
-    5_000,
-    '恢复默认',
+    '取消回滚外观',
   );
   await waitFor(
     async () => (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols === colsAtDefaultFont,
     5_000,
-    '字号恢复',
+    '取消回滚字号',
   );
-  // 设置面板也能调停靠区尺寸；只写 layout，不参与配置恢复默认。
+
+  // 保存：真正写盘。
+  await openSettings();
+  await openSection('terminal');
+  await evaluate(setSelectScript('#settings-font-size', '18'));
+  await evaluate(setSelectScript('#settings-right-click', 'menu'));
+  await openSection('appearance');
+  await evaluate(setSelectScript('#settings-density', 'compact'));
+  await evaluate(setSelectScript('#settings-theme', 'light'));
+  await openSection('connection');
+  await evaluate(setSelectScript('#settings-keepalive', '60'));
+  await openSection('transfer');
+  await evaluate(`document.querySelector('[data-testid="settings-files-default"]').click()`);
+  const settingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/settings-smoke.png', Buffer.from(settingsShot.data, 'base64'));
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '保存后关闭设置',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="toast"]')?.textContent === '设置已保存'`),
+    5_000,
+    '保存提示',
+  );
+  await waitFor(
+    async () => {
+      const config = await readConfig();
+      return (
+        config?.terminal.fontSize === 18 &&
+        config?.terminal.rightClick === 'menu' &&
+        config?.ui.density === 'compact' &&
+        config?.ui.theme === 'light' &&
+        config?.ssh.keepaliveInterval === 60 &&
+        config?.files.openByDefault === false
+      );
+    },
+    5_000,
+    '设置写入磁盘',
+  );
+
+  // 重开保持。
+  await openSettings();
+  await openSection('terminal');
+  await waitFor(
+    () => evaluate(`document.querySelector('#settings-font-size')?.value === '18'`),
+    5_000,
+    '设置重开后保持',
+  );
+
+  // 恢复默认设置：二次点击确认，改的是草稿，保存才落盘。
+  await evaluate(`document.querySelector('[data-testid="settings-reset"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-reset"]')?.textContent === '再点一次确认'`),
+    5_000,
+    '恢复默认确认态',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-reset"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('#settings-font-size')?.value === '13'`),
+    5_000,
+    '恢复默认设置进草稿',
+  );
+  if ((await readConfig()).terminal.fontSize !== 18) throw new Error('恢复默认在保存前不应落盘');
+  // 布局即时：改左栏 260，再恢复默认布局（二次点击即时生效，不进草稿）。
+  await openSection('layout');
   await evaluate(`(() => {
     const input = document.querySelector('[data-testid="settings-dock-size-left"]');
     if (!input) return;
@@ -449,10 +504,100 @@ try {
     5_000,
     '设置面板调整左栏',
   );
-  await evaluate(`document.querySelector('.settings-panel__body').scrollTop = 9999`);
+  await evaluate(`document.querySelector('[data-testid="settings-reset-layout"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-reset-layout"]')?.textContent === '再点一次确认'`),
+    5_000,
+    '恢复默认布局确认态',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-reset-layout"]').click()`);
+  await waitFor(
+    async () =>
+      (await evaluate(
+        `window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.sizes.left : null))`,
+      )) === 220,
+    5_000,
+    '恢复默认布局',
+  );
   const settingsDockShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/settings-dock-size.png', Buffer.from(settingsDockShot.data, 'base64'));
-  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+
+  // 快捷键：改「切换系统资源面板」为 ⌘⇧J；冲突阻止保存，解绑后恢复。
+  await openSection('shortcuts');
+  await evaluate(`document.querySelector('[data-testid="shortcut-edit-panel.monitor"]').click()`);
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', key: 'j', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="shortcut-edit-panel.monitor"]')?.textContent === '⌘⇧J'`),
+    5_000,
+    '快捷键录制',
+  );
+
+  await evaluate(`document.querySelector('[data-testid="shortcut-edit-tab.next"]').click()`);
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 't', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="shortcut-conflict"]') !== null`),
+    5_000,
+    '快捷键冲突提示',
+  );
+  if ((await evaluate(`document.querySelector('[data-testid="settings-save"]').disabled`)) !== true) {
+    throw new Error('冲突未阻止保存');
+  }
+  const shortcutShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/shortcut-smoke.png', Buffer.from(shortcutShot.data, 'base64'));
+  await evaluate(`document.querySelector('[data-testid="shortcut-clear-tab.next"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="shortcut-conflict"]') === null`),
+    5_000,
+    '解绑后冲突解除',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-save"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '快捷键保存',
+  );
+  await waitFor(
+    async () => {
+      const config = await readConfig();
+      return (
+        config?.terminal.fontSize === 13 &&
+        config?.ui.density === 'comfortable' &&
+        config?.shortcuts.overrides['panel.monitor']?.code === 'KeyJ' &&
+        config?.shortcuts.overrides['tab.next'] === null
+      );
+    },
+    5_000,
+    '恢复默认与快捷键写入',
+  );
+
+  // 改键后新键生效、旧键失效。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', key: 'j', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-cpu"]') !== null`),
+    5_000,
+    '新快捷键打开监控面板',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', key: 'j', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="monitor-cpu"]') === null`),
+    5_000,
+    '新快捷键再按一次关闭',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm', metaKey: true, shiftKey: true, bubbles: true }))`,
+  );
+  await delay(400);
+  if ((await evaluate(`document.querySelector('[data-testid="monitor-cpu"]') !== null`)) ) {
+    throw new Error('旧快捷键应失效');
+  }
 
   // 右键菜单模式：配置切到 menu，验证菜单出现与粘贴动作。
   const baseConfig = await evaluate(
@@ -761,6 +906,12 @@ try {
   // 设置面板入口：把系统资源改到左侧，再改回右侧。
   await evaluate(`document.querySelector('[data-testid="open-settings"]').click()`);
   await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') !== null`),
+    5_000,
+    '设置面板',
+  );
+  await evaluate(`document.querySelector('[data-testid="settings-nav-layout"]').click()`);
+  await waitFor(
     () => evaluate(`document.querySelector('[data-testid="settings-dock-monitor"]') !== null`),
     5_000,
     '设置面板布局分区',
@@ -777,7 +928,7 @@ try {
     5_000,
     '设置里改回右侧',
   );
-  await evaluate(`document.querySelector('[data-testid="settings-close"]').click()`);
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
 
   // 重载页面：面板布局与分隔比例应从 layout.json 恢复（等价于重启应用）。
   await Promise.resolve(evaluate(`location.reload()`)).catch(() => {});
@@ -843,6 +994,14 @@ try {
   if (!(workspaceWidth > 900)) throw new Error(`关闭面板后工作区未撑满：${workspaceWidth}`);
 
   const tail = screen.split('\n').filter(Boolean).slice(-2).join(' | ');
+  // 原生菜单与托盘只在主进程存在，用启动日志证明装配成功。
+  const startupLogs = appLogs.join('');
+  if (!startupLogs.includes('[menu] 已装配：ETerm / 文件 / 编辑 / 视图 / 窗口 / 帮助')) {
+    throw new Error('原生菜单未按预期装配');
+  }
+  if (!startupLogs.includes('[tray] 已创建')) {
+    throw new Error('托盘未创建（缺模板图或图片为空）');
+  }
   console.log(`冒烟通过：终端输出「${tail}」，截图 ${SCREENSHOT}`);
   process.exitCode = 0;
 } catch (error) {
