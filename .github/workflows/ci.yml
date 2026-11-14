@@ -1,0 +1,38 @@
+name: ci
+
+# 日常分支的保护网：类型检查、单测、生产依赖审计。
+# 发布构建仍在 release.yml（打 tag 触发），这里只验证不产出。
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元测试
+        run: npm test
+
+      # 只在生产依赖上卡 high / critical：开发依赖的告警不阻断，
+      # 与 electron / builder 的升级节奏解耦。
+      - name: 生产依赖审计
+        run: npm audit --omit=dev --audit-level=high

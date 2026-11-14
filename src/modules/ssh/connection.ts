@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream';
 import { ProductError, normalizeError } from '../../core/errors.ts';
 import { t } from '../../shared/i18n/index.ts';
 import { fingerprintOf } from './fingerprint.ts';
+import { SSH_ALGORITHMS } from './algorithms.ts';
 import { connectViaProxy } from './proxy.ts';
 import type { SshTarget } from './target.ts';
 
@@ -76,6 +77,7 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
         readyTimeout: 10_000,
         keepaliveInterval: target.keepaliveInterval ?? 30_000,
         keepaliveCountMax: target.keepaliveCountMax ?? 3,
+        algorithms: SSH_ALGORITHMS,
         hostVerifier: (key: Buffer) => {
           observedFingerprint = fingerprintOf(key);
           if (!expected) return false;
@@ -89,6 +91,13 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
     });
   } catch (error) {
     client.end();
+    // 握手失败只记主机与错误级别：不含密码 / 私钥，便于区分算法协商、认证与网络问题。
+    const level = (error as { level?: unknown }).level;
+    console.warn(
+      `[core-ssh] 握手失败 ${target.host}:${target.port}`,
+      typeof level === 'string' ? level : '',
+      (error as Error).message,
+    );
     // 只有握手阶段真的拿到指纹才能说是「首次确认」或「指纹变化」；
     // 端口拒绝、DNS 失败这类错误根本没走到 hostVerifier，照实归一。
     if (observedFingerprint && !expected) {

@@ -94,7 +94,7 @@ macOS（真系统）
 4. `npm run pack` 后启动打包产物，人工检查五项：输入法、终端字体渲染、剪贴板、钥匙串授权、菜单快捷键；
 5. 发 patch 版本，changelog 记一条；失败就回退到上一个 major，不带着问题发版。
 
-ETerm 特有的高风险点（升级时优先验证）：xterm canvas 字形、`eterm-plugin://` 自定义协议、`safeStorage` 钥匙串授权、`Menu` accelerator 与改键联动、`webUtils.getPathForFile` 拖拽路径。
+ETerm 特有的高风险点（升级时优先验证）：xterm canvas 字形、`eterm-plugin://` 自定义协议、`safeStorage` 钥匙串授权、`Menu` accelerator 与改键联动、`webUtils.getPathForFile` 拖拽路径。另有一条已在 0.9.x 踩到的差异：Electron 的 Node（BoringSSL）不提供原始 `chacha20` cipher，SSH 算法白名单里列出 `chacha20-poly1305@openssh.com` 会在协商前直接报 `Unsupported algorithm`。
 
 ## 八、不跟进会怎样
 
@@ -117,16 +117,17 @@ ETerm 特有的高风险点（升级时优先验证）：xterm canvas 字形、`
 
 ## 十、同类工具怎么做
 
-- **Tabby（Electron）**：既跟 Electron 大版本（公开更新日志显示 2025 年内从 29 升到 32），也换协议库——2024-12 起用 `russh` 重写 SSH 后端，明确修复 CVE-2024-55950。说明「跟运行时」和「换依赖库」是两条并行工作，不是二选一。
+- **Tabby（Electron）**：既跟 Electron 大版本（公开更新日志显示 2025 年内从 29 升到 32），也换过协议库——2024-12 的 v1.0.216 里同时做了两件事：修自己 macOS 权限配置的漏洞 CVE-2024-55950（过度 entitlements 导致 TCC 绕过，与 SSH 库无关），以及把 SSH 后端从 ssh2 换成 russh。公开日志没有把换库原因写成「修该 CVE」。
 - **SSHYard（Go 原生）**：公开资料描述为 Go 开发、原生渲染的跨平台 SSH / SFTP 客户端，不走 Electron 路线。它没有 Electron 的上游风险，但继承 Go GUI 工具链与系统渲染层的 bug，属于「换上游」而非「没有上游」。
 
 结论：上游依赖是所有桌面应用的共性问题，差别只在「bug 的形态」和「修复通道在谁手里」。Chromium 高危漏洞通常几天内出补丁，这是留在 Electron 的现实优势。
 
 ## 十一、当前缺口与待办
 
-- `electron` 目前是 `^45.3.1`（caret，会跟 minor）；建议改 `~` 并落一份升级清单。
-- 主进程没有 `render-process-gone` / `did-fail-load` / `uncaughtException` 兜底，渲染进程崩溃时表现为黑屏或无声退出，无法区分「上游故障」还是「自身故障」。
+- `electron` 已从 `^45.3.1` 改为 `~45.3.1`（只跟 patch），minor 升级作为显式动作走第七节的五步清单。
+- 主进程已补 `render-process-gone` / `did-fail-load` 兜底（可读提示 + 重载）与 `uncaughtException` / `unhandledRejection` 日志；渲染进程崩溃不再表现为黑屏。
 - 没有 host 适配层，换壳成本被放大；这是换壳启动前的第一个任务，不换壳则不必做。
+- SSH 协议库 `ssh2` 当前为 1.17.0：`npm audit` 无告警，Snyk 对 1.17.0 标「无已知漏洞」，历史上的 Terrapin（CVE-2023-48795）已在 1.15.0 修复、Windows 命令注入（CVE-2020-26301）在 1.4.0 修复。风险不在已知 CVE，而在上游接近停更（Snyk 标 Inactive、单维护者），后续新漏洞与新算法可能得不到支持；需要定期审计并保留换库预案。
 - `App.tsx` 里配置存在多份同源状态，属于独立的结构性重构议题，与本篇无关。
 
 ## 十二、来源与确定性

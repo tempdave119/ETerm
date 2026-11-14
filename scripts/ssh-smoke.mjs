@@ -435,12 +435,17 @@ proxyServer.on('connect', (request, clientSocket, head) => {
     clientSocket.pipe(upstream);
   });
   upstream.on('error', () => clientSocket.destroy());
+  // 隧道对端被强行断开时 clientSocket 也会报 ECONNRESET，不能让它变成未捕获异常。
+  clientSocket.on('error', () => upstream.destroy());
 });
 await new Promise((resolve) => proxyServer.listen(0, '127.0.0.1', resolve));
 const proxyPort = proxyServer.address().port;
 
-// 端口转发的目标：本机 TCP echo。
-const echoServer = net.createServer((socket) => socket.pipe(socket));
+// 端口转发的目标：本机 TCP echo。连接断开时 socket 会报 ECONNRESET，需要接住。
+const echoServer = net.createServer((socket) => {
+  socket.on('error', () => socket.destroy());
+  socket.pipe(socket);
+});
 await new Promise((resolve) => echoServer.listen(0, '127.0.0.1', resolve));
 const echoPort = echoServer.address().port;
 
@@ -471,6 +476,7 @@ function printableTelnetData(chunk) {
 }
 const telnetServer = net.createServer((socket) => {
   let clientBytes = Buffer.alloc(0);
+  socket.on('error', () => socket.destroy());
   socket.write('telnet-banner\r\n');
   socket.write(Buffer.from([255, 253, 31]));
   socket.write(Buffer.from([255, 250, 24, 1, 255, 240]));
@@ -1035,7 +1041,8 @@ try {
     '新建文件夹输入框',
   );
   await evaluate(setInputScript('.file-panel__name-input', 'smoke-dir'));
-  await evaluate(`document.querySelector('.file-panel__name-input').blur()`);
+  // 先显式聚焦再 blur：autoFocus 偶尔晚一帧，直接 blur 不会触发提交，造成偶发超时。
+  await evaluate(`(() => { const node = document.querySelector('.file-panel__name-input'); node?.focus(); node?.blur(); })()`);
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="file-row-smoke-dir"]') !== null`),
     5_000,
@@ -1059,7 +1066,7 @@ try {
     '重命名输入框',
   );
   await evaluate(setInputScript('.file-row__rename', 'smoke-renamed.txt'));
-  await evaluate(`document.querySelector('.file-row__rename').blur()`);
+  await evaluate(`(() => { const node = document.querySelector('.file-row__rename'); node?.focus(); node?.blur(); })()`);
   await waitFor(
     () => evaluate(`document.querySelector('[data-testid="file-row-smoke-renamed.txt"]') !== null`),
     5_000,

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Tray } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, screen, shell, type Tray } from 'electron';
 import Module from 'node:module';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -104,6 +104,15 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let menuLogged = false;
 
+// 主进程兜底：上游或自身抛出的未处理异常不能让进程静默退出，至少留下可诊断的日志。
+// 这里不退出进程，避免把一次可恢复的错误放大成崩溃。
+process.on('uncaughtException', (error) => {
+  console.error('[main] 未捕获异常', error);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] 未处理的 Promise 拒绝', reason);
+});
+
 /** 菜单项点击统一下发给渲染层；命令分发与快捷键共用一套实现。 */
 function sendMenuCommand(command: MenuCommand): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(MENU_IPC.command, command);
@@ -164,6 +173,46 @@ function applyMenu(config: AppConfig): void {
   }
 }
 
+/**
+ * 上游崩溃兜底：渲染进程退出或主框架加载失败时给出可读提示并允许重载，
+ * 而不是让用户面对黑屏，也无法区分「Electron 的问题」与「我们的问题」。
+ */
+function installCrashRecovery(window: BrowserWindow): void {
+  let recovering = false;
+
+  const recover = (reason: string): void => {
+    if (recovering || window.isDestroyed()) return;
+    recovering = true;
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'error',
+      title: 'ETerm 界面异常',
+      message: '界面进程意外退出或页面加载失败。',
+      detail: reason,
+      buttons: ['重新加载', '退出'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) {
+      recovering = false;
+      window.webContents.reload();
+    } else {
+      app.quit();
+    }
+  };
+
+  window.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[window] 渲染进程退出：${details.reason}（exitCode=${details.exitCode}）`);
+    recover(`渲染进程退出：${details.reason}（exitCode=${details.exitCode}）`);
+  });
+
+  window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    // -3 是被主动取消的加载（例如被导航拦截），不算故障。
+    if (!isMainFrame || code === -3) return;
+    console.error(`[window] 页面加载失败：${code} ${description} ${url}`);
+    recover(`页面加载失败：${code} ${description}`);
+  });
+}
+
 async function createWindow(): Promise<void> {
   if (mainWindow && !mainWindow.isDestroyed()) return;
 
@@ -207,6 +256,7 @@ async function createWindow(): Promise<void> {
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+  installCrashRecovery(window);
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   const saveWindowState = (): void => {
