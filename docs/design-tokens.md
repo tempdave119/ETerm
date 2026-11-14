@@ -29,11 +29,23 @@ description: "F-15 交付物：设计 token 清单、控件五态规则、密度
 ## 主题
 
 - 两套主题：深色（`:root` 默认）与浅色（`:root[data-theme="light"]`）。属性挂在 `html` 上，切换只换变量，不重建面板。
-- 偏好三档：`system` / `dark` / `light`，存在 `config.json` 的 `ui.theme`；`system` 跟随 `prefers-color-scheme`，系统切换时实时响应。
+- 内置三档：`system` / `dark` / `light`，存在 `config.json` 的 `ui.theme`；`system` 跟随 `prefers-color-scheme`，系统切换时实时响应。外部主题用 `ext:<id>` 存在同一字段。
 - 首屏渲染前先按系统主题写好 `data-theme`，避免配置异步加载完成前闪一下深色；窗口 `backgroundColor` 也随系统深浅设置。
 - 浅色覆盖范围：背景三层、文本四级、边框两级、状态四色、交互遮罩、弹层遮罩与阴影、主按钮四色。字号 / 间距 / 圆角 / 尺寸不动。
 - xterm 用两套调色板（`TERMINAL_THEMES`），切换主题时写 `term.options.theme`，不重建终端实例。
-- 外部主题（自定义 token 覆盖）尚未做，需先定文件格式与安全边界。
+
+### 外部主题
+
+- 目录：`<用户数据目录>/themes/*.json`；设置「外观」里点「打开主题目录」会带过去，放好后点「刷新主题」。示例见 `examples/themes/nord.json`。
+- 结构：`{ id, name, base, ui, terminal }`。
+  - `id`：1–32 位小写字母 / 数字 / 短横线，不能是 `system` / `dark` / `light`。
+  - `name`：1–40 字符，显示在下拉里。
+  - `base`：`dark` / `light`，决定未覆盖 token 的兜底与 xterm 基础调色板。
+  - `ui`：只允许颜色 token（`--bg-*` / `--text-*` / `--border-*` / `--status-*` / `--hover-*` / `--active-overlay` / `--backdrop` / `--primary-*`）。
+  - `terminal`：只允许 xterm 颜色键（`background` / `foreground` / `cursor` / `selection*` / 16 色）。
+- 校验：颜色只接受 `#rgb` / `#rrggbb` / `#rrggbbaa` / `rgb()` / `rgba()`；未知键、保留 id、非法 JSON、超过 64 KB 的文件整份跳过并记日志。文件按文件名排序，重复 id 保留第一份。
+- 应用：`ui` 写成 `html` 的 inline CSS 变量，`terminal` 合并到内置调色板；切回内置主题会清空 inline 覆盖。主题只覆盖颜色，不覆盖字体 / 间距 / 圆角 / 尺寸。
+- 缺失：选中的外部主题文件被删除或校验失败时回退系统主题，设置面板显示「外部主题（缺失）」与处理提示。
 
 ## 控件五态
 

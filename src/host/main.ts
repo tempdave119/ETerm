@@ -12,6 +12,7 @@ import type { AppConfig } from '../services/config/schema.ts';
 import { CredentialStore } from '../services/credentials/store.ts';
 import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { LayoutStore } from '../services/layouts/store.ts';
+import { ThemeStore } from '../services/themes/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
 import { IPC, MENU_IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
 import type { MenuCommand } from '../shared/ipc.ts';
@@ -33,6 +34,7 @@ import { registerKnownHostsIpc } from './known-hosts-ipc.ts';
 import { registerLayoutsIpc } from './layouts-ipc.ts';
 import { createSafeStorageCodec } from './secret-codec.ts';
 import { registerSystemIpc } from './system-ipc.ts';
+import { registerThemesIpc } from './themes-ipc.ts';
 import { registerTransfersIpc } from './transfers-ipc.ts';
 import { buildMenuTemplate } from './menu.ts';
 import { buildTrayMenu, createAppTray, type TrayActions } from './tray.ts';
@@ -43,6 +45,7 @@ interface AppServices {
   credentials: CredentialStore;
   knownHosts: KnownHostsStore;
   layouts: LayoutStore;
+  themes: ThemeStore;
 }
 
 app.setName('ETerm');
@@ -72,6 +75,7 @@ let disposeComponentsIpc: (() => void) | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
+let disposeThemesIpc: (() => void) | null = null;
 let disposeSerialIpc: (() => void) | null = null;
 let disposeClipboardIpc: (() => void) | null = null;
 let disposeCredentialsIpc: (() => void) | null = null;
@@ -235,6 +239,7 @@ void app.whenReady().then(async () => {
     credentials: new CredentialStore({ baseDir, codec: createSafeStorageCodec() }),
     knownHosts: new KnownHostsStore({ baseDir }),
     layouts: new LayoutStore({ baseDir }),
+    themes: new ThemeStore({ baseDir }),
   };
   appServices = services;
   registry.provide('connections', services.connections);
@@ -255,6 +260,7 @@ void app.whenReady().then(async () => {
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);
   disposeLayoutsIpc = registerLayoutsIpc(services.layouts);
   disposeCredentialsIpc = registerCredentialsIpc(services.credentials);
+  disposeThemesIpc = registerThemesIpc(services.themes);
 
   // 菜单与托盘先于窗口就位：关窗后从托盘唤回窗口时不需要重启应用。
   app.setAboutPanelOptions({
@@ -299,6 +305,8 @@ app.on('will-quit', () => {
   disposeSerialIpc = null;
   disposeCredentialsIpc?.();
   disposeCredentialsIpc = null;
+  disposeThemesIpc?.();
+  disposeThemesIpc = null;
   sessions?.dispose();
   registry.dispose();
 });

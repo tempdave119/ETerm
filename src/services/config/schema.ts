@@ -4,9 +4,11 @@
  */
 
 import type { ShortcutOverrides, ShortcutSpec } from '../../shared/shortcut.ts';
+import { isThemePreference, type ThemePreference } from '../../shared/theme.ts';
+
+export type { ThemePreference };
 
 export type UiDensity = 'comfortable' | 'compact';
-export type ThemePreference = 'system' | 'dark' | 'light';
 export type LanguagePreference = 'system' | 'zh-CN' | 'en-US';
 export type MonitorProcessSort = 'memory' | 'cpu';
 export type RightClickAction = 'paste' | 'menu' | 'off';
@@ -120,10 +122,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
     },
     ui: {
       density: ui.density === 'compact' || ui.density === 'comfortable' ? ui.density : defaults.ui.density,
-      theme:
-        ui.theme === 'system' || ui.theme === 'dark' || ui.theme === 'light'
-          ? ui.theme
-          : defaults.ui.theme,
+      theme: isThemePreference(ui.theme) ? ui.theme : defaults.ui.theme,
       language: readLanguage(ui.language, defaults.ui.language),
       monitorProcessSort:
         ui.monitorProcessSort === 'memory' || ui.monitorProcessSort === 'cpu'
@@ -279,8 +278,8 @@ function requireDensity(value: unknown): UiDensity {
 }
 
 function requireTheme(value: unknown): ThemePreference {
-  if (value === 'system' || value === 'dark' || value === 'light') return value;
-  throw new Error('外观主题只能是 system、dark 或 light');
+  if (isThemePreference(value)) return value;
+  throw new Error('外观主题只能是 system、dark、light 或 ext:<id>');
 }
 
 function readLanguage(value: unknown, fallback: LanguagePreference): LanguagePreference {

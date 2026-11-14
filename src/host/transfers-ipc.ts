@@ -211,6 +211,24 @@ export function registerTransfersIpc(
     }
   });
 
+  ipcMain.handle(TRANSFERS_IPC.pause, (_event, rawId): IpcResult<null> => {
+    try {
+      queue.pause(readString(rawId, '传输 id', 64));
+      return success(null);
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(TRANSFERS_IPC.resume, (_event, rawId): IpcResult<null> => {
+    try {
+      queue.resume(readString(rawId, '传输 id', 64));
+      return success(null);
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   ipcMain.handle(TRANSFERS_IPC.pickUpload, async (_event, raw): Promise<IpcResult<TransferView[] | null>> => {
     try {
       const value = readRecord(raw, '上传参数');
@@ -326,6 +344,8 @@ export function registerTransfersIpc(
       TRANSFERS_IPC.list,
       TRANSFERS_IPC.cancel,
       TRANSFERS_IPC.retry,
+      TRANSFERS_IPC.pause,
+      TRANSFERS_IPC.resume,
       TRANSFERS_IPC.pickUpload,
       TRANSFERS_IPC.pickDownload,
       TRANSFERS_IPC.pickDownloadDir,

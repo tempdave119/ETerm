@@ -77,6 +77,9 @@ export interface TransferPort {
   upload(sourcePath: string, targetPath: string): TransferTask;
   download(sourcePath: string, targetPath: string): TransferTask;
   cancel(id: string): void;
+  /** 流级暂停：数据留在内核缓冲里，不落偏移量；连接断开即失败。 */
+  pause(id: string): void;
+  resume(id: string): void;
   onProgress(handler: (progress: TransferProgress) => void): () => void;
 }
 

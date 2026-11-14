@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { cpSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -123,14 +123,19 @@ mkdirSync(dataDir, { recursive: true });
 cpSync(join(process.cwd(), 'examples', 'components', 'serial'), join(dataDir, 'components', 'serial'), {
   recursive: true,
 });
+cpSync(join(process.cwd(), 'examples', 'components', 'telnet'), join(dataDir, 'components', 'telnet'), {
+  recursive: true,
+});
 const keyPair = utils.generateKeyPairSync('ed25519');
 const keyPath = join(dataDir, 'id_ed25519');
 writeFileSync(keyPath, keyPair.private, { mode: 0o600 });
 const uploadFixture = join(dataDir, 'upload.txt');
 // 8 MiB：既走真实流式上传，也给「取消传输」留出足够长的可点击窗口（mock 每块延迟 25ms）。
 writeFileSync(uploadFixture, `upload-from-smoke\n${'x'.repeat(8 * 1024 * 1024)}`);
+const uploadSourceSize = statSync(uploadFixture).size;
 const uploadFixture2 = join(dataDir, 'upload2.txt');
 writeFileSync(uploadFixture2, 'upload2-from-smoke\n');
+const uploadSource2Size = statSync(uploadFixture2).size;
 const dragFixture = join(dataDir, 'drag.txt');
 writeFileSync(dragFixture, 'drag-from-smoke\n');
 const dropDir = join(dataDir, 'dropdir');
@@ -259,6 +264,24 @@ const server = new Server({ hostKeys: [hostKey.private] }, (connection) => {
             sftp.status(reqid, STATUS.OK);
           } catch {
             sftp.status(reqid, STATUS.FAILURE);
+          }
+        });
+
+        sftp.on('RENAME', async (reqid, oldPath, newPath) => {
+          try {
+            await rename(resolveRemote(oldPath), resolveRemote(newPath));
+            sftp.status(reqid, STATUS.OK);
+          } catch {
+            sftp.status(reqid, STATUS.FAILURE);
+          }
+        });
+
+        sftp.on('REMOVE', async (reqid, path) => {
+          try {
+            await unlink(resolveRemote(path));
+            sftp.status(reqid, STATUS.OK);
+          } catch {
+            sftp.status(reqid, STATUS.NO_SUCH_FILE);
           }
         });
 
@@ -420,6 +443,47 @@ const proxyPort = proxyServer.address().port;
 const echoServer = net.createServer((socket) => socket.pipe(socket));
 await new Promise((resolve) => echoServer.listen(0, '127.0.0.1', resolve));
 const echoPort = echoServer.address().port;
+
+// Telnet mock：banner + NAWS / TTYPE 协商 + 回显可打印字符。
+const telnetState = { naws: false, ttype: false };
+function printableTelnetData(chunk) {
+  const output = [];
+  for (let index = 0; index < chunk.length; index += 1) {
+    const byte = chunk[index];
+    if (byte !== 255) {
+      if ((byte >= 0x20 && byte <= 0x7e) || byte === 0x0d || byte === 0x0a) output.push(byte);
+      continue;
+    }
+    const verb = chunk[index + 1];
+    if (verb === 250) {
+      index += 2;
+      while (index < chunk.length && !(chunk[index] === 255 && chunk[index + 1] === 240)) index += 1;
+      index += 1;
+      continue;
+    }
+    if (verb >= 251 && verb <= 254) {
+      index += 2;
+      continue;
+    }
+    index += 1;
+  }
+  return Buffer.from(output).toString('utf8');
+}
+const telnetServer = net.createServer((socket) => {
+  let clientBytes = Buffer.alloc(0);
+  socket.write('telnet-banner\r\n');
+  socket.write(Buffer.from([255, 253, 31]));
+  socket.write(Buffer.from([255, 250, 24, 1, 255, 240]));
+  socket.on('data', (chunk) => {
+    clientBytes = Buffer.concat([clientBytes, chunk]);
+    if (clientBytes.includes(Buffer.from([255, 250, 31]))) telnetState.naws = true;
+    if (clientBytes.includes(Buffer.from('xterm-256color'))) telnetState.ttype = true;
+    const echoed = printableTelnetData(chunk);
+    if (echoed) socket.write(echoed);
+  });
+});
+await new Promise((resolve) => telnetServer.listen(0, '127.0.0.1', resolve));
+const telnetPort = telnetServer.address().port;
 
 // 无 SFTP 的对照服务器：只接认证与 shell，用来验证「能力降级」而不是报错阻塞终端。
 const noSftpConnections = new Set();
@@ -939,6 +1003,8 @@ try {
   if (!uploaded.includes('upload-from-smoke')) throw new Error('上传内容不正确');
   const uploaded2 = await readFile(join(remoteRoot, 'upload2.txt'), 'utf8');
   if (!uploaded2.includes('upload2-from-smoke')) throw new Error('第二个上传内容不正确');
+  const uploadLeftovers = (await readdir(remoteRoot)).filter((name) => name.endsWith('.part'));
+  if (uploadLeftovers.length > 0) throw new Error(`上传后残留临时文件：${uploadLeftovers.join(', ')}`);
 
   await evaluate(`document.querySelector('button[title="刷新"]').click()`);
   await waitFor(
@@ -1290,6 +1356,53 @@ try {
     '关闭串口表单',
   );
 
+  // Telnet 外挂组件：协议下拉出现 Telnet；mock 服务端发 banner、协商 NAWS / TTYPE 并回显。
+  const tabsBeforeTelnet = await evaluate(`document.querySelectorAll('.terminal-host').length`);
+  await clickOn('[data-testid="panel-frame-sessions"] button[title="新建连接"]');
+  await waitFor(() => evaluate(`document.querySelector('#connection-protocol') !== null`), 5_000, 'Telnet 协议选择');
+  await evaluate(setSelectScript('#connection-protocol', 'telnet'));
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="connection-option-host"]') !== null`),
+    10_000,
+    'Telnet 字段渲染',
+  );
+  await evaluate(setInputScript('#connection-name', 'mock-telnet'));
+  await evaluate(setInputScript('#connection-option-host', '127.0.0.1'));
+  await evaluate(setInputScript('#connection-option-port', String(telnetPort)));
+  await clickOn('[data-testid="connection-save-connect"]');
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-host').length === ${tabsBeforeTelnet + 1}`),
+    15_000,
+    'Telnet 标签打开',
+  );
+  const telnetSession = String(
+    await evaluate(`[...document.querySelectorAll('.terminal-host')].at(-1)?.dataset.sessionId ?? ''`),
+  );
+  if (!telnetSession) throw new Error('没有拿到 Telnet 会话');
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(telnetSession)})`)).includes('telnet-banner'),
+    15_000,
+    'Telnet banner',
+  );
+  await evaluate(`window.__etermDebug.type(${JSON.stringify(telnetSession)}, "echo telnet-ok\\r")`);
+  await waitFor(
+    async () =>
+      String(await evaluate(`window.__etermDebug.read(${JSON.stringify(telnetSession)})`)).includes('echo telnet-ok'),
+    15_000,
+    'Telnet 回显',
+  );
+  if (!telnetState.naws || !telnetState.ttype) {
+    throw new Error(`Telnet 协商不完整：${JSON.stringify(telnetState)}`);
+  }
+  await shotOf('tmp/ssh-smoke-telnet.png');
+  await evaluate(`document.querySelector('.tab[data-active="true"] .tab__close').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelectorAll('.terminal-host').length === ${tabsBeforeTelnet}`),
+    5_000,
+    '关闭 Telnet 标签',
+  );
+
   // 错主机：端口 1 必然拒连 → HOST_UNREACHABLE。
   await saveAndConnect({ name: 'error-host', host: '127.0.0.1', port: 1, username: 'tester', auth: 'key' });
   await waitErrorTitle('连不上主机', '错主机错误文案');
@@ -1322,13 +1435,35 @@ try {
   await shotOf('tmp/error-file.png');
   await clickOn('[data-testid="file-preview"] .button--primary');
 
-  // 取消传输：8 MiB 上传在 mock 每块 25ms 下会停留数秒，足以点取消。
+  // 暂停 / 恢复：8 MiB 上传在 mock 每块 25ms 下会停留数秒，足以切换状态。
   await clickOn('[data-testid="file-upload"]');
   await waitFor(
     () => evaluate(`document.querySelector('.transfer-row[data-status="running"]') !== null`),
     15_000,
     '上传开跑',
   );
+  await clickOn('.transfer-row[data-status="running"] [data-testid^="transfer-pause-"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.transfer-row[data-status="paused"]') !== null`),
+    10_000,
+    '暂停传输',
+  );
+  await delay(500);
+  const pausedMeta = String(await textOf('.transfer-row[data-status="paused"] .transfer-row__meta'));
+  await delay(1_000);
+  const pausedMetaAfter = String(await textOf('.transfer-row[data-status="paused"] .transfer-row__meta'));
+  if (pausedMetaAfter !== pausedMeta) {
+    throw new Error(`暂停后进度仍在变化：${pausedMeta} -> ${pausedMetaAfter}`);
+  }
+  await shotOf('tmp/ssh-smoke-pause.png');
+  await clickOn('.transfer-row[data-status="paused"] [data-testid^="transfer-resume-"]');
+  await waitFor(
+    () => evaluate(`document.querySelector('.transfer-row[data-status="running"]') !== null`),
+    10_000,
+    '恢复传输',
+  );
+
+  // 取消传输：恢复后仍在大文件中段，足够点击取消。
   await clickOn('.transfer-row[data-status="running"] [data-testid^="transfer-cancel-"]');
   await waitFor(
     () => evaluate(`document.querySelector('.transfer-row[data-status="canceled"]') !== null`),
@@ -1339,6 +1474,26 @@ try {
     `document.querySelector('.transfer-row[data-status="canceled"]')?.closest('.transfer-item')?.querySelector('.error-message') != null`,
   );
   if (canceledHasError) throw new Error('取消传输不应显示错误块');
+
+  // 取消后队列会补位下一个任务；等队列空闲再断言临时文件与目标完整性。
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('.transfer-row[data-status="running"], .transfer-row[data-status="queued"]') === null`,
+      ),
+    40_000,
+    '取消后队列空闲',
+  );
+  const cancelLeftovers = (await readdir(remoteRoot)).filter((name) => name.endsWith('.part'));
+  if (cancelLeftovers.length > 0) throw new Error(`取消后残留临时文件：${cancelLeftovers.join(', ')}`);
+  const canceledUploadSize = (await stat(join(remoteRoot, 'upload.txt'))).size;
+  const canceledUpload2Size = (await stat(join(remoteRoot, 'upload2.txt'))).size;
+  if (canceledUploadSize !== uploadSourceSize) {
+    throw new Error(`取消后 upload.txt 被截断：${canceledUploadSize} / ${uploadSourceSize}`);
+  }
+  if (canceledUpload2Size !== uploadSource2Size) {
+    throw new Error(`取消后 upload2.txt 被截断：${canceledUpload2Size} / ${uploadSource2Size}`);
+  }
   await shotOf('tmp/error-cancel.png');
 
   // 无 SFTP 降级：终端可用、文件面板不出现，文件通道给出明确原因。
@@ -1471,6 +1626,13 @@ try {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     echoServer.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1000);
+    telnetServer.close(() => {
       clearTimeout(timer);
       resolve();
     });

@@ -9,6 +9,8 @@ class FakePort implements TransferPort {
   readonly uploaded: Array<[string, string]> = [];
   readonly downloaded: Array<[string, string]> = [];
   readonly canceled: string[] = [];
+  readonly paused: string[] = [];
+  readonly resumed: string[] = [];
   #sequence = 0;
 
   upload(source: string, target: string): TransferTask {
@@ -24,6 +26,14 @@ class FakePort implements TransferPort {
   cancel(id: string): void {
     this.canceled.push(id);
     this.tasks.get(id)?.reject(new Error('传输已取消'));
+  }
+
+  pause(id: string): void {
+    this.paused.push(id);
+  }
+
+  resume(id: string): void {
+    this.resumed.push(id);
   }
 
   onProgress(handler: (progress: TransferProgress) => void): () => void {
@@ -156,6 +166,64 @@ test('queue_cancel_running_task_calls_port_cancel', async () => {
 
   assert.equal(queue.find(view.id)?.status, 'canceled');
   assert.deepEqual(port?.canceled, ['port-1']);
+});
+
+test('queue_pause_and_resume_running_task', async () => {
+  const { queue, port, changes } = createQueue();
+  const view = queue.enqueue(request('paused.txt'));
+
+  queue.pause(view.id);
+  assert.deepEqual(port?.paused, ['port-1']);
+  assert.equal(queue.find(view.id)?.status, 'paused');
+
+  port?.emit('port-1', 4, 10);
+  assert.equal(queue.find(view.id)?.transferred, 4);
+
+  queue.resume(view.id);
+  assert.deepEqual(port?.resumed, ['port-1']);
+  assert.equal(queue.find(view.id)?.status, 'running');
+
+  port?.finish('port-1');
+  await flush();
+  assert.equal(queue.find(view.id)?.status, 'done');
+  assert.ok(changes.some((task) => task.status === 'paused'));
+});
+
+test('queue_pause_ignores_queued_task', async () => {
+  const { queue, port } = createQueue(1);
+  queue.enqueue(request('first.txt'));
+  const second = queue.enqueue(request('second.txt'));
+
+  queue.pause(second.id);
+
+  assert.equal(queue.find(second.id)?.status, 'queued');
+  assert.equal(port?.paused.length, 0);
+});
+
+test('queue_paused_task_keeps_slot_until_cancel', async () => {
+  const { queue, port } = createQueue(1);
+  const first = queue.enqueue(request('first.txt'));
+  const second = queue.enqueue(request('second.txt'));
+
+  queue.pause(first.id);
+  await flush();
+  assert.equal(queue.find(second.id)?.status, 'queued', '暂停不应释放并发槽');
+
+  queue.cancel(first.id);
+  await flush();
+  assert.equal(queue.find(first.id)?.status, 'canceled');
+  assert.equal(queue.find(second.id)?.status, 'running', '取消暂停任务后应补位');
+  assert.deepEqual(port?.canceled, ['port-1']);
+});
+
+test('queue_resume_ignores_non_paused_task', async () => {
+  const { queue, port } = createQueue();
+  const view = queue.enqueue(request('running.txt'));
+
+  queue.resume(view.id);
+
+  assert.equal(queue.find(view.id)?.status, 'running');
+  assert.equal(port?.resumed.length, 0);
 });
 
 test('queue_normalizes_transfer_failure_with_path_detail', async () => {

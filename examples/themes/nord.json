@@ -1,0 +1,40 @@
+{
+  "id": "nord",
+  "name": "Nord",
+  "base": "dark",
+  "ui": {
+    "--bg-canvas": "#2e3440",
+    "--bg-panel": "#3b4252",
+    "--bg-overlay": "#434c5e",
+    "--text-primary": "#eceff4",
+    "--text-secondary": "#d8dee9",
+    "--text-tertiary": "#a3abb8",
+    "--border-subtle": "#434c5e",
+    "--border-strong": "#4c566a",
+    "--status-info": "#88c0d0",
+    "--primary-bg": "#eceff4",
+    "--primary-text": "#2e3440"
+  },
+  "terminal": {
+    "background": "#2e3440",
+    "foreground": "#d8dee9",
+    "cursor": "#88c0d0",
+    "selectionBackground": "rgba(136, 192, 208, 0.3)",
+    "black": "#3b4252",
+    "red": "#bf616a",
+    "green": "#a3be8c",
+    "yellow": "#ebcb8b",
+    "blue": "#81a1c1",
+    "magenta": "#b48ead",
+    "cyan": "#88c0d0",
+    "white": "#e5e9f0",
+    "brightBlack": "#4c566a",
+    "brightRed": "#bf616a",
+    "brightGreen": "#a3be8c",
+    "brightYellow": "#ebcb8b",
+    "brightBlue": "#81a1c1",
+    "brightMagenta": "#b48ead",
+    "brightCyan": "#8fbcbb",
+    "brightWhite": "#eceff4"
+  }
+}

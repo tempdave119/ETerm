@@ -89,6 +89,23 @@ await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build']);
 const dataDir = join(process.cwd(), 'tmp', 'smoke', randomUUID());
 mkdirSync(dataDir, { recursive: true });
 
+// 外部主题：一份合法、一份带未知 token；后者应被跳过且不出现在下拉里。
+mkdirSync(join(dataDir, 'themes'), { recursive: true });
+writeFileSync(
+  join(dataDir, 'themes', 'nord.json'),
+  JSON.stringify({
+    id: 'nord',
+    name: 'Nord Smoke',
+    base: 'dark',
+    ui: { '--bg-canvas': '#101820', '--text-primary': '#e5e9f0' },
+    terminal: { background: '#101820', foreground: '#e5e9f0' },
+  }),
+);
+writeFileSync(
+  join(dataDir, 'themes', 'broken.json'),
+  JSON.stringify({ id: 'broken', name: 'Broken', base: 'dark', ui: { '--font-body': '13px' } }),
+);
+
 const appLogs = [];
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -401,6 +418,37 @@ try {
   }
   const themeShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/theme-light-smoke.png', Buffer.from(themeShot.data, 'base64'));
+
+  // 外部主题：合法文件出现在下拉、坏文件被跳过；切回内置时 inline 覆盖要清空。
+  await waitFor(
+    () => evaluate(`document.querySelector('#settings-theme option[value="ext:nord"]') !== null`),
+    5_000,
+    '外部主题出现在下拉',
+  );
+  const brokenThemeVisible = await evaluate(
+    `document.querySelector('#settings-theme option[value="ext:broken"]') !== null`,
+  );
+  if (brokenThemeVisible) throw new Error('非法主题不应出现在下拉里');
+  await evaluate(setSelectScript('#settings-theme', 'ext:nord'));
+  await waitFor(
+    () =>
+      evaluate(
+        `document.documentElement.dataset.theme === 'dark' && document.documentElement.style.getPropertyValue('--bg-canvas').trim() === '#101820'`,
+      ),
+    5_000,
+    '外部主题生效',
+  );
+  const externalShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/theme-external-smoke.png', Buffer.from(externalShot.data, 'base64'));
+  await evaluate(setSelectScript('#settings-theme', 'light'));
+  await waitFor(
+    () =>
+      evaluate(
+        `document.documentElement.dataset.theme === 'light' && document.documentElement.style.getPropertyValue('--bg-canvas') === ''`,
+      ),
+    5_000,
+    '切回内置主题清理覆盖',
+  );
 
   // 取消：草稿丢弃，界面回到已保存值。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);

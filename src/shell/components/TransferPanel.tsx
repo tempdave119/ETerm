@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, RotateCcw, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pause, Play, RotateCcw, X } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { TransferView } from '../../shared/ipc.ts';
 import { t, type MessageKey } from '../../shared/i18n/index.ts';
@@ -11,6 +11,8 @@ interface TransferPanelProps {
   onMove(target: DockId | null): void;
   onCancel(id: string): void;
   onRetry(id: string): void;
+  onPause(id: string): void;
+  onResume(id: string): void;
   onOpenFiles(): void;
   canPanelMoveUp?: boolean;
   canPanelMoveDown?: boolean;
@@ -20,6 +22,7 @@ interface TransferPanelProps {
 const STATUS_LABEL: Record<TransferView['status'], MessageKey> = {
   queued: 'transfer.queued',
   running: 'transfer.running',
+  paused: 'transfer.paused',
   done: 'transfer.done',
   failed: 'transfer.failed',
   canceled: 'transfer.cancelled',
@@ -31,6 +34,8 @@ export function TransferPanel({
   onMove,
   onCancel,
   onRetry,
+  onPause,
+  onResume,
   onOpenFiles,
   canPanelMoveUp,
   canPanelMoveDown,
@@ -85,7 +90,31 @@ export function TransferPanel({
                 <span className="transfer-row__meta">
                   {task.total > 0 ? `${percent}%` : `${task.transferred} B`}
                 </span>
-                {task.status === 'running' || task.status === 'queued' ? (
+                {task.status === 'running' ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title={t('transfer.pause')}
+                    aria-label={t('transfer.pause')}
+                    data-testid={`transfer-pause-${task.id}`}
+                    onClick={() => onPause(task.id)}
+                  >
+                    <Pause size={14} strokeWidth={1.5} />
+                  </button>
+                ) : null}
+                {task.status === 'paused' ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title={t('transfer.resume')}
+                    aria-label={t('transfer.resume')}
+                    data-testid={`transfer-resume-${task.id}`}
+                    onClick={() => onResume(task.id)}
+                  >
+                    <Play size={14} strokeWidth={1.5} />
+                  </button>
+                ) : null}
+                {task.status === 'running' || task.status === 'paused' || task.status === 'queued' ? (
                   <button
                     className="icon-button"
                     type="button"

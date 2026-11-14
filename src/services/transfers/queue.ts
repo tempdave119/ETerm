@@ -2,7 +2,7 @@ import { ProductError, normalizeError, type ProductErrorInfo } from '../../core/
 import type { TransferPort } from '../../core/ports.ts';
 
 export type TransferDirection = 'upload' | 'download';
-export type TransferStatus = 'queued' | 'running' | 'done' | 'failed' | 'canceled';
+export type TransferStatus = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'canceled';
 
 export interface TransferRequest {
   sessionId: string;
@@ -115,10 +115,27 @@ export class TransferQueue {
       return;
     }
 
-    if (job.view.status === 'running') {
+    if (job.view.status === 'running' || job.view.status === 'paused') {
       this.#setStatus(job, 'canceled');
       if (job.port && job.portTaskId) job.port.cancel(job.portTaskId);
     }
+  }
+
+  /** 暂停只作用于运行中的任务；排队任务没有可停的流。 */
+  pause(id: string): void {
+    const job = this.#tasks.get(id);
+    if (!job || job.view.status !== 'running') return;
+    if (!job.port || !job.portTaskId) return;
+    job.port.pause(job.portTaskId);
+    this.#setStatus(job, 'paused');
+  }
+
+  resume(id: string): void {
+    const job = this.#tasks.get(id);
+    if (!job || job.view.status !== 'paused') return;
+    if (!job.port || !job.portTaskId) return;
+    job.port.resume(job.portTaskId);
+    this.#setStatus(job, 'running');
   }
 
   retry(id: string): void {
@@ -198,7 +215,8 @@ export class TransferQueue {
       const jobId = this.#portTaskToJob.get(progress.id);
       if (!jobId) return;
       const job = this.#tasks.get(jobId);
-      if (!job || job.view.status !== 'running') return;
+      // 暂停后仍可能收到已缓冲的数据块，进度要如实更新，否则恢复前会显示旧值。
+      if (!job || (job.view.status !== 'running' && job.view.status !== 'paused')) return;
       job.view.transferred = progress.transferred;
       job.view.total = progress.total;
       job.view.updatedAt = new Date().toISOString();
@@ -208,13 +226,14 @@ export class TransferQueue {
   }
 
   #finish(job: Job): void {
-    if (job.view.status !== 'running') return;
+    // 暂停恰好发生在最后一包之后时，任务仍应正常完成；取消态则保持取消。
+    if (job.view.status !== 'running' && job.view.status !== 'paused') return;
     job.view.transferred = job.view.total || job.view.transferred;
     this.#setStatus(job, 'done');
   }
 
   #fail(job: Job, error: unknown): void {
-    if (job.view.status !== 'running') return;
+    if (job.view.status !== 'running' && job.view.status !== 'paused') return;
     // 端口抛出的原始错误（fs / sftp / 链路）一律在队列边界翻成产品错误。
     job.view.error = normalizeError(error).toInfo();
     this.#setStatus(job, 'failed');

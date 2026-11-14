@@ -8,56 +8,6 @@ import { t } from '../../shared/i18n/index.ts';
 import { attachSession } from '../session-stream.ts';
 import { registerTerminal } from '../debug-bridge.ts';
 
-// xterm 只认具体值，不认 CSS 变量；两套调色板与 tokens.css 的深浅色保持同值。
-export type TerminalTheme = 'dark' | 'light';
-
-const TERMINAL_THEMES: Record<TerminalTheme, ITheme> = {
-  dark: {
-    background: '#16181c',
-    foreground: '#e6e8eb',
-    cursor: '#7aa2f7',
-    selectionBackground: 'rgba(122, 162, 247, 0.28)',
-    black: '#1b1e24',
-    red: '#f7768e',
-    green: '#9ece6a',
-    yellow: '#e0af68',
-    blue: '#7aa2f7',
-    magenta: '#bb9af7',
-    cyan: '#7dcfff',
-    white: '#c0caf5',
-    brightBlack: '#414868',
-    brightRed: '#f7768e',
-    brightGreen: '#9ece6a',
-    brightYellow: '#e0af68',
-    brightBlue: '#7aa2f7',
-    brightMagenta: '#bb9af7',
-    brightCyan: '#7dcfff',
-    brightWhite: '#e6e8eb',
-  },
-  light: {
-    background: '#f5f6f8',
-    foreground: '#1c1f24',
-    cursor: '#2b6cb0',
-    selectionBackground: 'rgba(43, 108, 176, 0.2)',
-    black: '#1c1f24',
-    red: '#c93c52',
-    green: '#3f7d20',
-    yellow: '#9a6700',
-    blue: '#2b6cb0',
-    magenta: '#8b4aa0',
-    cyan: '#0e7490',
-    white: '#4d545d',
-    brightBlack: '#737b86',
-    brightRed: '#e05570',
-    brightGreen: '#4f9a2a',
-    brightYellow: '#b57d00',
-    brightBlue: '#3b82c4',
-    brightMagenta: '#a45cb8',
-    brightCyan: '#1490a8',
-    brightWhite: '#1c1f24',
-  },
-};
-
 // SFMono-Regular 不是 macOS 可解析的 family 名（系统私有字体为 .SF NS Mono，Chromium 拒绝访问），
 // 写进去只会被跳过；显式落到 Menlo，装了 SF Mono 的机器优先用它。
 const FONT_FAMILY = '"SF Mono", Menlo, Monaco, "Courier New", monospace';
@@ -66,7 +16,7 @@ interface TerminalViewProps {
   sessionId: string;
   active: boolean;
   fontSize: number;
-  theme: TerminalTheme;
+  theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
   /** 把复制 / 粘贴 / 全选句柄交给外壳，供应用菜单调用；卸载时传 null。 */
@@ -131,7 +81,7 @@ export function TerminalView({
       lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
-      theme: TERMINAL_THEMES[theme],
+      theme,
     });
     termRef.current = term;
 
@@ -248,7 +198,7 @@ export function TerminalView({
     // 主题切换不重建终端，直接换调色板。
     const term = termRef.current;
     if (!term) return;
-    term.options.theme = TERMINAL_THEMES[theme];
+    term.options.theme = theme;
   }, [theme]);
 
   useEffect(() => {

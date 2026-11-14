@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
+import type { ThemeDefinition } from '../../shared/theme.ts';
 import { panelById } from '../panels/registry.ts';
 import { findConflictIds, resolveShortcuts } from '../commands/resolve.ts';
 import { t, type MessageKey } from '../../shared/i18n/index.ts';
@@ -20,6 +21,9 @@ interface SettingsPanelProps {
   onResetLayout(): void;
   onPanelDockChange(id: PanelId, dock: DockId | null): void;
   onDockSizeChange(dock: 'left' | 'right' | 'bottom', size: number): void;
+  themes: ThemeDefinition[];
+  onReloadThemes(): void;
+  onOpenThemesDir(): void;
 }
 
 type SectionId = 'appearance' | 'terminal' | 'connection' | 'transfer' | 'shortcuts' | 'layout';
@@ -50,6 +54,9 @@ export function SettingsPanel({
   onResetLayout,
   onPanelDockChange,
   onDockSizeChange,
+  themes,
+  onReloadThemes,
+  onOpenThemesDir,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>('appearance');
   // 恢复默认是破坏性动作，用「再点一次确认」替代额外弹窗。
@@ -86,6 +93,10 @@ export function SettingsPanel({
 
   const dirty = isDirty(config, savedConfig);
   const shortcutConflicts = findConflictIds(resolveShortcuts(config.shortcuts.overrides));
+  const selectedExternalId = config.ui.theme.startsWith('ext:') ? config.ui.theme.slice(4) : null;
+  const selectedExternalMissing = Boolean(
+    selectedExternalId && !themes.some((theme) => theme.id === selectedExternalId),
+  );
 
   const confirmThen = (kind: 'settings' | 'layout', run: () => void): void => {
     if (confirming !== kind) {
@@ -153,8 +164,30 @@ export function SettingsPanel({
                     <option value="system">{t('settings.theme.system')}</option>
                     <option value="dark">{t('settings.theme.dark')}</option>
                     <option value="light">{t('settings.theme.light')}</option>
+                    {themes.map((theme) => (
+                      <option key={theme.id} value={`ext:${theme.id}`}>
+                        {theme.name}
+                      </option>
+                    ))}
+                    {selectedExternalMissing ? (
+                      <option value={config.ui.theme}>{t('settings.theme.missing')}</option>
+                    ) : null}
                   </select>
                 </div>
+                <div className="form-row">
+                  <span />
+                  <div className="settings-theme-actions">
+                    <button className="button" type="button" onClick={onReloadThemes} data-testid="settings-theme-reload">
+                      {t('settings.theme.reload')}
+                    </button>
+                    <button className="button" type="button" onClick={onOpenThemesDir} data-testid="settings-theme-open-dir">
+                      {t('settings.theme.openDir')}
+                    </button>
+                  </div>
+                </div>
+                {selectedExternalMissing ? (
+                  <p className="form-hint form-hint--warning">{t('settings.theme.missingHint')}</p>
+                ) : null}
                 <div className="form-row">
                   <label htmlFor="settings-density">{t('settings.density')}</label>
                   <select

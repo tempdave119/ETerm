@@ -727,6 +727,12 @@ button {
   width: 100%;
 }
 
+.settings-theme-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-base);
+}
+
 .settings-subtitle {
   margin-top: var(--space-tight);
   color: var(--text-tertiary);
@@ -1074,6 +1080,10 @@ button {
   margin: 0;
   color: var(--text-tertiary);
   font-size: var(--font-aux);
+}
+
+.form-hint--warning {
+  color: var(--status-warning);
 }
 
 .form-error {

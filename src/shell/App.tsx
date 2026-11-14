@@ -10,6 +10,8 @@ import type {
   TransferView,
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
+import type { ThemeDefinition } from '../shared/theme.ts';
+import { applyUiTheme, resolveTheme, terminalThemeFor } from './theme.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
 import { defaultPanelLayout, isPanelOpen, movePanel, movePanelWithinDock, panelDockOf, setDivider, setDockSize, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
 import {
@@ -113,6 +115,7 @@ export function App() {
   const pendingConfigSaves = useRef(0);
   const configVersionRef = useRef(0);
   const [components, setComponents] = useState<ComponentDescriptor[]>([]);
+  const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -174,6 +177,12 @@ export function App() {
   useEffect(() => {
     void window.eterm.listComponents().then((result) => {
       if (result.ok) setComponents(result.value);
+    });
+  }, []);
+
+  useEffect(() => {
+    void window.eterm.listThemes().then((result) => {
+      if (result.ok) setThemes(result.value);
     });
   }, []);
 
@@ -299,6 +308,27 @@ export function App() {
 
   const retryTransfer = useCallback(async (id: string): Promise<void> => {
     const result = await window.eterm.retryTransfer(id);
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const pauseTransfer = useCallback(async (id: string): Promise<void> => {
+    const result = await window.eterm.pauseTransfer(id);
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const resumeTransfer = useCallback(async (id: string): Promise<void> => {
+    const result = await window.eterm.resumeTransfer(id);
+    if (!result.ok) setError(result.error);
+  }, []);
+
+  const reloadThemes = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.listThemes();
+    if (result.ok) setThemes(result.value);
+    else setSettingsError(result.error.message);
+  }, []);
+
+  const openThemesDir = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.openThemesDir();
     if (!result.ok) setError(result.error);
   }, []);
 
@@ -1019,6 +1049,8 @@ export function App() {
             onMove={(target) => movePanelTo('transfers', target)}
             onCancel={(id) => void cancelTransfer(id)}
             onRetry={(id) => void retryTransfer(id)}
+            onPause={(id) => void pauseTransfer(id)}
+            onResume={(id) => void resumeTransfer(id)}
             onOpenFiles={() => {
               if (!panelDockOf(panelLayoutRef.current, 'files')) togglePanel('files');
             }}
@@ -1041,11 +1073,18 @@ export function App() {
   const rightClickCopySelection = effectiveConfig?.terminal.rightClickCopySelection ?? false;
   const density = effectiveConfig?.ui.density ?? 'comfortable';
   const themePreference = effectiveConfig?.ui.theme ?? 'system';
-  const resolvedTheme = themePreference === 'system' ? systemTheme : themePreference;
+  const resolvedTheme = useMemo(
+    () => resolveTheme(themePreference, systemTheme, themes),
+    [themePreference, systemTheme, themes],
+  );
+  const terminalTheme = useMemo(
+    () => terminalThemeFor(resolvedTheme.base, resolvedTheme.definition),
+    [resolvedTheme],
+  );
 
   useEffect(() => {
-    // 变量挂在 html 上，切换主题不重建任何面板。
-    document.documentElement.dataset.theme = resolvedTheme;
+    // 变量挂在 html 上，切换主题不重建任何面板；外部主题的覆盖在这里统一清理。
+    applyUiTheme(resolvedTheme.base, resolvedTheme.definition);
   }, [resolvedTheme]);
 
   return (
@@ -1115,7 +1154,7 @@ export function App() {
                     tabActive={tab.id === activeTabId}
                     showHeaders={countLeaves(tab.layout) > 1}
                     fontSize={fontSize}
-                    theme={resolvedTheme}
+                    theme={terminalTheme}
                     rightClick={rightClick}
                     rightClickCopySelection={rightClickCopySelection}
                     onActivate={(paneId) => setPaneActive(tab.id, paneId)}
@@ -1199,6 +1238,9 @@ export function App() {
             movePanelTo(id, dock);
           }}
           onDockSizeChange={finishDockResize}
+          themes={themes}
+          onReloadThemes={() => void reloadThemes()}
+          onOpenThemesDir={() => void openThemesDir()}
         />
       ) : null}
 

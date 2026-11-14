@@ -91,6 +91,16 @@ module.exports = {
 - 组件报错可以抛 `{ code, message?, next?, detail?, host?, port? }` 形状的对象，宿主按产品码识别；不要依赖 `ProductError` 类实例跨 bundle 共享。
 - 安装即信任：组件在主进程内运行，无签名、无沙箱、无市场；不要装来路不明的组件。
 
+## Telnet 样例
+
+`examples/components/telnet/` 是第二个外挂能力包样例：
+
+- 把整个目录复制到 `<用户数据目录>/components/telnet`，重启后新建连接的协议下拉出现「Telnet」。
+- 表单字段：`host`（主机）与 `port`（端口，默认 23）；连接记录把两项存在 `options` 里，宿主不解释。
+- 最小 Telnet 协商：主动声明 TTYPE / NAWS / SGA，按服务端 DO / WILL 回应；剥离 IAC 协商字节后交给 xterm；TTYPE 回 `xterm-256color`，窗口变化发 NAWS，回车按 NVT 发 CR LF。
+- 限制：明文协议，不做 Telnet 认证与加密，只适合可信网络；不实现行模式 / LINEMODE。
+- 验证：`tests/modules/telnet-protocol.test.ts`（IAC / NAWS / TTYPE / 数据剥离）、`tests/modules/telnet-session.test.ts`（真实 TCP 会话）；`npm run ssh-smoke` 用 mock Telnet 服务器验证 banner、回显、NAWS 与 TTYPE。
+
 ## 串口样例
 
 `examples/components/serial/` 是随仓库提供的样例：

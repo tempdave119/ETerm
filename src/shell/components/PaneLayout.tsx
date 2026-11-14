@@ -2,7 +2,8 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 import type { RightClickAction } from '../../shared/ipc.ts';
 import type { LayoutNode, SplitNode } from '../layout.ts';
-import { TerminalView, type TerminalHandle, type TerminalTheme } from './TerminalView.tsx';
+import type { ITheme } from '@xterm/xterm';
+import { TerminalView, type TerminalHandle } from './TerminalView.tsx';
 
 interface PaneLayoutProps {
   node: LayoutNode;
@@ -10,7 +11,7 @@ interface PaneLayoutProps {
   tabActive: boolean;
   showHeaders: boolean;
   fontSize: number;
-  theme: TerminalTheme;
+  theme: ITheme;
   rightClick: RightClickAction;
   rightClickCopySelection: boolean;
   onActivate(paneId: string): void;

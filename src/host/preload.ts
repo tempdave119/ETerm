@@ -15,6 +15,7 @@ import {
   MENU_IPC,
   SERIAL_IPC,
   SYSTEM_IPC,
+  THEMES_IPC,
   TRANSFERS_IPC,
   type AppConfig,
   type ComponentDescriptor,
@@ -37,6 +38,7 @@ import {
   type SecretKind,
   type SerialDevice,
   type SystemStats,
+  type ThemeDefinition,
   type TransferView,
 } from '../shared/ipc.ts';
 import type { ExitInfo } from '../core/ports.ts';
@@ -98,6 +100,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(TRANSFERS_IPC.cancel, id) as Promise<IpcResult<null>>,
   retryTransfer: (id: string) =>
     ipcRenderer.invoke(TRANSFERS_IPC.retry, id) as Promise<IpcResult<null>>,
+  pauseTransfer: (id: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.pause, id) as Promise<IpcResult<null>>,
+  resumeTransfer: (id: string) =>
+    ipcRenderer.invoke(TRANSFERS_IPC.resume, id) as Promise<IpcResult<null>>,
   pickUpload: (sessionId: string, remoteDir: string) =>
     ipcRenderer.invoke(TRANSFERS_IPC.pickUpload, { sessionId, remoteDir }) as Promise<
       IpcResult<TransferView[] | null>
@@ -156,6 +162,8 @@ const api: EtermApi = {
     ipcRenderer.invoke(CLIPBOARD_IPC.write, text) as Promise<IpcResult<null>>,
 
   getConfig: () => ipcRenderer.invoke(CONFIG_IPC.get) as Promise<IpcResult<AppConfig>>,
+  listThemes: () => ipcRenderer.invoke(THEMES_IPC.list) as Promise<IpcResult<ThemeDefinition[]>>,
+  openThemesDir: () => ipcRenderer.invoke(THEMES_IPC.openDir) as Promise<IpcResult<null>>,
   saveConfig: (config: AppConfig) =>
     ipcRenderer.invoke(CONFIG_IPC.save, config) as Promise<IpcResult<AppConfig>>,
   resetConfig: () => ipcRenderer.invoke(CONFIG_IPC.reset) as Promise<IpcResult<AppConfig>>,

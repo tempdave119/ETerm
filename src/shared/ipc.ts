@@ -13,6 +13,7 @@ import type { TransferDirection, TransferView } from '../services/transfers/queu
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
 import type { ComponentDescriptor } from './components.ts';
+import type { ThemeDefinition } from './theme.ts';
 import type {
   ConnectionInput,
   ConnectionRecord,
@@ -35,6 +36,7 @@ export type { LayoutTemplate };
 export type { PanelLayout };
 export type { ComponentDescriptor };
 export type { ComponentField } from './components.ts';
+export type { ThemeDefinition };
 
 export const IPC = {
   open: 'session:open',
@@ -63,6 +65,8 @@ export const TRANSFERS_IPC = {
   list: 'transfers:list',
   cancel: 'transfers:cancel',
   retry: 'transfers:retry',
+  pause: 'transfers:pause',
+  resume: 'transfers:resume',
   pickUpload: 'transfers:pick-upload',
   pickDownload: 'transfers:pick-download',
   pickDownloadDir: 'transfers:pick-download-dir',
@@ -72,6 +76,11 @@ export const TRANSFERS_IPC = {
 
 export const DROP_IPC = {
   register: 'drop:register',
+} as const;
+
+export const THEMES_IPC = {
+  list: 'themes:list',
+  openDir: 'themes:open-dir',
 } as const;
 
 export const FORWARDS_IPC = {
@@ -217,6 +226,8 @@ export interface EtermApi {
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;
   retryTransfer(id: string): Promise<IpcResult<null>>;
+  pauseTransfer(id: string): Promise<IpcResult<null>>;
+  resumeTransfer(id: string): Promise<IpcResult<null>>;
   pickUpload(sessionId: string, remoteDir: string): Promise<IpcResult<TransferView[] | null>>;
   pickDownload(sessionId: string, remotePath: string): Promise<IpcResult<TransferView | null>>;
   pickDownloadDir(sessionId: string, remotePath: string): Promise<IpcResult<TransferView[] | null>>;
@@ -244,6 +255,8 @@ export interface EtermApi {
   writeClipboard(text: string): Promise<IpcResult<null>>;
 
   getConfig(): Promise<IpcResult<AppConfig>>;
+  listThemes(): Promise<IpcResult<ThemeDefinition[]>>;
+  openThemesDir(): Promise<IpcResult<null>>;
   saveConfig(config: AppConfig): Promise<IpcResult<AppConfig>>;
   resetConfig(): Promise<IpcResult<AppConfig>>;
   onConfigChange(handler: (config: AppConfig) => void): () => void;

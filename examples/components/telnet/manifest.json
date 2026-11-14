@@ -1,0 +1,26 @@
+{
+  "id": "telnet",
+  "kind": "capability",
+  "apiVersion": "^1.0.0",
+  "entry": "index.cjs",
+  "activation": { "onProtocol": "telnet" },
+  "ui": {
+    "label": "Telnet",
+    "fields": [
+      {
+        "key": "host",
+        "label": "主机",
+        "type": "text",
+        "placeholder": "127.0.0.1",
+        "required": true
+      },
+      {
+        "key": "port",
+        "label": "端口",
+        "type": "number",
+        "default": "23",
+        "required": true
+      }
+    ]
+  }
+}

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { ModuleRegistry } from '../../src/core/registry.ts';
 import { loadComponents } from '../../src/host/components.ts';
 
-test('components_loads_serial_example_and_registers_protocol', async () => {
+test('components_load_examples_and_register_protocols', async () => {
   const registry = new ModuleRegistry();
   const descriptors = await loadComponents({
     baseDir: join(process.cwd(), 'examples'),
@@ -14,20 +14,23 @@ test('components_loads_serial_example_and_registers_protocol', async () => {
     logger: () => {},
   });
 
-  assert.equal(descriptors.length, 1);
-  assert.equal(descriptors[0]?.protocol, 'serial');
-  assert.equal(descriptors[0]?.label, '串口');
+  assert.equal(descriptors.length, 2);
+  const serial = descriptors.find((item) => item.protocol === 'serial');
+  const telnet = descriptors.find((item) => item.protocol === 'telnet');
+  assert.equal(serial?.label, '串口');
   assert.deepEqual(
-    descriptors[0]?.fields.map((field) => field.key),
+    serial?.fields.map((field) => field.key),
     ['path', 'baudRate', 'dataBits', 'stopBits', 'parity', 'flowControl', 'lineEnding', 'dtr', 'rts'],
   );
   // 设备下拉来自宿主枚举，布尔开关用于 DTR / RTS。
-  assert.equal(descriptors[0]?.fields[0]?.optionsSource, 'serial-devices');
-  assert.equal(descriptors[0]?.fields[7]?.type, 'boolean');
+  assert.equal(serial?.fields[0]?.optionsSource, 'serial-devices');
+  assert.equal(serial?.fields[7]?.type, 'boolean');
+  assert.equal(telnet?.label, 'Telnet');
+  assert.deepEqual(telnet?.fields.map((field) => field.key), ['host', 'port']);
 
   registry.setupAll();
-  const module = registry.moduleForProtocol('serial');
-  assert.ok(module.exports.openSession);
+  assert.ok(registry.moduleForProtocol('serial').exports.openSession);
+  assert.ok(registry.moduleForProtocol('telnet').exports.openSession);
 });
 
 test('components_skips_broken_manifest', async () => {
