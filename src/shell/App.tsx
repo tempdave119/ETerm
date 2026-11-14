@@ -70,6 +70,7 @@ interface FormState {
   editing: ConnectionRecord | null;
   hasPassword: boolean;
   hasPassphrase: boolean;
+  hasProxyPassword: boolean;
 }
 
 let localSequence = 0;
@@ -889,19 +890,21 @@ export function App() {
   }, [hostKey, openConnection]);
 
   const openNewForm = useCallback((): void => {
-    setForm({ editing: null, hasPassword: false, hasPassphrase: false });
+    setForm({ editing: null, hasPassword: false, hasPassphrase: false, hasProxyPassword: false });
     setFormError(null);
   }, []);
 
   const openEditForm = useCallback(async (connection: ConnectionRecord): Promise<void> => {
-    const [password, passphrase] = await Promise.all([
+    const [password, passphrase, proxyPassword] = await Promise.all([
       window.eterm.hasCredential(connection.id, 'password'),
       window.eterm.hasCredential(connection.id, 'passphrase'),
+      window.eterm.hasCredential(connection.id, 'proxy-password'),
     ]);
     setForm({
       editing: connection,
       hasPassword: password.ok ? password.value : false,
       hasPassphrase: passphrase.ok ? passphrase.value : false,
+      hasProxyPassword: proxyPassword.ok ? proxyPassword.value : false,
     });
     setFormError(null);
   }, []);
@@ -926,6 +929,13 @@ export function App() {
         }
         if (secrets.passphrase) {
           const stored = await window.eterm.setCredential(saved.value.id, 'passphrase', secrets.passphrase);
+          if (!stored.ok) {
+            setFormError(stored.error.message);
+            return;
+          }
+        }
+        if (secrets.proxyPassword) {
+          const stored = await window.eterm.setCredential(saved.value.id, 'proxy-password', secrets.proxyPassword);
           if (!stored.ok) {
             setFormError(stored.error.message);
             return;
@@ -1519,6 +1529,7 @@ export function App() {
           editing={form.editing}
           hasStoredPassword={form.hasPassword}
           hasStoredPassphrase={form.hasPassphrase}
+          hasStoredProxyPassword={form.hasProxyPassword}
           submitting={submitting}
           error={formError}
           onCancel={() => setForm(null)}

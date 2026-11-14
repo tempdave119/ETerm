@@ -13,6 +13,7 @@ import { t } from '../../shared/i18n/index.ts';
 export interface FormSecrets {
   password?: string;
   passphrase?: string;
+  proxyPassword?: string;
 }
 
 interface ConnectionFormProps {
@@ -22,6 +23,7 @@ interface ConnectionFormProps {
   editing: ConnectionRecord | null;
   hasStoredPassword: boolean;
   hasStoredPassphrase: boolean;
+  hasStoredProxyPassword: boolean;
   submitting: boolean;
   error: string | null;
   onCancel(): void;
@@ -35,6 +37,7 @@ export function ConnectionForm({
   editing,
   hasStoredPassword,
   hasStoredPassphrase,
+  hasStoredProxyPassword,
   submitting,
   error,
   onCancel,
@@ -52,6 +55,8 @@ export function ConnectionForm({
   const [proxyType, setProxyType] = useState<'none' | 'http' | 'socks5'>(editing?.proxy?.type ?? 'none');
   const [proxyHost, setProxyHost] = useState(editing?.proxy?.host ?? '');
   const [proxyPort, setProxyPort] = useState(String(editing?.proxy?.port ?? 1080));
+  const [proxyUsername, setProxyUsername] = useState(editing?.proxy?.username ?? '');
+  const [proxyPassword, setProxyPassword] = useState('');
   const [options, setOptions] = useState<Record<string, string>>(editing?.options ?? {});
   const [note, setNote] = useState(editing?.note ?? '');
   const [password, setPassword] = useState('');
@@ -165,12 +170,18 @@ export function ConnectionForm({
         proxy:
           proxyType === 'none'
             ? null
-            : { type: proxyType, host: proxyHost.trim(), port: Number(proxyPort) },
+            : {
+                type: proxyType,
+                host: proxyHost.trim(),
+                port: Number(proxyPort),
+                ...(proxyUsername.trim() ? { username: proxyUsername.trim() } : {}),
+              },
         note: noteValue,
       },
       {
         password: auth === 'password' && password ? password : undefined,
         passphrase: auth === 'key' && passphrase ? passphrase : undefined,
+        proxyPassword: proxyType !== 'none' && proxyPassword ? proxyPassword : undefined,
       },
       connectAfter,
     );
@@ -368,6 +379,33 @@ export function ConnectionForm({
                         value={proxyPort}
                         inputMode="numeric"
                         onChange={(event) => setProxyPort(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-columns">
+                    <div className="form-row">
+                      <label htmlFor="connection-proxy-user">{t('connection.proxyUsername')}</label>
+                      <input
+                        id="connection-proxy-user"
+                        value={proxyUsername}
+                        autoComplete="off"
+                        placeholder={t('connection.proxyUsernamePlaceholder')}
+                        onChange={(event) => setProxyUsername(event.target.value)}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="connection-proxy-password">{t('connection.proxyPassword')}</label>
+                      <input
+                        id="connection-proxy-password"
+                        type="password"
+                        value={proxyPassword}
+                        autoComplete="off"
+                        placeholder={
+                          hasStoredProxyPassword
+                            ? t('connection.passwordStored')
+                            : t('connection.proxyPasswordPlaceholder')
+                        }
+                        onChange={(event) => setProxyPassword(event.target.value)}
                       />
                     </div>
                   </div>

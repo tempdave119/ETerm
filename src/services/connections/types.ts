@@ -6,6 +6,8 @@ export interface ConnectionProxy {
   type: ProxyType;
   host: string;
   port: number;
+  /** 代理用户名；密码不进 connections.json，存凭据库（proxy-password）。 */
+  username?: string;
 }
 
 export interface ConnectionRecord {

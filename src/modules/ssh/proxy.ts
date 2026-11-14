@@ -62,7 +62,10 @@ function httpConnect(proxy: ProxyConfig, host: string, port: number): Promise<ne
     socket.on('data', onData);
     socket.once('error', (error) => fail(proxyFailure('连不上代理', error.message)));
     socket.once('connect', () => {
-      socket.write(`CONNECT ${host}:${port} HTTP/1.1\r\nHost: ${host}:${port}\r\n\r\n`);
+      const authorization = proxy.username
+        ? `Proxy-Authorization: Basic ${Buffer.from(`${proxy.username}:${proxy.password ?? ''}`).toString('base64')}\r\n`
+        : '';
+      socket.write(`CONNECT ${host}:${port} HTTP/1.1\r\nHost: ${host}:${port}\r\n${authorization}\r\n`);
     });
   });
 }
@@ -71,7 +74,7 @@ function socks5Connect(proxy: ProxyConfig, host: string, port: number): Promise<
   return new Promise<net.Socket>((resolve, reject) => {
     const socket = net.connect(proxy.port, proxy.host);
     let buffer = Buffer.alloc(0);
-    let stage: 'greeting' | 'connect' = 'greeting';
+    let stage: 'greeting' | 'auth' | 'connect' = 'greeting';
     let settled = false;
 
     const fail = (error: ProductError): void => {
@@ -87,13 +90,42 @@ function socks5Connect(proxy: ProxyConfig, host: string, port: number): Promise<
 
       if (stage === 'greeting') {
         if (buffer.length < 2) return;
-        if (buffer[0] !== 0x05 || buffer[1] !== 0x00) {
-          fail(proxyFailure('代理不支持免认证的 SOCKS5', `协商结果 ${buffer.subarray(0, 2).toString('hex')}`));
+        if (buffer[0] !== 0x05) {
+          fail(proxyFailure('代理响应异常', `协商首字节 ${buffer[0] ?? 0}`));
           return;
         }
+        const method = buffer[1] ?? 0xff;
         buffer = buffer.subarray(2);
+        if (method === 0x00) {
+          stage = 'connect';
+          socket.write(buildSocks5Request(host, port));
+          return;
+        }
+        if (method === 0x02 && proxy.username) {
+          stage = 'auth';
+          socket.write(buildSocks5Auth(proxy.username, proxy.password ?? ''));
+          return;
+        }
+        fail(proxyFailure('代理不支持可用的 SOCKS5 认证', `协商结果 05${method.toString(16)}`));
+        return;
+      }
+
+      if (stage === 'auth') {
+        if (buffer.length < 2) return;
+        const version = buffer[0];
+        const status = buffer[1];
+        buffer = buffer.subarray(2);
+        if (version !== 0x01) {
+          fail(proxyFailure('代理认证响应异常', `版本 ${version}`));
+          return;
+        }
+        if (status !== 0x00) {
+          fail(proxyFailure('代理认证失败', `SOCKS5 认证状态 ${status}`));
+          return;
+        }
         stage = 'connect';
         socket.write(buildSocks5Request(host, port));
+        return;
       }
 
       const reply = readSocks5Reply(buffer);
@@ -116,10 +148,27 @@ function socks5Connect(proxy: ProxyConfig, host: string, port: number): Promise<
     socket.on('data', onData);
     socket.once('error', (error) => fail(proxyFailure('连不上代理', error.message)));
     socket.once('connect', () => {
-      // 0x05 + 1 种方法 + 免认证
-      socket.write(Buffer.from([0x05, 0x01, 0x00]));
+      // 有凭据时把「用户名密码」作为可接受方法排在免认证之后。
+      const methods = proxy.username
+        ? Buffer.from([0x05, 0x02, 0x00, 0x02])
+        : Buffer.from([0x05, 0x01, 0x00]);
+      socket.write(methods);
     });
   });
+}
+
+function buildSocks5Auth(username: string, password: string): Buffer {
+  const user = Buffer.from(username, 'utf8');
+  const pass = Buffer.from(password, 'utf8');
+  if (user.length === 0 || user.length > 255 || pass.length > 255) {
+    throw new Error('SOCKS5 用户名需为 1–255 字节，密码不超过 255 字节');
+  }
+  return Buffer.concat([
+    Buffer.from([0x01, user.length]),
+    user,
+    Buffer.from([pass.length]),
+    pass,
+  ]);
 }
 
 function buildSocks5Request(host: string, port: number): Buffer {

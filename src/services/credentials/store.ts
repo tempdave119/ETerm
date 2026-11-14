@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { JsonFile } from '../storage/json-file.ts';
 
-export type SecretKind = 'password' | 'passphrase';
+export type SecretKind = 'password' | 'passphrase' | 'proxy-password';
 
 export interface SecretCodec {
   encrypt(plain: string): Promise<string>;

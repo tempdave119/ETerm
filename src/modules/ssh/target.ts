@@ -2,6 +2,8 @@ export interface ProxyConfig {
   type: 'http' | 'socks5';
   host: string;
   port: number;
+  username?: string;
+  password?: string;
 }
 
 export interface SshTarget {
@@ -100,5 +102,11 @@ function parseProxyConfig(raw: unknown): ProxyConfig {
     type: record.type,
     host: readString(record.host, 'proxy.host', 255),
     port: rawPort,
+    ...(record.username === undefined
+      ? {}
+      : { username: readString(record.username, 'proxy.username', 255) }),
+    ...(record.password === undefined
+      ? {}
+      : { password: readString(record.password, 'proxy.password', 4096) }),
   };
 }

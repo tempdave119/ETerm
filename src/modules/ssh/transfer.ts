@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { rename, stat, unlink } from 'node:fs/promises';
 import { posix } from 'node:path';
 import { Transform, type Readable, type TransformCallback, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -22,12 +22,16 @@ export interface TransferFsLike {
   createReadStream(path: string): Readable;
   createWriteStream(path: string): Writable;
   stat(path: string): Promise<{ size: number }>;
+  rename(from: string, to: string): Promise<void>;
+  unlink(path: string): Promise<void>;
 }
 
 const defaultFs: TransferFsLike = {
   createReadStream: (path) => createReadStream(path),
   createWriteStream: (path) => createWriteStream(path),
   stat: (path) => stat(path),
+  rename: (from, to) => rename(from, to),
+  unlink: (path) => unlink(path),
 };
 
 interface TaskState {
@@ -59,6 +63,14 @@ function removeRemoteFile(sftp: SftpTransferLike, path: string): Promise<void> {
       resolve();
     }
   });
+}
+
+async function removeLocalFile(fsOps: TransferFsLike, path: string): Promise<void> {
+  try {
+    await fsOps.unlink(path);
+  } catch {
+    // 同 removeRemoteFile：清理失败不覆盖原始错误。
+  }
 }
 
 function renameRemote(sftp: SftpTransferLike, from: string, to: string): Promise<void> {
@@ -225,16 +237,35 @@ export function createTransferPort(sftp: SftpTransferLike, fsOps: TransferFsLike
     },
 
     download(sourcePath, targetPath) {
-      const state: TaskState = { id: `transfer-${++sequence}`, transferred: 0, total: 0, canceled: false };
+      const id = `transfer-${++sequence}`;
+      const state: TaskState = {
+        id,
+        transferred: 0,
+        total: 0,
+        canceled: false,
+        sourcePath,
+        targetPath,
+        tempPath: tempPathFor(targetPath, id),
+      };
       const source = sftp.createReadStream(sourcePath);
-      const target = fsOps.createWriteStream(targetPath);
+      const target = fsOps.createWriteStream(state.tempPath as string);
       const task = start(source, target, state);
+      const done = task.done
+        .then(async () => {
+          if (state.canceled) throw new Error('传输已取消');
+          // 与服务端上传对称：先写同目录临时文件，完成后再原子替换目标。
+          await fsOps.rename(state.tempPath as string, targetPath);
+        })
+        .catch(async (error: unknown) => {
+          if (state.tempPath) await removeLocalFile(fsOps, state.tempPath);
+          throw state.canceled ? new Error('传输已取消') : error;
+        });
       sftp.stat(sourcePath, (error, stats) => {
         if (error || !stats?.size) return;
         state.total = stats.size;
         emit(state);
       });
-      return task;
+      return { id: task.id, done };
     },
 
     cancel(id) {

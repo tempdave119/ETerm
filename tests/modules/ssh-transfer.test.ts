@@ -31,6 +31,19 @@ function createFakeFs(files: Map<string, Buffer>, readOverride?: (path: string) 
       return stream;
     },
     stat: async (path) => ({ size: files.get(path)?.length ?? 0 }),
+    async rename(from, to) {
+      const chunks = written.get(from);
+      if (chunks) {
+        written.set(to, chunks);
+        written.delete(from);
+      }
+      files.set(to, Buffer.concat(chunks ?? []));
+      files.delete(from);
+    },
+    async unlink(path) {
+      written.delete(path);
+      files.delete(path);
+    },
   };
   return { fs, written };
 }
@@ -202,5 +215,39 @@ test('transfer_download_writes_local_and_uses_remote_size', async () => {
   await task.done;
 
   assert.equal(Buffer.concat(written.get('/local/b.txt') ?? []).toString(), 'world!');
+  assert.ok(![...written.keys()].some((path) => path.includes('.part')), '下载完成后不应残留临时文件');
   assert.equal(progress.at(-1)?.total, 6);
+});
+
+test('transfer_download_cancel_removes_temp_file', async () => {
+  const files = new Map<string, Buffer>();
+  const { fs, written } = createFakeFs(files);
+  const { sftp } = createFakeSftp(new Map());
+  sftp.createReadStream = () => pendingReadable('partial');
+  const port = createTransferPort(sftp, fs);
+
+  const task = port.download('/remote/big', '/local/big');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  port.cancel(task.id);
+
+  await assert.rejects(task.done, /传输已取消|aborted/);
+  assert.equal(written.size, 0, '取消后不应留下临时文件');
+});
+
+test('transfer_download_failure_removes_temp_file', async () => {
+  const files = new Map<string, Buffer>();
+  const { fs, written } = createFakeFs(files);
+  const { sftp } = createFakeSftp(new Map());
+  sftp.createReadStream = () =>
+    Readable.from(
+      (async function* () {
+        throw new Error('source-boom');
+      })(),
+    );
+  const port = createTransferPort(sftp, fs);
+
+  const task = port.download('/remote/x', '/local/x');
+
+  await assert.rejects(task.done, /source-boom/);
+  assert.equal(written.size, 0, '失败后不应留下临时文件');
 });

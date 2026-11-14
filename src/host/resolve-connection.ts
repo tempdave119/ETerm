@@ -95,7 +95,13 @@ async function resolveSshTarget(
 
   const fingerprint = await deps.knownHosts.get(target.host, target.port);
   if (fingerprint) target.hostKeyFingerprint = fingerprint;
-  if (record.proxy) target.proxy = { ...record.proxy };
+  if (record.proxy) {
+    target.proxy = { ...record.proxy };
+    if (record.proxy.username) {
+      const proxyPassword = await deps.credentials.get(record.id, 'proxy-password');
+      if (proxyPassword) target.proxy.password = proxyPassword;
+    }
+  }
 
   if (record.jumpConnectionId) {
     if (chain.includes(record.id)) {
