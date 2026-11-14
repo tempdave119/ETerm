@@ -84,27 +84,31 @@ test('panels_parse_normalizes_invalid_dividers', () => {
 
 test('panels_parse_clamps_dock_sizes', () => {
   const defaults = defaultPanelLayout();
-  assert.deepEqual(defaults.sizes, { left: 240, right: 300 });
+  assert.deepEqual(defaults.sizes, { left: 240, right: 300, bottom: 160 });
 
   const layout = parsePanelLayout({
     docks: { left: ['sessions'], right: ['files'], bottom: [] },
-    sizes: { left: 10, right: 999 },
+    sizes: { left: 10, right: 999, bottom: 999 },
   });
 
-  assert.equal(layout.sizes.left, 180);
-  assert.equal(layout.sizes.right, 560);
+  assert.equal(layout.sizes.left, 200);
+  assert.equal(layout.sizes.right, 450);
+  assert.equal(layout.sizes.bottom, 250);
 });
 
 test('panels_set_dock_size_clamps_and_preserves_rest', () => {
   const layout = defaultPanelLayout();
 
   const wide = setDockSize(layout, 'left', 999);
-  assert.equal(wide.sizes.left, 420);
+  assert.equal(wide.sizes.left, 360);
   assert.deepEqual(wide.docks, layout.docks);
   assert.deepEqual(wide.dividers, layout.dividers);
 
   const narrow = setDockSize(layout, 'right', 0);
   assert.equal(narrow.sizes.right, 260);
+
+  const tall = setDockSize(layout, 'bottom', 999);
+  assert.equal(tall.sizes.bottom, 250);
 });
 
 test('panels_move_between_docks', () => {

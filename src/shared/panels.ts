@@ -18,21 +18,22 @@ export interface PanelLayout {
   docks: Record<DockId, PanelId[]>;
   /** 区内分隔位置（累计比例，0.15–0.85），长度 = 面板数 - 1。 */
   dividers: Record<DockId, number[]>;
-  /** 左右停靠区宽度（px）；底栏高度仍固定。 */
-  sizes: { left: number; right: number };
+  /** 左右栏宽度与底栏高度（px）。 */
+  sizes: { left: number; right: number; bottom: number };
 }
 
 const MIN_GAP = 0.1;
 const MIN_DIVIDER = 0.15;
 const MAX_DIVIDER = 0.85;
 
-/** 左右停靠区的拖动边界；右栏下限保留监控面板两列指标卡所需的宽度。 */
+/** 停靠区拖动边界；右栏下限保留监控面板两列指标卡所需的宽度。 */
 export const DOCK_SIZE_LIMITS = {
-  left: { min: 180, max: 420 },
-  right: { min: 260, max: 560 },
+  left: { min: 200, max: 360 },
+  right: { min: 260, max: 450 },
+  bottom: { min: 150, max: 250 },
 } as const;
 
-const DEFAULT_DOCK_SIZES = { left: 240, right: 300 } as const;
+const DEFAULT_DOCK_SIZES = { left: 240, right: 300, bottom: 160 } as const;
 
 export function defaultPanelLayout(): PanelLayout {
   return {
@@ -122,11 +123,12 @@ function parseDocks(record: Record<string, unknown>, defaults: PanelLayout): Pan
     sizes: {
       left: parseDockSize(sizesRecord.left, 'left'),
       right: parseDockSize(sizesRecord.right, 'right'),
+      bottom: parseDockSize(sizesRecord.bottom, 'bottom'),
     },
   };
 }
 
-function parseDockSize(value: unknown, dock: 'left' | 'right'): number {
+function parseDockSize(value: unknown, dock: DockId): number {
   const limit = DOCK_SIZE_LIMITS[dock];
   if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_DOCK_SIZES[dock];
   return Math.min(limit.max, Math.max(limit.min, Math.round(value)));
@@ -274,8 +276,8 @@ export function setDivider(layout: PanelLayout, dock: DockId, index: number, rat
   return { ...layout, dividers: { ...layout.dividers, [dock]: dividers } };
 }
 
-/** 设置左右停靠区宽度；静态边界之外的值夹回范围内。 */
-export function setDockSize(layout: PanelLayout, dock: 'left' | 'right', size: number): PanelLayout {
+/** 设置停靠区尺寸；静态边界之外的值夹回范围内。 */
+export function setDockSize(layout: PanelLayout, dock: DockId, size: number): PanelLayout {
   const limit = DOCK_SIZE_LIMITS[dock];
   const next = Math.min(limit.max, Math.max(limit.min, Math.round(size)));
   if (next === layout.sizes[dock]) return layout;

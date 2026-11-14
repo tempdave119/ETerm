@@ -210,9 +210,8 @@ export function MonitorPanel({
                   </div>
                 </div>
                 <div className="monitor-process-list">
-                  {processList.map((proc, index) => (
+                  {processList.map((proc) => (
                     <div className="monitor-process" key={`${proc.pid}-${proc.name}`}>
-                      <span className="monitor-process__rank">{index + 1}</span>
                       <span className="monitor-process__name" title={proc.name}>
                         {proc.name}
                       </span>

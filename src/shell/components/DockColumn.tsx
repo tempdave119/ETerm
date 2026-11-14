@@ -9,7 +9,7 @@ interface DockPanelItem {
 
 interface DockColumnProps {
   dock: DockId;
-  /** 左右停靠区的宽度（px）；底栏不传。 */
+  /** 停靠区尺寸：左右为宽度，底栏为高度（px）。 */
   size?: number;
   panels: DockPanelItem[];
   /** 区内分隔的累计比例，长度 = 面板数 - 1。 */
@@ -68,7 +68,13 @@ export function DockColumn({ dock, size, panels, dividers, onResize, onResizeEnd
     <div
       className={`dock dock--${dock}`}
       data-testid={`dock-${dock}`}
-      style={size ? { flex: `0 0 ${size}px`, width: `${size}px` } : undefined}
+      style={
+        size
+          ? dock === 'bottom'
+            ? { flex: `0 0 ${size}px`, height: `${size}px` }
+            : { flex: `0 0 ${size}px`, width: `${size}px` }
+          : undefined
+      }
     >
       {panels.map((panel, index) => {
         const start = index === 0 ? 0 : (dividers[index - 1] ?? index / panels.length);

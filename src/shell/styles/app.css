@@ -904,7 +904,6 @@ button {
 .dock--bottom {
   flex: 0 0 160px;
   height: 160px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 /* 左右停靠区宽度拖拽条；拖动范围由 DockResizer 夹紧 */
@@ -924,6 +923,19 @@ button {
   left: 2px;
   width: 1px;
   background: var(--border-subtle);
+}
+
+.dock-resizer--bottom {
+  cursor: row-resize;
+}
+
+.dock-resizer--bottom::before {
+  top: 2px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
 }
 
 .dock-resizer:hover {
@@ -1253,10 +1265,10 @@ button {
 
 .monitor-metric__value {
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: var(--font-aux);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.3;
 }
 
 .monitor-metric__sub {
@@ -1396,14 +1408,7 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-tight);
-  font-size: var(--font-aux);
-}
-
-.monitor-process__rank {
-  flex: 0 0 14px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+  font-size: 11px;
 }
 
 .monitor-process__name {

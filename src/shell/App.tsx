@@ -389,15 +389,15 @@ export function App() {
   );
 
   const resizeDock = useCallback(
-    (dock: 'left' | 'right', width: number): void => {
-      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, width), false);
+    (dock: DockId, size: number): void => {
+      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, size), false);
     },
     [applyPanelLayout],
   );
 
   const finishDockResize = useCallback(
-    (dock: 'left' | 'right', width: number): void => {
-      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, width), true);
+    (dock: DockId, size: number): void => {
+      applyPanelLayout(setDockSize(panelLayoutRef.current, dock, size), true);
     },
     [applyPanelLayout],
   );
@@ -998,10 +998,10 @@ export function App() {
         {leftPanels.length ? (
           <DockResizer
             side="left"
-            width={panelLayout.sizes.left}
-            otherWidth={rightPanels.length ? panelLayout.sizes.right : 0}
-            onResize={(width) => resizeDock('left', width)}
-            onResizeEnd={(width) => finishDockResize('left', width)}
+            size={panelLayout.sizes.left}
+            otherSize={rightPanels.length ? panelLayout.sizes.right : 0}
+            onResize={(size) => resizeDock('left', size)}
+            onResizeEnd={(size) => finishDockResize('left', size)}
           />
         ) : null}
         <main className="workspace">
@@ -1046,8 +1046,18 @@ export function App() {
               ))
             )}
           </div>
+          {bottomPanels.length ? (
+            <DockResizer
+              side="bottom"
+              size={panelLayout.sizes.bottom}
+              otherSize={0}
+              onResize={(size) => resizeDock('bottom', size)}
+              onResizeEnd={(size) => finishDockResize('bottom', size)}
+            />
+          ) : null}
           <DockColumn
             dock="bottom"
+            size={panelLayout.sizes.bottom}
             panels={bottomPanels}
             dividers={panelLayout.dividers.bottom}
             onResize={(index, ratio) => resizePanelDivider('bottom', index, ratio)}
@@ -1057,10 +1067,10 @@ export function App() {
         {rightPanels.length ? (
           <DockResizer
             side="right"
-            width={panelLayout.sizes.right}
-            otherWidth={leftPanels.length ? panelLayout.sizes.left : 0}
-            onResize={(width) => resizeDock('right', width)}
-            onResizeEnd={(width) => finishDockResize('right', width)}
+            size={panelLayout.sizes.right}
+            otherSize={leftPanels.length ? panelLayout.sizes.left : 0}
+            onResize={(size) => resizeDock('right', size)}
+            onResizeEnd={(size) => finishDockResize('right', size)}
           />
         ) : null}
         <DockColumn

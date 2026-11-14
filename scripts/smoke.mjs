@@ -552,7 +552,7 @@ try {
   writeFileSync('tmp/monitor-smoke.png', Buffer.from(monitorShot.data, 'base64'));
 
   // 左右停靠区可拖宽度：拖到静态上限 / 下限，验证边界与落盘。
-  const dragDockResizer = async (side, dx) => {
+  const dragDockResizer = async (side, dx, dy = 0) => {
     const point = await evaluate(`(() => {
       const element = document.querySelector('[data-testid="dock-resizer-${side}"]');
       if (!element) return null;
@@ -571,14 +571,14 @@ try {
     await client.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: point.x + dx,
-      y: point.y,
+      y: point.y + dy,
       button: 'left',
       buttons: 1,
     });
     await client.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       x: point.x + dx,
-      y: point.y,
+      y: point.y + dy,
       button: 'left',
       buttons: 0,
       clickCount: 1,
@@ -588,24 +588,32 @@ try {
     evaluate(`window.eterm.getPanelLayout().then((result) => (result.ok ? result.value.sizes : null))`);
 
   await dragDockResizer('right', -400);
-  await waitFor(async () => (await dockSizes())?.right === 560, 5_000, '右栏拖到上限');
+  await waitFor(async () => (await dockSizes())?.right === 450, 5_000, '右栏拖到上限');
   await dragDockResizer('right', 400);
   await waitFor(async () => (await dockSizes())?.right === 260, 5_000, '右栏拖到下限');
   await dragDockResizer('left', 200);
-  await waitFor(async () => (await dockSizes())?.left === 420, 5_000, '左栏拖到上限');
+  await waitFor(async () => (await dockSizes())?.left === 360, 5_000, '左栏拖到上限');
   await dragDockResizer('left', -300);
-  await waitFor(async () => (await dockSizes())?.left === 180, 5_000, '左栏拖到下限');
+  await waitFor(async () => (await dockSizes())?.left === 200, 5_000, '左栏拖到下限');
+  await dragDockResizer('bottom', 0, -200);
+  await waitFor(async () => (await dockSizes())?.bottom === 250, 5_000, '底栏拖到上限');
+  await dragDockResizer('bottom', 0, 300);
+  await waitFor(async () => (await dockSizes())?.bottom === 150, 5_000, '底栏拖到下限');
   await waitFor(
     async () => {
       try {
         const parsed = JSON.parse(await readFile(join(dataDir, 'layout.json'), 'utf8'));
-        return parsed.panels?.sizes?.left === 180 && parsed.panels?.sizes?.right === 260;
+        return (
+          parsed.panels?.sizes?.left === 200 &&
+          parsed.panels?.sizes?.right === 260 &&
+          parsed.panels?.sizes?.bottom === 150
+        );
       } catch {
         return false;
       }
     },
     5_000,
-    '停靠区宽度落盘',
+    '停靠区尺寸落盘',
   );
 
   // 右侧两个面板：拖分隔改比例并落盘，再用齿轮菜单把系统资源移到左侧并改回。
