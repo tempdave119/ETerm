@@ -55,8 +55,12 @@ export function shortcutFromEvent(event: KeyEventLike): ShortcutSpec | null {
   return event.shiftKey ? { code: event.code, shift: true } : { code: event.code };
 }
 
-export function findCommandByShortcut(event: KeyEventLike, resolved: ResolvedShortcuts): CommandDefinition | null {
-  for (const command of COMMANDS) {
+export function findCommandByShortcut(
+  event: KeyEventLike,
+  resolved: ResolvedShortcuts,
+  commands: readonly CommandDefinition[] = COMMANDS,
+): CommandDefinition | null {
+  for (const command of commands) {
     const spec = resolved[command.id];
     if (spec && matchesShortcut(event, spec)) return command;
   }

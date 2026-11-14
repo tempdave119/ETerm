@@ -126,6 +126,22 @@ export class PluginStore {
       .map((record) => ({ pluginId: record.id, directory: join(this.#pluginsDir, record.id) }));
   }
 
+  /** 已启用插件的 manifest 与目录，供命令运行时加载入口。 */
+  async enabledPlugins(): Promise<{ manifest: PluginManifest; directory: string }[]> {
+    const records = await this.list();
+    const result: { manifest: PluginManifest; directory: string }[] = [];
+    for (const record of records) {
+      if (!record.enabled) continue;
+      const directory = join(this.#pluginsDir, record.id);
+      try {
+        result.push({ manifest: await this.#readManifest(directory), directory });
+      } catch (error) {
+        this.#log(`插件已跳过：${record.id}`, error);
+      }
+    }
+    return result;
+  }
+
   /** 读并校验插件 manifest；字段错误带上具体原因，安装时直接展示给用户。 */
   async #readManifest(directory: string): Promise<PluginManifest> {
     const file = join(directory, 'manifest.json');

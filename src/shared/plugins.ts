@@ -54,6 +54,13 @@ export interface PluginRecord {
   enabled: boolean;
 }
 
+/** 插件命令在宿主内的完整 id：plugin:<pluginId>:<commandId>。 */
+export interface PluginCommandInfo {
+  id: string;
+  title: string;
+  pluginId: string;
+}
+
 /** 插件状态文件：只记禁用列表，目录存在即视为已安装。 */
 export interface PluginsFile {
   version: number;
@@ -192,20 +199,34 @@ export function pluginRecordOf(manifest: PluginManifest, enabled: boolean): Plug
 
 export const PLUGIN_PANEL_PREFIX = 'plugin:';
 
-/** 插件面板在布局里的 id；与内置面板共用 PanelLayout 的 docks 数组。 */
+/** 插件面板与命令共用 plugin:<pluginId>:<localId> 形式。 */
 export function pluginPanelId(pluginId: string, panelId: string): string {
   return `${PLUGIN_PANEL_PREFIX}${pluginId}:${panelId}`;
 }
 
-export function parsePluginPanelId(value: string): { pluginId: string; panelId: string } | null {
+export function pluginCommandId(pluginId: string, commandId: string): string {
+  return `${PLUGIN_PANEL_PREFIX}${pluginId}:${commandId}`;
+}
+
+export function parsePluginIdPair(value: string): { pluginId: string; localId: string } | null {
   if (!value.startsWith(PLUGIN_PANEL_PREFIX)) return null;
   const rest = value.slice(PLUGIN_PANEL_PREFIX.length);
   const index = rest.indexOf(':');
   if (index <= 0 || index === rest.length - 1) return null;
   const pluginId = rest.slice(0, index);
-  const panelId = rest.slice(index + 1);
-  if (!ID_PATTERN.test(pluginId) || !ID_PATTERN.test(panelId)) return null;
-  return { pluginId, panelId };
+  const localId = rest.slice(index + 1);
+  if (!ID_PATTERN.test(pluginId) || !ID_PATTERN.test(localId)) return null;
+  return { pluginId, localId };
+}
+
+export function parsePluginPanelId(value: string): { pluginId: string; panelId: string } | null {
+  const parsed = parsePluginIdPair(value);
+  return parsed ? { pluginId: parsed.pluginId, panelId: parsed.localId } : null;
+}
+
+export function parsePluginCommandId(value: string): { pluginId: string; commandId: string } | null {
+  const parsed = parsePluginIdPair(value);
+  return parsed ? { pluginId: parsed.pluginId, commandId: parsed.localId } : null;
 }
 
 /**

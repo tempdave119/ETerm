@@ -2,13 +2,15 @@ import { ipcMain, dialog, shell } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import { normalizeError } from '../core/errors.ts';
 import type { PluginStore } from '../services/plugins/store.ts';
+import type { PluginRuntime } from './plugin-runtime.ts';
 import { PLUGINS_IPC, type IpcResult } from '../shared/ipc.ts';
-import type { PluginRecord } from '../shared/plugins.ts';
+import type { PluginCommandInfo, PluginRecord } from '../shared/plugins.ts';
 import { t } from '../shared/i18n/index.ts';
 import { readRecord, readString } from './validate.ts';
 
 interface PluginsIpcOptions {
   store: PluginStore;
+  runtime: PluginRuntime;
   pluginsDir: string;
 }
 
@@ -78,6 +80,23 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
     }
   });
 
+  ipcMain.handle(PLUGINS_IPC.listCommands, async (): Promise<IpcResult<PluginCommandInfo[]>> => {
+    try {
+      return { ok: true, value: options.runtime.listCommands() };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(PLUGINS_IPC.runCommand, async (_event, raw): Promise<IpcResult<null>> => {
+    try {
+      await options.runtime.runCommand(readId(raw));
+      return { ok: true, value: null };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   return () => {
     for (const channel of [
       PLUGINS_IPC.list,
@@ -85,6 +104,8 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
       PLUGINS_IPC.setEnabled,
       PLUGINS_IPC.uninstall,
       PLUGINS_IPC.openDir,
+      PLUGINS_IPC.listCommands,
+      PLUGINS_IPC.runCommand,
     ]) {
       ipcMain.removeHandler(channel);
     }

@@ -1,28 +1,39 @@
-import { useEffect, useState } from 'react';
-import { COMMANDS, shortcutLabel, type CommandDefinition, type CommandId } from '../commands/registry.ts';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  commandGroup,
+  commandTitle,
+  shortcutLabel,
+  type CommandDefinition,
+} from '../commands/registry.ts';
 import { findConflictIds, shortcutFromEvent, type ResolvedShortcuts } from '../commands/resolve.ts';
-import { t, type MessageKey } from '../../shared/i18n/index.ts';
+import { t } from '../../shared/i18n/index.ts';
 import type { ShortcutOverrides } from '../../shared/shortcut.ts';
 
 interface ShortcutEditorProps {
+  /** 内置 + 插件命令的合并表。 */
+  commands: readonly CommandDefinition[];
   /** 当前生效表（默认 + 覆盖）。 */
   resolved: ResolvedShortcuts;
   overrides: ShortcutOverrides;
   onChange(next: ShortcutOverrides): void;
 }
 
-const GROUPS = COMMANDS.reduce<{ groupKey: MessageKey; commands: CommandDefinition[] }[]>((list, command) => {
-  const existing = list.find((item) => item.groupKey === command.groupKey);
-  if (existing) existing.commands.push(command);
-  else list.push({ groupKey: command.groupKey, commands: [command] });
-  return list;
-}, []);
-
 /** 快捷键编辑：点键位进入录制，Esc 取消；冲突行内标出，冲突未解决时不允许保存。 */
-export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditorProps) {
-  const [recording, setRecording] = useState<CommandId | null>(null);
+export function ShortcutEditor({ commands, resolved, overrides, onChange }: ShortcutEditorProps) {
+  const [recording, setRecording] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const conflicts = findConflictIds(resolved);
+
+  const groups = useMemo(() => {
+    const list: { key: string; title: string; commands: CommandDefinition[] }[] = [];
+    for (const command of commands) {
+      const key = command.groupKey ?? 'plugin';
+      const existing = list.find((item) => item.key === key);
+      if (existing) existing.commands.push(command);
+      else list.push({ key, title: commandGroup(command), commands: [command] });
+    }
+    return list;
+  }, [commands]);
 
   useEffect(() => {
     if (!recording) return;
@@ -70,15 +81,15 @@ export function ShortcutEditor({ resolved, overrides, onChange }: ShortcutEditor
         </p>
       ) : null}
 
-      {GROUPS.map(({ groupKey, commands }) => (
-        <div className="shortcut-group" key={groupKey}>
-          <div className="settings-subtitle">{t(groupKey)}</div>
-          {commands.map((command) => {
+      {groups.map(({ key, title, commands: groupCommands }) => (
+        <div className="shortcut-group" key={key}>
+          <div className="settings-subtitle">{title}</div>
+          {groupCommands.map((command) => {
             const spec = resolved[command.id] ?? null;
             const active = recording === command.id;
             return (
               <div className="shortcut-row" key={command.id} data-testid={`shortcut-row-${command.id}`}>
-                <span className="shortcut-row__title">{t(command.titleKey)}</span>
+                <span className="shortcut-row__title">{commandTitle(command)}</span>
                 <button
                   className="shortcut-key"
                   type="button"

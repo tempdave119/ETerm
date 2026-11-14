@@ -26,8 +26,8 @@ test('commands_have_unique_ids_and_shortcuts', () => {
 
 test('commands_every_entry_has_title_group_and_keywords', () => {
   for (const command of COMMANDS) {
-    assert.ok(command.titleKey.length > 0, `${command.id} 缺少标题 key`);
-    assert.ok(command.groupKey.length > 0, `${command.id} 缺少分组 key`);
+    assert.ok((command.titleKey ?? '').length > 0, `${command.id} 缺少标题 key`);
+    assert.ok((command.groupKey ?? '').length > 0, `${command.id} 缺少分组 key`);
     assert.ok(command.keywords.length > 0, `${command.id} 缺少关键词`);
   }
 });

@@ -17,10 +17,18 @@ export type ShortcutOverrides = Record<string, ShortcutSpec | null>;
 
 export type ResolvedShortcuts = Record<string, ShortcutSpec | null>;
 
-/** 合并默认值与用户覆盖；解绑的项保持 null，不参与分发与冲突检测。 */
-export function resolveShortcuts(overrides: ShortcutOverrides): ResolvedShortcuts {
+/** 合并默认值与用户覆盖；额外命令（插件）没有默认键，只取用户覆盖。 */
+export function resolveShortcuts(
+  overrides: ShortcutOverrides,
+  extraCommands: readonly { id: string; shortcut?: ShortcutSpec }[] = [],
+): ResolvedShortcuts {
   const resolved: ResolvedShortcuts = {};
   for (const command of COMMANDS) {
+    const override = overrides[command.id];
+    resolved[command.id] = override === undefined ? (command.shortcut ?? null) : override;
+  }
+  for (const command of extraCommands) {
+    if (command.id in resolved) continue;
     const override = overrides[command.id];
     resolved[command.id] = override === undefined ? (command.shortcut ?? null) : override;
   }

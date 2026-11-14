@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { PluginRecord } from '../shared/plugins.ts';
+import type { PluginCommandInfo, PluginRecord } from '../shared/plugins.ts';
 import {
   CLIPBOARD_IPC,
   COMPONENTS_IPC,
@@ -110,6 +110,10 @@ const api: EtermApi = {
     ipcRenderer.invoke(PLUGINS_IPC.setEnabled, { id, enabled }) as Promise<IpcResult<null>>,
   uninstallPlugin: (id: string) => ipcRenderer.invoke(PLUGINS_IPC.uninstall, id) as Promise<IpcResult<null>>,
   openPluginsDir: () => ipcRenderer.invoke(PLUGINS_IPC.openDir) as Promise<IpcResult<null>>,
+  listPluginCommands: () =>
+    ipcRenderer.invoke(PLUGINS_IPC.listCommands) as Promise<IpcResult<PluginCommandInfo[]>>,
+  runPluginCommand: (id: string) =>
+    ipcRenderer.invoke(PLUGINS_IPC.runCommand, id) as Promise<IpcResult<null>>,
 
   listTransfers: () => ipcRenderer.invoke(TRANSFERS_IPC.list) as Promise<IpcResult<TransferView[]>>,
   cancelTransfer: (id: string) =>

@@ -101,6 +101,7 @@ export const enUS: Record<MessageKey, string> = {
   'command.group.panel': 'Panels',
   'command.group.settings': 'Settings',
   'command.group.palette': 'Commands',
+  'command.group.plugin': 'Plugins',
 
   // 面板
   'panel.sessions': 'Sessions',

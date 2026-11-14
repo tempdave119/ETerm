@@ -32,11 +32,22 @@ export function matchesShortcut(event: KeyEventLike, shortcut: ShortcutSpec): bo
 }
 
 /** 命令面板过滤：标题与关键词都参与，空查询返回全部。 */
-export function filterCommands(query: string): CommandDefinition[] {
+export function commandTitle(command: CommandDefinition): string {
+  return command.titleKey ? t(command.titleKey) : (command.title ?? command.id);
+}
+
+export function commandGroup(command: CommandDefinition): string {
+  return command.groupKey ? t(command.groupKey) : t('command.group.plugin');
+}
+
+export function filterCommands(
+  query: string,
+  commands: readonly CommandDefinition[] = COMMANDS,
+): CommandDefinition[] {
   const needle = query.trim().toLowerCase();
-  if (!needle) return [...COMMANDS];
-  return COMMANDS.filter((command) =>
-    [t(command.titleKey), ...command.keywords].some((text) => text.toLowerCase().includes(needle)),
+  if (!needle) return [...commands];
+  return commands.filter((command) =>
+    [commandTitle(command), ...command.keywords].some((text) => text.toLowerCase().includes(needle)),
   );
 }
 

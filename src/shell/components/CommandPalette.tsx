@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { filterCommands, shortcutLabel, type CommandId } from '../commands/registry.ts';
-import { t } from '../../shared/i18n/index.ts';
+import {
+  commandGroup,
+  commandTitle,
+  filterCommands,
+  shortcutLabel,
+  type CommandDefinition,
+} from '../commands/registry.ts';
 
 interface CommandPaletteProps {
-  onRun(id: CommandId): void;
+  commands: readonly CommandDefinition[];
+  onRun(id: string): void;
   onClose(): void;
 }
 
 /** ⌘K 命令面板：搜索、方向键、Enter 执行、Esc 关闭。 */
-export function CommandPalette({ onRun, onClose }: CommandPaletteProps) {
+export function CommandPalette({ commands, onRun, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const results = useMemo(() => filterCommands(query), [query]);
+  const results = useMemo(() => filterCommands(query, commands), [query, commands]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -84,8 +90,8 @@ export function CommandPalette({ onRun, onClose }: CommandPaletteProps) {
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => run(index)}
               >
-                <span className="palette__title">{t(command.titleKey)}</span>
-                <span className="palette__group">{t(command.groupKey)}</span>
+                <span className="palette__title">{commandTitle(command)}</span>
+                <span className="palette__group">{commandGroup(command)}</span>
                 {command.shortcut ? (
                   <span className="palette__shortcut">{shortcutLabel(command.shortcut)}</span>
                 ) : null}

@@ -12,6 +12,7 @@ import {
 import type { ThemeDefinition } from '../../shared/theme.ts';
 import { panelById } from '../panels/registry.ts';
 import { findConflictIds, resolveShortcuts } from '../commands/resolve.ts';
+import type { CommandDefinition } from '../commands/registry.ts';
 import { t, type MessageKey } from '../../shared/i18n/index.ts';
 import { ShortcutEditor } from './ShortcutEditor.tsx';
 import { isDirty } from '../settings-draft.ts';
@@ -47,6 +48,8 @@ interface SettingsPanelProps {
   onSetPluginEnabled(id: string, enabled: boolean): void;
   onUninstallPlugin(id: string): void;
   onOpenPluginsDir(): void;
+  /** 内置 + 插件命令的合并表，用于快捷键列表与冲突检测。 */
+  commands: readonly CommandDefinition[];
 }
 
 type SectionId = 'appearance' | 'terminal' | 'connection' | 'extensions' | 'transfer' | 'shortcuts' | 'layout';
@@ -110,6 +113,7 @@ export function SettingsPanel({
   onSetPluginEnabled,
   onUninstallPlugin,
   onOpenPluginsDir,
+  commands,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<SectionId>('appearance');
   const [confirmUninstallId, setConfirmUninstallId] = useState<string | null>(null);
@@ -228,7 +232,7 @@ export function SettingsPanel({
   );
 
   const dirty = isDirty(config, savedConfig);
-  const shortcutConflicts = findConflictIds(resolveShortcuts(config.shortcuts.overrides));
+  const shortcutConflicts = findConflictIds(resolveShortcuts(config.shortcuts.overrides, commands));
   const selectedExternalId = config.ui.theme.startsWith('ext:') ? config.ui.theme.slice(4) : null;
   const selectedExternalMissing = Boolean(
     selectedExternalId && !themes.some((theme) => theme.id === selectedExternalId),
@@ -829,7 +833,8 @@ export function SettingsPanel({
               <section className="settings-group">
                 <h3 className="settings-group__title">{t('settings.nav.shortcuts')}</h3>
                 <ShortcutEditor
-                  resolved={resolveShortcuts(config.shortcuts.overrides)}
+                  commands={commands}
+                  resolved={resolveShortcuts(config.shortcuts.overrides, commands)}
                   overrides={config.shortcuts.overrides}
                   onChange={(next) =>
                     update((draft) => {

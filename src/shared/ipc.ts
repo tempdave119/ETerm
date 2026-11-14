@@ -13,7 +13,7 @@ import type { TransferDirection, TransferView } from '../services/transfers/queu
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
 import type { ComponentDescriptor, ComponentSample } from './components.ts';
-import type { PluginRecord } from './plugins.ts';
+import type { PluginCommandInfo, PluginRecord } from './plugins.ts';
 import type { ThemeDefinition } from './theme.ts';
 import type {
   ConnectionInput,
@@ -70,6 +70,8 @@ export const PLUGINS_IPC = {
   setEnabled: 'plugins:set-enabled',
   uninstall: 'plugins:uninstall',
   openDir: 'plugins:open-dir',
+  listCommands: 'plugins:list-commands',
+  runCommand: 'plugins:run-command',
 } as const;
 
 export const TRANSFERS_IPC = {
@@ -247,6 +249,8 @@ export interface EtermApi {
   setPluginEnabled(id: string, enabled: boolean): Promise<IpcResult<null>>;
   uninstallPlugin(id: string): Promise<IpcResult<null>>;
   openPluginsDir(): Promise<IpcResult<null>>;
+  listPluginCommands(): Promise<IpcResult<PluginCommandInfo[]>>;
+  runPluginCommand(id: string): Promise<IpcResult<null>>;
 
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;

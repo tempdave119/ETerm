@@ -30,6 +30,7 @@ import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
 import { registerPluginsIpc } from './plugins-ipc.ts';
+import { PluginRuntime } from './plugin-runtime.ts';
 import { registerPluginProtocol, registerPluginScheme } from './plugin-protocol.ts';
 import { PluginStore } from '../services/plugins/store.ts';
 import { loadComponents } from './components.ts';
@@ -89,6 +90,7 @@ let disposeKnownHostsIpc: (() => void) | null = null;
 let disposeComponentsIpc: (() => void) | null = null;
 let disposePluginsIpc: (() => void) | null = null;
 let disposePluginProtocol: (() => void) | null = null;
+let pluginRuntime: PluginRuntime | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
@@ -308,6 +310,12 @@ void app.whenReady().then(async () => {
     baseDir,
     logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
   });
+  const runtime = new PluginRuntime({
+    store: pluginStore,
+    logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
+  });
+  await runtime.start();
+  pluginRuntime = runtime;
   const services: AppServices = {
     connections: new ConnectionStore({ baseDir }),
     config: new ConfigStore({ baseDir }),
@@ -347,6 +355,7 @@ void app.whenReady().then(async () => {
 
   disposePluginsIpc = registerPluginsIpc({
     store: pluginStore,
+    runtime,
     pluginsDir: path.join(baseDir, 'plugins'),
   });
   disposePluginProtocol = registerPluginProtocol(pluginStore);
@@ -390,6 +399,8 @@ app.on('will-quit', () => {
   disposePluginsIpc = null;
   disposePluginProtocol?.();
   disposePluginProtocol = null;
+  pluginRuntime?.dispose();
+  pluginRuntime = null;
   disposeConfigIpc?.();
   disposeConfigIpc = null;
   disposeKnownHostsIpc?.();

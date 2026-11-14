@@ -100,6 +100,7 @@ export const zhCN = {
   'command.group.panel': '面板',
   'command.group.settings': '设置',
   'command.group.palette': '命令',
+  'command.group.plugin': '插件',
 
   // 面板
   'panel.sessions': '会话',

@@ -11,10 +11,11 @@ import type {
   TransferView,
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
-import { parsePluginPanelId, pluginPanelId, type PluginRecord } from '../shared/plugins.ts';
+import { parsePluginPanelId, pluginPanelId, type PluginCommandInfo, type PluginRecord } from '../shared/plugins.ts';
 import type { ThemeDefinition } from '../shared/theme.ts';
 import { applyUiTheme, resolveTheme, terminalThemeFor } from './theme.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
+import { mergeCommands } from '../shared/commands.ts';
 import { defaultPanelLayout, isPanelOpen, movePanel, movePanelWithinDock, panelDockOf, setDivider, setDockSize, type DockId, type PanelId, type PanelLayout } from '../shared/panels.ts';
 import {
   clampRatio,
@@ -124,6 +125,7 @@ export function App() {
   const [componentsBusy, setComponentsBusy] = useState(false);
   const [componentsNotice, setComponentsNotice] = useState<string | null>(null);
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [pluginCommands, setPluginCommands] = useState<PluginCommandInfo[]>([]);
   const [pluginsBusy, setPluginsBusy] = useState(false);
   const [pluginsNotice, setPluginsNotice] = useState<string | null>(null);
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
@@ -142,9 +144,10 @@ export function App() {
   const locale = normalizeLocale(effectiveConfig?.ui.language ?? 'system', navigator.language);
   setLocale(locale);
   // 快捷键生效表随草稿变化，设置面板里改完能立即预览冲突。
+  const commands = useMemo(() => mergeCommands(pluginCommands), [pluginCommands]);
   const shortcuts = useMemo(
-    () => resolveShortcuts(effectiveConfig?.shortcuts.overrides ?? {}),
-    [effectiveConfig?.shortcuts.overrides],
+    () => resolveShortcuts(effectiveConfig?.shortcuts.overrides ?? {}, pluginCommands),
+    [effectiveConfig?.shortcuts.overrides, pluginCommands],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -208,6 +211,8 @@ export function App() {
   const loadPlugins = useCallback(async (): Promise<void> => {
     const result = await window.eterm.listPlugins();
     if (result.ok) setPlugins(result.value);
+    const pluginCommandResult = await window.eterm.listPluginCommands();
+    if (pluginCommandResult.ok) setPluginCommands(pluginCommandResult.value);
   }, []);
 
   useEffect(() => {
@@ -1145,6 +1150,12 @@ export function App() {
         case 'palette.open':
           setPaletteOpen(true);
           break;
+        default:
+          if (id.startsWith('plugin:')) {
+            void window.eterm.runPluginCommand(id).then((result) => {
+              if (!result.ok) setError(result.error);
+            });
+          }
       }
     },
     [
@@ -1168,14 +1179,14 @@ export function App() {
     const onKeyDown = (event: KeyboardEvent): void => {
       // 弹层打开时全局命令不分发：避免在设置 / 命令面板 / 连接表单里误触 ⌘W 这类动作。
       if (settingsOpen || paletteOpen || forwardOpen || hostKey || form || shellDialogOpen) return;
-      const command = findCommandByShortcut(event, shortcuts);
+      const command = findCommandByShortcut(event, shortcuts, commands);
       if (!command) return;
       event.preventDefault();
       runCommand(command.id);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [runCommand, shortcuts, settingsOpen, paletteOpen, forwardOpen, hostKey, form, shellDialogOpen]);
+  }, [runCommand, shortcuts, commands, settingsOpen, paletteOpen, forwardOpen, hostKey, form, shellDialogOpen]);
 
   useEffect(() => {
     return window.eterm.onMenuCommand((command) => {
@@ -1533,6 +1544,7 @@ export function App() {
           onSetPluginEnabled={(id, enabled) => void setPluginEnabled(id, enabled)}
           onUninstallPlugin={(id) => void uninstallPlugin(id)}
           onOpenPluginsDir={() => void openPluginsDir()}
+          commands={commands}
         />
       ) : null}
 
@@ -1548,6 +1560,7 @@ export function App() {
 
       {paletteOpen ? (
         <CommandPalette
+          commands={commands}
           onRun={(id) => {
             setPaletteOpen(false);
             runCommand(id);

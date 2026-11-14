@@ -121,9 +121,22 @@ writeFileSync(
     permissions: ['panel'],
     panels: [{ id: 'smoke', title: 'Smoke Panel', defaultDock: 'right' }],
     themes: [{ id: 'plugin-ocean', title: 'Plugin Ocean' }],
+    commands: [{ id: 'hello', title: 'Plugin Hello' }],
   }),
 );
-writeFileSync(join(dataDir, 'plugins', 'smoke-plugin', 'index.cjs'), 'module.exports = {};\n');
+writeFileSync(
+  join(dataDir, 'plugins', 'smoke-plugin', 'index.cjs'),
+  `const { writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+module.exports = {
+  activate(api) {
+    api.registerCommand('hello', () => {
+      writeFileSync(join(process.env.ETERM_USER_DATA ?? '', 'plugin-command-ran.txt'), 'ok');
+    });
+  },
+};
+`,
+);
 writeFileSync(
   join(dataDir, 'plugins', 'smoke-plugin', 'panel.html'),
   '<!doctype html><meta charset="utf-8"><body style="font:13px sans-serif;padding:12px">smoke panel</body>',
@@ -452,6 +465,34 @@ try {
     '命令打开设置',
   );
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+
+  // 插件命令：⌘K 搜到插件命令并执行，副作用落到临时 userData。
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK', key: 'k', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-palette"]') !== null`),
+    5_000,
+    '插件命令面板',
+  );
+  await evaluate(setInputScript('#command-query', 'Plugin Hello'));
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]') !== null`),
+    5_000,
+    '插件命令过滤',
+  );
+  await evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]').click()`);
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 'plugin-command-ran.txt'), 'utf8')) === 'ok';
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '插件命令执行',
+  );
 
   // 设置：左侧分类导航；config 走草稿（即时预览、取消回滚、保存才落盘），layout 即时。
   const colsAtDefaultFont = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols;

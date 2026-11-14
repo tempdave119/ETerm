@@ -6,30 +6,21 @@
  */
 
 import type { MessageKey } from './i18n/index.ts';
+import type { PluginCommandInfo } from './plugins.ts';
 import type { ShortcutSpec } from './shortcut.ts';
 
-export type CommandId =
-  | 'terminal.new'
-  | 'terminal.find'
-  | 'connection.new'
-  | 'tab.close'
-  | 'tab.next'
-  | 'tab.prev'
-  | 'pane.close'
-  | 'pane.split-row'
-  | 'pane.split-column'
-  | 'files.toggle'
-  | 'panel.monitor'
-  | 'forward.open'
-  | 'settings.open'
-  | 'palette.open';
+/** 内置命令用固定 id；插件命令为 plugin:<pluginId>:<commandId>。 */
+export type CommandId = string;
 
 export interface CommandDefinition {
-  id: CommandId;
-  titleKey: MessageKey;
-  groupKey: MessageKey;
+  id: string;
+  /** 内置命令用 i18n key；插件命令用 title。 */
+  titleKey?: MessageKey;
+  title?: string;
+  groupKey?: MessageKey;
   keywords: string[];
   shortcut?: ShortcutSpec;
+  pluginId?: string;
 }
 
 export const COMMANDS: readonly CommandDefinition[] = [
@@ -131,3 +122,17 @@ export const COMMANDS: readonly CommandDefinition[] = [
     shortcut: { code: 'KeyK' },
   },
 ];
+
+/** 插件命令进入单空合并表；标题来自插件 manifest，没有默认快捷键。 */
+export function pluginCommandDefinition(command: PluginCommandInfo): CommandDefinition {
+  return {
+    id: command.id,
+    title: command.title,
+    keywords: [command.title, command.pluginId],
+    pluginId: command.pluginId,
+  };
+}
+
+export function mergeCommands(pluginCommands: readonly PluginCommandInfo[] = []): CommandDefinition[] {
+  return [...COMMANDS, ...pluginCommands.map(pluginCommandDefinition)];
+}
