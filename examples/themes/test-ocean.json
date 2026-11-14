@@ -1,0 +1,40 @@
+{
+  "id": "test-ocean",
+  "name": "测试 · 海蓝",
+  "base": "dark",
+  "ui": {
+    "--bg-canvas": "#0b1e2d",
+    "--bg-panel": "#102a3c",
+    "--bg-overlay": "#16384e",
+    "--text-primary": "#e6f4ff",
+    "--text-secondary": "#9fc3d8",
+    "--text-tertiary": "#6f93a8",
+    "--border-subtle": "#1e4158",
+    "--border-strong": "#2d5b77",
+    "--status-info": "#4fc3f7",
+    "--primary-bg": "#e6f4ff",
+    "--primary-text": "#0b1e2d"
+  },
+  "terminal": {
+    "background": "#0b1e2d",
+    "foreground": "#e6f4ff",
+    "cursor": "#4fc3f7",
+    "selectionBackground": "rgba(79, 195, 247, 0.3)",
+    "black": "#102a3c",
+    "red": "#ff6b81",
+    "green": "#7bed9f",
+    "yellow": "#ffd166",
+    "blue": "#4fc3f7",
+    "magenta": "#c792ea",
+    "cyan": "#67e8f9",
+    "white": "#d7e9f5",
+    "brightBlack": "#2d5b77",
+    "brightRed": "#ff8fa0",
+    "brightGreen": "#9bf6b5",
+    "brightYellow": "#ffe08a",
+    "brightBlue": "#7fd8ff",
+    "brightMagenta": "#d8b4f8",
+    "brightCyan": "#9ef2ff",
+    "brightWhite": "#f4fbff"
+  }
+}
