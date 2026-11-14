@@ -85,17 +85,35 @@ button {
   height: var(--row-height);
   padding: 0 var(--space-tight) 0 var(--space-container);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   background: transparent;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .tab:hover {
   background: var(--hover-subtle);
+  color: var(--text-secondary);
 }
 
 .tab[data-active="true"] {
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background: var(--text-secondary);
+  color: var(--bg-panel);
+  font-weight: 500;
+}
+
+.tab[data-active="true"]:hover {
+  background: var(--text-secondary);
+}
+
+.tab[data-active="true"] .tab__close {
+  color: var(--bg-panel);
+  opacity: 0.7;
+}
+
+.tab[data-active="true"] .tab__close:hover {
+  background: var(--active-overlay);
+  color: var(--bg-panel);
+  opacity: 1;
 }
 
 .tab__label {
