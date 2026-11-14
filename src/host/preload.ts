@@ -183,8 +183,8 @@ const api: EtermApi = {
   listComponents: () => ipcRenderer.invoke(COMPONENTS_IPC.list) as Promise<IpcResult<ComponentDescriptor[]>>,
   listComponentSamples: () =>
     ipcRenderer.invoke(COMPONENTS_IPC.samples) as Promise<IpcResult<ComponentSample[]>>,
-  installComponentSamples: () =>
-    ipcRenderer.invoke(COMPONENTS_IPC.installSamples) as Promise<
+  installComponentSamples: (ids?: string[]) =>
+    ipcRenderer.invoke(COMPONENTS_IPC.installSamples, ids) as Promise<
       IpcResult<{ installed: string[]; skipped: string[] }>
     >,
   uninstallComponentSample: (id: string) =>

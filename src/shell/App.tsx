@@ -366,6 +366,28 @@ export function App() {
     }
   }, [loadComponentSamples]);
 
+  const installComponentSample = useCallback(
+    async (id: string): Promise<void> => {
+      setComponentsBusy(true);
+      setComponentsNotice(null);
+      try {
+        const result = await window.eterm.installComponentSamples([id]);
+        if (!result.ok) {
+          setSettingsError(result.error.message);
+          return;
+        }
+        await loadComponentSamples();
+        const count = result.value.installed.length;
+        setComponentsNotice(
+          count > 0 ? t('settings.extensions.installDone', { count }) : t('settings.extensions.installNone'),
+        );
+      } finally {
+        setComponentsBusy(false);
+      }
+    },
+    [loadComponentSamples],
+  );
+
   const uninstallComponentSample = useCallback(
     async (id: string): Promise<void> => {
       setComponentsBusy(true);
@@ -1311,6 +1333,7 @@ export function App() {
           componentsBusy={componentsBusy}
           componentsNotice={componentsNotice}
           onInstallComponentSamples={() => void installComponentSamples()}
+          onInstallComponentSample={(id) => void installComponentSample(id)}
           onUninstallComponentSample={(id) => void uninstallComponentSample(id)}
           onOpenComponentsDir={() => void openComponentsDir()}
         />

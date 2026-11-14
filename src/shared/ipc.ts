@@ -268,7 +268,7 @@ export interface EtermApi {
 
   listComponents(): Promise<IpcResult<ComponentDescriptor[]>>;
   listComponentSamples(): Promise<IpcResult<ComponentSample[]>>;
-  installComponentSamples(): Promise<IpcResult<{ installed: string[]; skipped: string[] }>>;
+  installComponentSamples(ids?: string[]): Promise<IpcResult<{ installed: string[]; skipped: string[] }>>;
   uninstallComponentSample(id: string): Promise<IpcResult<{ removed: string[]; skipped: string[] }>>;
   openComponentsDir(): Promise<IpcResult<null>>;
   listSerialDevices(): Promise<IpcResult<SerialDevice[]>>;

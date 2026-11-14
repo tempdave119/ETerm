@@ -36,9 +36,13 @@ export function registerComponentsIpc(options: ComponentsIpcOptions): () => void
 
   ipcMain.handle(
     COMPONENTS_IPC.installSamples,
-    async (): Promise<IpcResult<{ installed: string[]; skipped: string[] }>> => {
+    async (_event, rawIds): Promise<IpcResult<{ installed: string[]; skipped: string[] }>> => {
       try {
-        return { ok: true, value: await installComponentSamples(options.sampleDirs) };
+        // 单行重装传一个 id，底部按钮不传参数 = 补齐全部缺失示例。
+        const ids = Array.isArray(rawIds)
+          ? rawIds.map((rawId) => readString(rawId, '组件 id', 64))
+          : undefined;
+        return { ok: true, value: await installComponentSamples(options.sampleDirs, ids) };
       } catch (error) {
         return failure(error);
       }

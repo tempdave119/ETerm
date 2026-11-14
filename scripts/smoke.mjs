@@ -497,6 +497,17 @@ try {
   }
   if (!telnetRemoved) throw new Error('卸载后 Telnet 组件目录仍存在');
 
+  // 卸载后单行重装：目录被删掉也能从随包示例复制回来，形成卸载/安装闭环。
+  await evaluate(`document.querySelector('[data-testid="component-install-telnet"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed === 'true'`,
+      ),
+    10_000,
+    '重新安装示例组件',
+  );
+
   // 取消：草稿丢弃，界面回到已保存值。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
   await waitFor(

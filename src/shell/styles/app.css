@@ -686,9 +686,20 @@ button {
   overflow: hidden;
 }
 
+/* 标题栏是拖动把手，拖动期间禁止选中文本 */
+.modal--settings .modal__title {
+  cursor: grab;
+  user-select: none;
+}
+
+.modal--settings .modal__title[data-dragging="true"] {
+  cursor: grabbing;
+}
+
 .settings-layout {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
+  /* 导航只容纳 2–4 字分类，120px 足够；再宽会挤压右侧内容（快捷键页的恢复按钮会换行） */
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: var(--space-block);
   flex: 1 1 auto;
   min-height: 0;
@@ -881,6 +892,12 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-block);
+}
+
+/* 提示文案允许换行，但恢复按钮必须单行，否则在窄内容区里会断成两行 */
+.shortcut-editor__header .button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .shortcut-group {
@@ -1124,6 +1141,8 @@ button {
   min-height: 0;
   overflow-y: auto;
   padding-right: var(--space-tight);
+  /* 顶部留 3px：第一行输入框 autoFocus 时 outline 向外扩，紧贴容器会被裁掉上边 */
+  padding-top: 3px;
 }
 
 .modal--form .form-row {

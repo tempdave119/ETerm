@@ -131,6 +131,7 @@ export const enUS: Record<MessageKey, string> = {
   'settings.extensions.notInstalled': 'Not installed',
   'settings.extensions.pendingRestart': 'Installed, loads after restart',
   'settings.extensions.install': 'Install samples',
+  'settings.extensions.installOne': 'Install',
   'settings.extensions.openDir': 'Open components folder',
   'settings.extensions.restartHint': 'Restart the app after installing or removing components.',
   'settings.extensions.installDone': 'Installed {count} sample component(s); restart the app to use them.',

@@ -83,6 +83,28 @@ test('component_samples_uninstalls_only_bundled_and_installed_ids', async () => 
   });
 });
 
+test('component_samples_reinstalls_after_uninstall_by_id', async () => {
+  await withDirs(async (dirs) => {
+    await installComponentSamples(dirs);
+    await uninstallComponentSamples(dirs, ['serial']);
+
+    const result = await installComponentSamples(dirs, ['serial']);
+    assert.deepEqual(result.installed, ['serial']);
+    assert.deepEqual(result.skipped, []);
+    const serial = (await listComponentSamples(dirs)).find((sample) => sample.id === 'serial');
+    assert.equal(serial?.installed, true);
+    assert.match(await readFile(join(dirs.userDir, 'serial', 'index.cjs'), 'utf8'), /module\.exports/);
+  });
+});
+
+test('component_samples_skips_unknown_install_id', async () => {
+  await withDirs(async (dirs) => {
+    const result = await installComponentSamples(dirs, ['unknown']);
+    assert.deepEqual(result.installed, []);
+    assert.deepEqual(result.skipped, ['unknown']);
+  });
+});
+
 test('component_samples_does_not_overwrite_existing_component', async () => {
   await withDirs(async (dirs) => {
     await mkdir(join(dirs.userDir, 'serial'), { recursive: true });

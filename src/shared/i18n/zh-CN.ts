@@ -130,6 +130,7 @@ export const zhCN = {
   'settings.extensions.notInstalled': '未安装',
   'settings.extensions.pendingRestart': '已安装，重启后加载',
   'settings.extensions.install': '安装示例组件',
+  'settings.extensions.installOne': '安装',
   'settings.extensions.openDir': '打开组件目录',
   'settings.extensions.restartHint': '安装或删除组件后需要重启应用才会生效。',
   'settings.extensions.installDone': '已安装 {count} 个示例组件，重启应用后生效。',

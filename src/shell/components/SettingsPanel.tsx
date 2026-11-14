@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
@@ -31,6 +31,7 @@ interface SettingsPanelProps {
   componentsBusy: boolean;
   componentsNotice: string | null;
   onInstallComponentSamples(): void;
+  onInstallComponentSample(id: string): void;
   onUninstallComponentSample(id: string): void;
   onOpenComponentsDir(): void;
 }
@@ -72,6 +73,7 @@ export function SettingsPanel({
   componentsBusy,
   componentsNotice,
   onInstallComponentSamples,
+  onInstallComponentSample,
   onUninstallComponentSample,
   onOpenComponentsDir,
 }: SettingsPanelProps) {
@@ -105,6 +107,82 @@ export function SettingsPanel({
     return () => window.clearTimeout(timer);
   }, [confirmUninstallId]);
 
+  // 面板可拖：标题栏当把手，偏移只写 transform，不参与布局计算。
+  const modalRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    rect: DOMRect;
+  } | null>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+
+  const clampToViewport = (value: number, min: number, max: number): number =>
+    Math.min(Math.max(value, min), max);
+
+  const onTitlePointerDown = (event: ReactPointerEvent<HTMLHeadingElement>): void => {
+    if (event.button !== 0) return;
+    const modal = modalRef.current;
+    if (!modal) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: dragOffsetRef.current.x,
+      baseY: dragOffsetRef.current.y,
+      rect: modal.getBoundingClientRect(),
+    };
+    setDragging(true);
+  };
+
+  const onTitlePointerMove = (event: ReactPointerEvent<HTMLHeadingElement>): void => {
+    const drag = dragRef.current;
+    const modal = modalRef.current;
+    if (!drag || !modal || event.pointerId !== drag.pointerId) return;
+    // 面板至少留 120px 在视口内，标题栏不会被拖到抓不回来；顶部不许出界。
+    const left = clampToViewport(
+      drag.rect.left + (event.clientX - drag.startX),
+      120 - drag.rect.width,
+      window.innerWidth - 120,
+    );
+    const top = clampToViewport(
+      drag.rect.top + (event.clientY - drag.startY),
+      0,
+      window.innerHeight - 48,
+    );
+    const x = drag.baseX + (left - drag.rect.left);
+    const y = drag.baseY + (top - drag.rect.top);
+    dragOffsetRef.current = { x, y };
+    modal.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
+  const endTitleDrag = (event: ReactPointerEvent<HTMLHeadingElement>): void => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (event.currentTarget.hasPointerCapture(drag.pointerId)) {
+      event.currentTarget.releasePointerCapture(drag.pointerId);
+    }
+    dragRef.current = null;
+    setDragging(false);
+  };
+
+  useEffect(() => {
+    // 窗口尺寸变化后旧偏移可能把面板顶出可视区，直接回中。
+    const onResize = (): void => {
+      dragRef.current = null;
+      dragOffsetRef.current = { x: 0, y: 0 };
+      setDragging(false);
+      if (modalRef.current) modalRef.current.style.transform = '';
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const update = useCallback(
     (patch: (draft: AppConfig) => void): void => {
       const next = structuredClone(configRef.current);
@@ -135,8 +213,24 @@ export function SettingsPanel({
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal modal--settings" role="dialog" aria-modal="true" aria-label="设置" data-testid="settings-panel">
-        <h2 className="modal__title">{t('settings.title')}</h2>
+      <div
+        className="modal modal--settings"
+        role="dialog"
+        aria-modal="true"
+        aria-label="设置"
+        data-testid="settings-panel"
+        ref={modalRef}
+      >
+        <h2
+          className="modal__title"
+          data-dragging={dragging}
+          onPointerDown={onTitlePointerDown}
+          onPointerMove={onTitlePointerMove}
+          onPointerUp={endTitleDrag}
+          onPointerCancel={endTitleDrag}
+        >
+          {t('settings.title')}
+        </h2>
 
         <div className="settings-layout">
           <nav className="settings-nav" aria-label={t('settings.title')}>
@@ -424,7 +518,15 @@ export function SettingsPanel({
                                 : t('settings.extensions.uninstall')}
                             </button>
                           ) : (
-                            <span />
+                            <button
+                              className="link-button"
+                              type="button"
+                              disabled={componentsBusy}
+                              data-testid={`component-install-${sample.id}`}
+                              onClick={() => onInstallComponentSample(sample.id)}
+                            >
+                              {t('settings.extensions.installOne')}
+                            </button>
                           )}
                         </div>
                       );

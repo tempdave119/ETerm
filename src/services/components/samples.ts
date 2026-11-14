@@ -102,15 +102,21 @@ export async function uninstallComponentSamples(
   return { removed, skipped };
 }
 
-/** 返回 installed / skipped；目标目录已存在时跳过，避免覆盖用户修改。 */
+/**
+ * 安装示例：不传 ids 时装全部缺失项，传 ids 时只装指定项（卸载后的单行重装走这条）。
+ * 目标目录已存在时跳过，避免覆盖用户修改。
+ */
 export async function installComponentSamples(
   dirs: ComponentSampleDirs,
+  ids?: readonly string[],
 ): Promise<{ installed: string[]; skipped: string[] }> {
   await mkdir(dirs.userDir, { recursive: true });
+  const wanted = ids ? new Set(ids) : null;
   const installed: string[] = [];
   const skipped: string[] = [];
 
   for (const item of await readBundledSamples(dirs)) {
+    if (wanted && !wanted.has(item.sample.id)) continue;
     const target = join(dirs.userDir, item.entry);
     if (await exists(join(target, 'manifest.json'))) {
       skipped.push(item.sample.id);
@@ -118,6 +124,13 @@ export async function installComponentSamples(
     }
     await cp(join(dirs.bundledDir, item.entry), target, { recursive: true, force: false });
     installed.push(item.sample.id);
+  }
+
+  // 请求了不存在的 id 也记 skipped，调用方才能判断这次有没有落空。
+  if (wanted) {
+    for (const id of wanted) {
+      if (!installed.includes(id) && !skipped.includes(id)) skipped.push(id);
+    }
   }
 
   return { installed, skipped };
