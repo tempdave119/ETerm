@@ -161,6 +161,8 @@ export const enUS: Record<MessageKey, string> = {
   'settings.plugins.sampleInstalled': 'Installed',
   'settings.plugins.samplesHint': 'Sample plugins ship with the app; install one and restart ETerm to see its panel.',
   'settings.plugins.sampleExists': 'Plugin {name} already exists',
+  'settings.plugins.openPanel': 'Open panel',
+  'settings.plugins.panelOpened': 'Open',
   'settings.plugins.permission.panel': 'Panel',
   'settings.plugins.permission.command': 'Command',
   'settings.plugins.permission.theme': 'Theme',

@@ -160,6 +160,8 @@ export const zhCN = {
   'settings.plugins.sampleInstalled': '已安装',
   'settings.plugins.samplesHint': '示例插件随应用打包，安装后重启 ETerm 即可在停靠区看到面板。',
   'settings.plugins.sampleExists': '插件 {name} 已存在，无需重复安装',
+  'settings.plugins.openPanel': '打开面板',
+  'settings.plugins.panelOpened': '已打开',
   'settings.plugins.permission.panel': '面板',
   'settings.plugins.permission.command': '命令',
   'settings.plugins.permission.theme': '主题',

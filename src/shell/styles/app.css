@@ -1462,6 +1462,11 @@ button {
   opacity: 0.5;
 }
 
+/* 插件列表上方是安装按钮行，示例 / 面板列表需要留出间距，避免贴在一起。 */
+.settings-plugins .component-sample-list {
+  margin-top: var(--space-base);
+}
+
 .settings-plugins[data-disabled='true'] .component-sample,
 .settings-plugins[data-disabled='true'] .settings-theme-actions {
   pointer-events: none;

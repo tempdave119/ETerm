@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
-import type { PluginPermission, PluginRecord, PluginSample } from '../../shared/plugins.ts';
+import { pluginPanelId, type PluginPermission, type PluginRecord, type PluginSample } from '../../shared/plugins.ts';
 import { commandForShellPreset, detectShellPreset, type LocalShellPreset } from '../../shared/local-shell.ts';
 import {
   TERMINAL_FONT_FAMILIES,
@@ -44,6 +44,9 @@ interface SettingsPanelProps {
   plugins: PluginRecord[];
   /** 随包示例插件（含是否已安装）。 */
   pluginSamples: PluginSample[];
+  /** 当前已停在停靠区里的面板 id，用于插件面板按钮的「已打开」状态。 */
+  openPluginPanelIds: ReadonlySet<string>;
+  onOpenPluginPanel(pluginId: string, panelId: string): void;
   pluginsBusy: boolean;
   pluginsNotice: string | null;
   onInstallPlugin(): void;
@@ -115,6 +118,8 @@ export function SettingsPanel({
   onOpenComponentsDir,
   plugins,
   pluginSamples,
+  openPluginPanelIds,
+  onOpenPluginPanel,
   pluginsBusy,
   pluginsNotice,
   onInstallPlugin,
@@ -792,6 +797,37 @@ export function SettingsPanel({
                       ))}
                     </div>
                   )}
+                  {/* 插件面板关掉后从这里重新打开；禁用或已打开时按钮置灰。 */}
+                  {plugins.some((plugin) => plugin.panels.length > 0) ? (
+                    <div className="component-sample-list" data-testid="plugin-panels">
+                      {plugins.flatMap((plugin) =>
+                        plugin.panels.map((panel) => {
+                          const id = pluginPanelId(plugin.id, panel.id);
+                          const open = openPluginPanelIds.has(id);
+                          return (
+                            <div className="component-sample" key={id} data-testid={`plugin-panel-row-${id}`}>
+                              <span className="component-sample__name">{panel.title}</span>
+                              <span className="component-sample__protocol">{plugin.id}</span>
+                              <span className="component-sample__status">
+                                {open ? t('settings.plugins.panelOpened') : ''}
+                              </span>
+                              <span className="component-sample__actions">
+                                <button
+                                  className="link-button"
+                                  type="button"
+                                  disabled={!pluginsEnabled || !plugin.enabled || open || pluginsBusy}
+                                  data-testid={`plugin-panel-open-${id}`}
+                                  onClick={() => onOpenPluginPanel(plugin.id, panel.id)}
+                                >
+                                  {t('settings.plugins.openPanel')}
+                                </button>
+                              </span>
+                            </div>
+                          );
+                        }),
+                      )}
+                    </div>
+                  ) : null}
                   {plugins.length > 0 ? (
                     <p className="form-hint">
                       {plugins

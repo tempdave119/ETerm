@@ -487,11 +487,13 @@ export function App() {
       }
       if (!result.value) return;
       await loadPlugins();
+      // 从目录安装也可能装的正是示例 id，示例列表的已安装态需要同步。
+      await loadPluginSamples();
       setPluginsNotice(t('settings.plugins.installDone', { name: result.value.id }));
     } finally {
       setPluginsBusy(false);
     }
-  }, [loadPlugins]);
+  }, [loadPluginSamples, loadPlugins]);
 
   const installPluginSample = useCallback(
     async (id: string): Promise<void> => {
@@ -550,12 +552,13 @@ export function App() {
           return;
         }
         await loadPlugins();
+        await loadPluginSamples();
         setPluginsNotice(t('settings.plugins.uninstallDone', { name: id }));
       } finally {
         setPluginsBusy(false);
       }
     },
-    [loadPlugins],
+    [loadPluginSamples, loadPlugins],
   );
 
   const openPluginsDir = useCallback(async (): Promise<void> => {
@@ -707,6 +710,29 @@ export function App() {
       applyPanelLayout(movePanel(current, id, defaultDock && defaultDock !== 'overlay' ? defaultDock : 'right'), true);
     },
     [applyPanelLayout],
+  );
+
+  // 插件面板关掉后没有入口再打开：设置里每个已启用插件的面板都有一个「打开面板」按钮。
+  const openPluginPanel = useCallback(
+    (pluginId: string, panelId: string): void => {
+      const plugin = plugins.find((item) => item.id === pluginId);
+      const panel = plugin?.panels.find((item) => item.id === panelId);
+      if (!plugin?.enabled || !panel) return;
+      const id = pluginPanelId(pluginId, panelId);
+      if (panelDockOf(panelLayoutRef.current, id)) return;
+      applyPanelLayout(movePanel(panelLayoutRef.current, id, panel.defaultDock ?? 'right'), true);
+    },
+    [plugins, applyPanelLayout],
+  );
+
+  const openPanelIds = useMemo(
+    () =>
+      new Set([
+        ...panelLayout.docks.left,
+        ...panelLayout.docks.right,
+        ...panelLayout.docks.bottom,
+      ]),
+    [panelLayout],
   );
 
   const movePanelTo = useCallback(
@@ -1641,6 +1667,8 @@ export function App() {
           onOpenComponentsDir={() => void openComponentsDir()}
           plugins={plugins}
           pluginSamples={pluginSamples}
+          openPluginPanelIds={openPanelIds}
+          onOpenPluginPanel={(pluginId, panelId) => openPluginPanel(pluginId, panelId)}
           pluginsBusy={pluginsBusy}
           pluginsNotice={pluginsNotice}
           onInstallPlugin={() => void installPlugin()}

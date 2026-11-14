@@ -767,6 +767,32 @@ try {
     `document.querySelector('[data-testid="plugin-sample-s3-browser"]')?.dataset.installed`,
   );
   if (sampleInstalled !== 'true') throw new Error('S3 示例插件应显示已安装');
+  // 卸载示例插件后，示例列表要立即回到「未安装」，并能一键装回。
+  await evaluate(`window.confirm = () => true`);
+  await evaluate(`document.querySelector('[data-testid="plugin-uninstall-s3-browser"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-row-s3-browser"]') === null`),
+    5_000,
+    'S3 插件卸载',
+  );
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="plugin-sample-s3-browser"]')?.dataset.installed === 'false'`,
+      ),
+    5_000,
+    '示例标记为未安装',
+  );
+  await evaluate(`document.querySelector('[data-testid="plugin-sample-install-s3-browser"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="plugin-sample-s3-browser"]')?.dataset.installed === 'true'`,
+      ),
+    5_000,
+    '示例重新安装',
+  );
+  await evaluate(`delete window.confirm`);
   const pluginSettingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(
     'tmp/plugin-settings-smoke.png',
@@ -827,6 +853,30 @@ try {
     },
     5_000,
     '插件面板消息桥',
+  );
+
+  // 关掉插件面板后，设置里的「打开面板」要能把它放回停靠区。
+  await evaluate(`document.querySelector('[data-testid="panel-close-plugin:smoke-plugin:smoke"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') === null`),
+    5_000,
+    '插件面板关闭',
+  );
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('[data-testid="plugin-panel-open-plugin:smoke-plugin:smoke"]')?.disabled === false`,
+      ),
+    5_000,
+    '插件面板入口可点击',
+  );
+  await evaluate(
+    `document.querySelector('[data-testid="plugin-panel-open-plugin:smoke-plugin:smoke"]').click()`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`),
+    5_000,
+    '插件面板重新打开',
   );
 
   // S3 插件：自检命令与面板消息桥打 mock 对象存储。
