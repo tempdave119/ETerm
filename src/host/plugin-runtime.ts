@@ -63,6 +63,16 @@ export class PluginRuntime {
     }
   }
 
+  /** 总开关：关闭时释放所有插件，开启时重新加载；可反复切换。 */
+  async setEnabled(enabled: boolean): Promise<void> {
+    if (!enabled) {
+      this.dispose();
+      return;
+    }
+    if (this.#loaded.length > 0) return;
+    await this.start();
+  }
+
   listCommands(): PluginCommandInfo[] {
     return this.#loaded.flatMap((plugin) =>
       [...plugin.commands.keys()].map((commandId) => ({

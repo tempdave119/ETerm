@@ -31,9 +31,13 @@ export function registerPluginScheme(): void {
  * 插件面板通过 iframe 加载 `eterm-plugin://<pluginId>/panel.html`。
  * 只服务启用插件的目录内文件；路径穿越与非法 id 一律拒绝。
  */
-export function registerPluginProtocol(store: PluginStore): () => void {
+export function registerPluginProtocol(
+  store: PluginStore,
+  isEnabled: () => Promise<boolean>,
+): () => void {
   protocol.handle(PLUGIN_SCHEME, async (request) => {
     try {
+      if (!(await isEnabled())) return new Response('forbidden', { status: 403 });
       const url = new URL(request.url);
       const root = await store.panelRoot(url.hostname);
       if (!root) return new Response('not found', { status: 404 });

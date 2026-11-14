@@ -256,6 +256,10 @@ async function createWindow(): Promise<void> {
       transferQueue?.setMaxConcurrent(config.transfer.concurrency);
       // 改键后菜单提示同步；不动已打开的面板。
       applyMenu(config);
+      // 插件总开关即时生效：关闭释放所有插件，开启重新加载。
+      void pluginRuntime?.setEnabled(config.plugins.enabled).catch((error: unknown) => {
+        console.warn('[plugins] 切换插件总开关失败', error);
+      });
     });
     void settings.get().then((config) => transferQueue?.setMaxConcurrent(config.transfer.concurrency));
   }
@@ -306,6 +310,7 @@ void app.whenReady().then(async () => {
   }
   // 冒烟可用 ETERM_USER_DATA 指向临时目录，避免污染真实配置与 known_hosts。
   const baseDir = process.env.ETERM_USER_DATA ?? app.getPath('userData');
+  const configStore = new ConfigStore({ baseDir });
   const pluginStore = new PluginStore({
     baseDir,
     logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
@@ -314,15 +319,20 @@ void app.whenReady().then(async () => {
     store: pluginStore,
     logger: (message, detail) => console.warn(`[plugins] ${message}`, detail ?? ''),
   });
-  await runtime.start();
+  const initialConfig = await configStore.get();
+  if (initialConfig.plugins.enabled) await runtime.start();
   pluginRuntime = runtime;
   const services: AppServices = {
     connections: new ConnectionStore({ baseDir }),
-    config: new ConfigStore({ baseDir }),
+    config: configStore,
     credentials: new CredentialStore({ baseDir, codec: createSafeStorageCodec() }),
     knownHosts: new KnownHostsStore({ baseDir }),
     layouts: new LayoutStore({ baseDir }),
-    themes: new ThemeStore({ baseDir, pluginThemeDirs: () => pluginStore.themeDirs() }),
+    themes: new ThemeStore({
+      baseDir,
+      pluginThemeDirs: async () =>
+        (await configStore.get()).plugins.enabled ? pluginStore.themeDirs() : [],
+    }),
     windowState: new WindowStateStore({ baseDir }),
   };
   appServices = services;
@@ -357,8 +367,11 @@ void app.whenReady().then(async () => {
     store: pluginStore,
     runtime,
     pluginsDir: path.join(baseDir, 'plugins'),
+    isEnabled: async () => (await configStore.get()).plugins.enabled,
   });
-  disposePluginProtocol = registerPluginProtocol(pluginStore);
+  disposePluginProtocol = registerPluginProtocol(pluginStore, async () => {
+    return (await configStore.get()).plugins.enabled;
+  });
 
   disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);

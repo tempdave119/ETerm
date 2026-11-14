@@ -160,10 +160,18 @@ export function App() {
   const locale = normalizeLocale(effectiveConfig?.ui.language ?? 'system', navigator.language);
   setLocale(locale);
   // 快捷键生效表随草稿变化，设置面板里改完能立即预览冲突。
-  const commands = useMemo(() => mergeCommands(pluginCommands), [pluginCommands]);
+  const pluginsEnabled = effectiveConfig?.plugins.enabled ?? false;
+  const commands = useMemo(
+    () => mergeCommands(pluginsEnabled ? pluginCommands : []),
+    [pluginCommands, pluginsEnabled],
+  );
   const shortcuts = useMemo(
-    () => resolveShortcuts(effectiveConfig?.shortcuts.overrides ?? {}, pluginCommands),
-    [effectiveConfig?.shortcuts.overrides, pluginCommands],
+    () =>
+      resolveShortcuts(
+        effectiveConfig?.shortcuts.overrides ?? {},
+        pluginsEnabled ? pluginCommands : [],
+      ),
+    [effectiveConfig?.shortcuts.overrides, pluginsEnabled, pluginCommands],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -519,6 +527,15 @@ export function App() {
     if (!result.ok) setError(result.error);
   }, []);
 
+  // 开关变化后重新拉插件命令与主题；首次挂载不重复拉（已有各自初始化 effect）。
+  const pluginsEnabledRef = useRef(pluginsEnabled);
+  useEffect(() => {
+    if (pluginsEnabledRef.current === pluginsEnabled) return;
+    pluginsEnabledRef.current = pluginsEnabled;
+    void loadPlugins();
+    void reloadThemes();
+  }, [pluginsEnabled, loadPlugins, reloadThemes]);
+
   const saveConfig = useCallback((next: AppConfig, onSaved?: () => void): void => {
     setSettingsError(null);
     // 乐观更新，下一次设置改动基于最新值克隆；保存本身串行执行。
@@ -543,6 +560,16 @@ export function App() {
         pendingConfigSaves.current -= 1;
       });
   }, []);
+
+  /** 插件总开关即时保存：不参与设置草稿，关掉后所有插件能力立刻失效。 */
+  const setPluginsEnabled = useCallback(
+    (enabled: boolean): void => {
+      const current = configRef.current;
+      if (!current || current.plugins.enabled === enabled) return;
+      saveConfig({ ...current, plugins: { enabled } });
+    },
+    [saveConfig],
+  );
 
   // 首次启动引导只看一次：关闭或执行任一动作后写标记。
   const dismissOnboarded = useCallback((): void => {
@@ -607,9 +634,9 @@ export function App() {
     setNotice(t('settings.resetLayoutDone'));
   }, [applyPanelLayout]);
 
-  // 已启用插件的面板只在第一次见到时并入布局；用户主动关闭后重开应用不再强行加回。
+  // 已启用插件的面板只在第一次见到时并入布局；总开关关闭或用户主动关闭后都不再强行加回。
   useEffect(() => {
-    if (!layoutReady || plugins.length === 0) return;
+    if (!layoutReady || !pluginsEnabled || plugins.length === 0) return;
     const initialized = readPanelInitSet();
     const current = panelLayoutRef.current;
     let next = current;
@@ -625,7 +652,7 @@ export function App() {
     }
     if (added.length > 0) writePanelInitSet([...initialized, ...added]);
     if (next !== current) applyPanelLayout(next, true);
-  }, [plugins, layoutReady, applyPanelLayout]);
+  }, [plugins, layoutReady, pluginsEnabled, applyPanelLayout]);
 
   useEffect(() => {
     if (!notice) return;
@@ -1247,6 +1274,7 @@ export function App() {
   };
 
   const pluginPanelMeta = (id: string): { pluginId: string; title: string } | null => {
+    if (!pluginsEnabled) return null;
     const parsed = parsePluginPanelId(id);
     if (!parsed) return null;
     const plugin = plugins.find((item) => item.id === parsed.pluginId && item.enabled);
@@ -1574,6 +1602,8 @@ export function App() {
           onSetPluginEnabled={(id, enabled) => void setPluginEnabled(id, enabled)}
           onUninstallPlugin={(id) => void uninstallPlugin(id)}
           onOpenPluginsDir={() => void openPluginsDir()}
+          pluginsEnabled={pluginsEnabled}
+          onSetPluginsEnabled={(enabled) => setPluginsEnabled(enabled)}
           commands={commands}
         />
       ) : null}

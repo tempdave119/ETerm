@@ -12,6 +12,8 @@ interface PluginsIpcOptions {
   store: PluginStore;
   runtime: PluginRuntime;
   pluginsDir: string;
+  /** 插件总开关；关闭时拒绝安装 / 启停 / 卸载，只允许查看列表。 */
+  isEnabled: () => Promise<boolean>;
 }
 
 function failure(error: unknown): IpcResult<never> {
@@ -23,6 +25,12 @@ function readId(raw: unknown): string {
 }
 
 const PANEL_MESSAGE_MAX = 256 * 1024;
+
+async function requireEnabled(options: PluginsIpcOptions): Promise<void> {
+  if (!(await options.isEnabled())) {
+    throw new Error('插件未启用：先在 设置 → 插件 打开总开关');
+  }
+}
 
 /** 插件的安装 / 启停 / 卸载；安装走系统目录选择框，不接受渲染层传路径。 */
 export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
@@ -36,6 +44,7 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
 
   ipcMain.handle(PLUGINS_IPC.install, async (): Promise<IpcResult<PluginRecord | null>> => {
     try {
+      await requireEnabled(options);
       const picked = await dialog.showOpenDialog({
         title: t('plugins.pickTitle'),
         properties: ['openDirectory'],
@@ -52,6 +61,7 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
     PLUGINS_IPC.setEnabled,
     async (_event, raw): Promise<IpcResult<null>> => {
       try {
+        await requireEnabled(options);
         const value = readRecord(raw, '插件启停参数');
         if (typeof value.enabled !== 'boolean') throw new Error('enabled 必须是布尔值');
         await options.store.setEnabled(readId(value.id), value.enabled);
@@ -64,6 +74,7 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
 
   ipcMain.handle(PLUGINS_IPC.uninstall, async (_event, raw): Promise<IpcResult<null>> => {
     try {
+      await requireEnabled(options);
       await options.store.uninstall(readId(raw));
       return { ok: true, value: null };
     } catch (error) {
@@ -84,6 +95,8 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
 
   ipcMain.handle(PLUGINS_IPC.listCommands, async (): Promise<IpcResult<PluginCommandInfo[]>> => {
     try {
+      // 总开关刚打开时 runtime 可能还在异步加载，这里等一次，避免渲染层拿到空列表。
+      if (await options.isEnabled()) await options.runtime.setEnabled(true);
       return { ok: true, value: options.runtime.listCommands() };
     } catch (error) {
       return failure(error);

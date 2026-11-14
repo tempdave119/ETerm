@@ -371,7 +371,10 @@ try {
     const times = [...document.querySelectorAll('.terminal-gutter__time')].map((el) => el.textContent ?? '');
     return { first: nums[0], last: nums[nums.length - 1], count: nums.length, times };
   })()`);
-  if (!(gutter.count > 0) || !(gutter.last > gutter.first)) throw new Error('行号未递增或为空');
+  if (!(gutter.count > 0) || !(gutter.last > gutter.first)) {
+    const tail = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`)).slice(-200);
+    throw new Error(`行号未递增或为空：${JSON.stringify(gutter)} / 终端尾部=${JSON.stringify(tail)}`);
+  }
   if (!gutter.times.every((text) => text === '' || /^\[\d{2}:\d{2}:\d{2}\]$/.test(text))) {
     throw new Error(`时间格式不正确：${JSON.stringify(gutter.times.slice(0, 3))}`);
   }
@@ -513,34 +516,6 @@ try {
   );
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
 
-  // 插件命令：⌘K 搜到插件命令并执行，副作用落到临时 userData。
-  await evaluate(
-    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK', key: 'k', metaKey: true, bubbles: true }))`,
-  );
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="command-palette"]') !== null`),
-    5_000,
-    '插件命令面板',
-  );
-  await evaluate(setInputScript('#command-query', 'Plugin Hello'));
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]') !== null`),
-    5_000,
-    '插件命令过滤',
-  );
-  await evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]').click()`);
-  await waitFor(
-    async () => {
-      try {
-        return (await readFile(join(dataDir, 'plugin-command-ran.txt'), 'utf8')) === 'ok';
-      } catch {
-        return false;
-      }
-    },
-    5_000,
-    '插件命令执行',
-  );
-
   // 设置：左侧分类导航；config 走草稿（即时预览、取消回滚、保存才落盘），layout 即时。
   const colsAtDefaultFont = (await evaluate(`window.__etermDebug.size(${JSON.stringify(sessionId)})`)).cols;
   const readConfig = () =>
@@ -558,6 +533,7 @@ try {
     terminal: '#settings-font-size',
     connection: '#settings-keepalive',
     extensions: '[data-testid="component-sample-telnet"]',
+    plugins: '[data-testid="settings-plugins-enabled"]',
     transfer: '[data-testid="settings-files-default"]',
     shortcuts: '[data-testid="shortcut-row-terminal.new"]',
     layout: '[data-testid="settings-dock-size-left"]',
@@ -576,7 +552,7 @@ try {
   );
   if (settingsWidth < 710) throw new Error(`设置面板宽度不足：${settingsWidth}`);
   const navCount = await evaluate(`document.querySelectorAll('.settings-nav__item').length`);
-  if (navCount !== 7) throw new Error(`设置分类应为 7 个，实际 ${navCount}`);
+  if (navCount !== 8) throw new Error(`设置分类应为 8 个，实际 ${navCount}`);
 
   await openSection('terminal');
   await evaluate(setSelectScript('#settings-font-size', '18'));
@@ -649,11 +625,6 @@ try {
     5_000,
     '外部主题出现在下拉',
   );
-  await waitFor(
-    () => evaluate(`document.querySelector('#settings-theme option[value="ext:plugin-ocean"]') !== null`),
-    5_000,
-    '插件主题出现在下拉',
-  );
   const brokenThemeVisible = await evaluate(
     `document.querySelector('#settings-theme option[value="ext:broken"]') !== null`,
   );
@@ -681,84 +652,6 @@ try {
 
   // 能力包：示例组件默认未安装；一键安装后状态变化并落到临时 userData。
   await openSection('extensions');
-
-  // 插件：预置插件应出现在列表，可禁用（状态落盘）与卸载（目录删除）。
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`),
-    5_000,
-    '插件面板出现',
-  );
-  await waitFor(
-    async () => {
-      try {
-        return (await readFile(join(dataDir, 'panel-message-ran.txt'), 'utf8')).includes('"ping":true');
-      } catch {
-        return false;
-      }
-    },
-    5_000,
-    '插件面板消息桥',
-  );
-
-  // S3 插件：自检命令与面板消息桥打 mock 对象存储。
-  const s3Run = await evaluate(`window.eterm.runPluginCommand('plugin:s3-browser:selftest')`);
-  if (!s3Run?.ok) throw new Error(`S3 自检命令失败：${s3Run?.error?.message}`);
-  await waitFor(
-    async () => {
-      try {
-        return (await readFile(join(dataDir, 's3-selftest.json'), 'utf8')).includes('docs/a.txt');
-      } catch {
-        return false;
-      }
-    },
-    10_000,
-    'S3 自检落盘',
-  );
-  const s3List = await evaluate(
-    `window.eterm.sendPluginPanelMessage('s3-browser','browser',{ action: 'list', config: { endpoint: ${JSON.stringify(s3Endpoint)}, bucket: 'demo', accessKey: 'AK', secretKey: 'SK' } })`,
-  );
-  if (!s3List?.ok || !JSON.stringify(s3List.value).includes('docs/a.txt')) {
-    throw new Error('S3 面板消息未返回对象');
-  }
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),
-    5_000,
-    '插件列表',
-  );
-  const pluginEnabled = await evaluate(
-    `document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled`,
-  );
-  if (pluginEnabled !== 'true') throw new Error(`插件初始状态异常：${pluginEnabled}`);
-  await evaluate(`document.querySelector('[data-testid="plugin-toggle-smoke-plugin"]').click()`);
-  await waitFor(
-    () =>
-      evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled === 'false'`),
-    5_000,
-    '插件禁用',
-  );
-  const pluginState = JSON.parse(await readFile(join(dataDir, 'plugins.json'), 'utf8'));
-  if (!pluginState.disabled.includes('smoke-plugin')) throw new Error('插件禁用状态未落盘');
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') === null`),
-    5_000,
-    '禁用后插件面板消失',
-  );
-
-  await evaluate(`window.confirm = () => true`);
-  await evaluate(`document.querySelector('[data-testid="plugin-uninstall-smoke-plugin"]').click()`);
-  await waitFor(
-    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') === null`),
-    5_000,
-    '插件卸载',
-  );
-  await evaluate(`delete window.confirm`);
-  let pluginRemoved = false;
-  try {
-    await stat(join(dataDir, 'plugins', 'smoke-plugin'));
-  } catch {
-    pluginRemoved = true;
-  }
-  if (!pluginRemoved) throw new Error('卸载后插件目录仍存在');
 
   const beforeInstall = await evaluate(
     `document.querySelector('[data-testid="component-sample-telnet"]')?.dataset.installed`,
@@ -813,6 +706,158 @@ try {
     10_000,
     '重新安装示例组件',
   );
+
+  // 插件：默认停用，开启总开关后才加载能力与开放管理。
+  await openSection('plugins');
+  const globalSwitch = await evaluate(
+    `document.querySelector('[data-testid="settings-plugins-enabled"]')?.checked`,
+  );
+  if (globalSwitch !== false) throw new Error('插件总开关默认应为关闭');
+  const pluginDisabledHint = await evaluate(
+    `document.querySelector('[data-testid="plugins-disabled"]') !== null`,
+  );
+  if (!pluginDisabledHint) throw new Error('插件关闭时应提示先启用');
+  const panelBeforeEnable = await evaluate(
+    `document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`,
+  );
+  if (panelBeforeEnable) throw new Error('插件默认停用时不应渲染面板');
+
+  await evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]')?.checked === true`),
+    5_000,
+    '打开插件总开关',
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),
+    10_000,
+    '插件列表',
+  );
+
+  // 插件命令：总开关打开后命令才进入 ⌘K。
+  await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="settings-panel"]') === null`),
+    5_000,
+    '关闭设置测试插件命令',
+  );
+  await evaluate(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyK', key: 'k', metaKey: true, bubbles: true }))`,
+  );
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-palette"]') !== null`),
+    5_000,
+    '插件命令面板',
+  );
+  await evaluate(setInputScript('#command-query', 'Plugin Hello'));
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]') !== null`),
+    5_000,
+    '插件命令过滤',
+  );
+  await evaluate(`document.querySelector('[data-testid="command-plugin:smoke-plugin:hello"]').click()`);
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 'plugin-command-ran.txt'), 'utf8')) === 'ok';
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '插件命令执行',
+  );
+  await openSettings();
+  await openSection('plugins');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`),
+    10_000,
+    '插件面板出现',
+  );
+  const enabledThemes = await evaluate(
+    `window.eterm.listThemes().then((result) => (result.ok ? result.value.map((theme) => theme.id) : []))`,
+  );
+  if (!enabledThemes.includes('plugin-ocean')) throw new Error('插件主题未随总开关加载');
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 'panel-message-ran.txt'), 'utf8')).includes('"ping":true');
+      } catch {
+        return false;
+      }
+    },
+    5_000,
+    '插件面板消息桥',
+  );
+
+  // S3 插件：自检命令与面板消息桥打 mock 对象存储。
+  const s3Run = await evaluate(`window.eterm.runPluginCommand('plugin:s3-browser:selftest')`);
+  if (!s3Run?.ok) throw new Error(`S3 自检命令失败：${s3Run?.error?.message}`);
+  await waitFor(
+    async () => {
+      try {
+        return (await readFile(join(dataDir, 's3-selftest.json'), 'utf8')).includes('docs/a.txt');
+      } catch {
+        return false;
+      }
+    },
+    10_000,
+    'S3 自检落盘',
+  );
+  const s3List = await evaluate(
+    `window.eterm.sendPluginPanelMessage('s3-browser','browser',{ action: 'list', config: { endpoint: ${JSON.stringify(s3Endpoint)}, bucket: 'demo', accessKey: 'AK', secretKey: 'SK' } })`,
+  );
+  if (!s3List?.ok || !JSON.stringify(s3List.value).includes('docs/a.txt')) {
+    throw new Error('S3 面板消息未返回对象');
+  }
+
+  const pluginEnabled = await evaluate(
+    `document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled`,
+  );
+  if (pluginEnabled !== 'true') throw new Error(`插件初始状态异常：${pluginEnabled}`);
+  await evaluate(`document.querySelector('[data-testid="plugin-toggle-smoke-plugin"]').click()`);
+  await waitFor(
+    () =>
+      evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]')?.dataset.enabled === 'false'`),
+    5_000,
+    '插件禁用',
+  );
+  const pluginState = JSON.parse(await readFile(join(dataDir, 'plugins.json'), 'utf8'));
+  if (!pluginState.disabled.includes('smoke-plugin')) throw new Error('插件禁用状态未落盘');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') === null`),
+    5_000,
+    '禁用后插件面板消失',
+  );
+
+  await evaluate(`window.confirm = () => true`);
+  await evaluate(`document.querySelector('[data-testid="plugin-uninstall-smoke-plugin"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') === null`),
+    5_000,
+    '插件卸载',
+  );
+  await evaluate(`delete window.confirm`);
+  let pluginRemoved = false;
+  try {
+    await stat(join(dataDir, 'plugins', 'smoke-plugin'));
+  } catch {
+    pluginRemoved = true;
+  }
+  if (!pluginRemoved) throw new Error('卸载后插件目录仍存在');
+
+  // 关闭总开关：面板与插件主题立即失效。
+  await evaluate(`document.querySelector('[data-testid="settings-plugins-enabled"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-s3-browser"]') === null`),
+    10_000,
+    '关闭插件开关后面板消失',
+  );
+  const disabledThemes = await evaluate(
+    `window.eterm.listThemes().then((result) => (result.ok ? result.value.map((theme) => theme.id) : []))`,
+  );
+  if (disabledThemes.includes('plugin-ocean')) throw new Error('关闭插件开关后插件主题仍在');
 
   // 取消：草稿丢弃，界面回到已保存值。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);

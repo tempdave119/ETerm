@@ -124,6 +124,26 @@ test('plugin_runtime_lists_nothing_when_plugin_disabled', async () => {
   assert.deepEqual(runtime.listCommands(), []);
 });
 
+test('plugin_runtime_set_enabled_loads_and_releases', async () => {
+  const { runtime } = await createRuntime(`
+    module.exports = {
+      activate(api) {
+        api.registerCommand('hello', () => {});
+      },
+    };
+  `);
+
+  assert.deepEqual(runtime.listCommands(), []);
+  await runtime.setEnabled(true);
+  assert.equal(runtime.listCommands().length, 1);
+
+  await runtime.setEnabled(false);
+  assert.deepEqual(runtime.listCommands(), []);
+
+  await runtime.setEnabled(true);
+  assert.equal(runtime.listCommands().length, 1);
+});
+
 test('plugin_runtime_routes_panel_messages', async () => {
   const { runtime } = await createRuntime(`
     module.exports = {

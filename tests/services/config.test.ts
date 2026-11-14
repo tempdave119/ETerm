@@ -40,6 +40,24 @@ test('config_save_persists_after_reload', async () => {
   assert.deepEqual(await reloaded.get(), next);
 });
 
+test('config_plugins_are_disabled_by_default_and_persist', async () => {
+  const { dir, store } = await createStore();
+  assert.equal((await store.get()).plugins.enabled, false);
+
+  const next = defaultConfig();
+  next.plugins.enabled = true;
+  await store.save(next);
+
+  const reloaded = new ConfigStore({ baseDir: dir, logger: () => {} });
+  assert.equal((await reloaded.get()).plugins.enabled, true);
+});
+
+test('config_plugins_missing_field_falls_back_to_disabled', () => {
+  const parsed = parseConfigFile({ version: 1, config: { ...defaultConfig(), plugins: undefined } });
+
+  assert.equal(parsed.config.plugins.enabled, false);
+});
+
 test('config_reset_restores_defaults', async () => {
   const { store } = await createStore();
   const next = defaultConfig();
@@ -138,6 +156,7 @@ test('config_input_accepts_valid_full_config', () => {
     transfer: { concurrency: 4 },
     ui: { density: 'compact', theme: 'light', language: 'en-US', monitorProcessSort: 'cpu', onboarded: true },
     files: { openByDefault: false },
+    plugins: { enabled: false },
     shortcuts: { overrides: { 'files.toggle': { code: 'KeyG', shift: true }, 'panel.monitor': null } },
   };
 

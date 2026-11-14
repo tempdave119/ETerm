@@ -67,6 +67,10 @@ export interface AppConfig {
   files: {
     openByDefault: boolean;
   };
+  plugins: {
+    /** 插件总开关：默认关闭；开启后才加载插件能力并允许安装 / 启停 / 卸载。 */
+    enabled: boolean;
+  };
   shortcuts: {
     /** 只存与命令注册表默认值的差异；null 为解绑。 */
     overrides: ShortcutOverrides;
@@ -104,6 +108,7 @@ export function defaultConfig(): AppConfig {
     transfer: { concurrency: 1 },
     ui: { density: 'comfortable', theme: 'system', language: 'system', monitorProcessSort: 'memory', onboarded: false },
     files: { openByDefault: true },
+    plugins: { enabled: false },
     shortcuts: { overrides: {} },
   };
 }
@@ -134,6 +139,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
+  const plugins = asRecord(record.plugins);
   const shortcuts = asRecord(record.shortcuts);
 
   return {
@@ -178,6 +184,7 @@ export function sanitizeConfig(value: unknown): AppConfig {
       openByDefault:
         typeof files.openByDefault === 'boolean' ? files.openByDefault : defaults.files.openByDefault,
     },
+    plugins: { enabled: readBoolean(plugins.enabled, defaults.plugins.enabled) },
     shortcuts: { overrides: readShortcuts(shortcuts.overrides) },
   };
 }
@@ -193,6 +200,7 @@ export function parseConfigInput(value: unknown): AppConfig {
   const transfer = asRecord(record.transfer);
   const ui = asRecord(record.ui);
   const files = asRecord(record.files);
+  const plugins = asRecord(record.plugins);
   const shortcuts = asRecord(record.shortcuts);
 
   return {
@@ -222,6 +230,7 @@ export function parseConfigInput(value: unknown): AppConfig {
       onboarded: requireBoolean(ui.onboarded, '首次启动引导'),
     },
     files: { openByDefault: requireBoolean(files.openByDefault, '默认展开文件面板') },
+    plugins: { enabled: requireBoolean(plugins.enabled, '插件开关') },
     shortcuts: { overrides: requireShortcuts(shortcuts.overrides) },
   };
 }
