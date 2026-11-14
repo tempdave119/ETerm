@@ -229,6 +229,7 @@ export const enUS: Record<MessageKey, string> = {
   'tree.connecting': 'Connecting…',
   'tree.editAria': 'Edit {name}',
   'tree.deleteAria': 'Delete {name}',
+  'tree.deleteGroupAria': 'Delete group {name}',
 
   // 文件面板
   'files.title': 'Files',

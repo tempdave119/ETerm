@@ -228,6 +228,7 @@ export const zhCN = {
   'tree.connecting': '连接中…',
   'tree.editAria': '编辑 {name}',
   'tree.deleteAria': '删除 {name}',
+  'tree.deleteGroupAria': '删除分组 {name}',
 
   // 文件面板
   'files.title': '文件',

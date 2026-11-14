@@ -20,6 +20,7 @@ interface SessionTreeProps {
   onEdit(connection: ConnectionRecord): void;
   onDelete(connection: ConnectionRecord): void;
   onAddGroup(name: string): void;
+  onDeleteGroup(group: GroupRecord): void;
   onReorder(orderedIds: string[]): void;
   canPanelMoveUp?: boolean;
   canPanelMoveDown?: boolean;
@@ -40,6 +41,7 @@ export function SessionTree({
   onEdit,
   onDelete,
   onAddGroup,
+  onDeleteGroup,
   onReorder,
   canPanelMoveUp,
   canPanelMoveDown,
@@ -157,14 +159,15 @@ export function SessionTree({
       ) : null}
 
       <div className="session-tree__list">
-        {connections.length === 0 ? (
+        {/* 分组独立于连接存在：组内连接删光后仍要显示空组，否则组名被占用却无从操作。 */}
+        {connections.length === 0 && groups.length === 0 ? (
           <div className="tree-empty">
             <span>{t('tree.empty')}</span>
             <button className="button button--primary" type="button" onClick={onNew}>
               {t('tree.new')}
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : keyword && filtered.length === 0 ? (
           <div className="tree-empty">
             <span>{t('tree.noMatch')}</span>
           </div>
@@ -176,11 +179,23 @@ export function SessionTree({
               const isCollapsed = !keyword && collapsed.has(group.id);
               return (
                 <div key={group.id} className="tree-group">
-                  <button className="tree-group__header" type="button" onClick={() => toggleGroup(group.id)}>
-                    <Folder size={16} strokeWidth={1.5} />
-                    <span className="tree-group__name">{group.name}</span>
-                    <span className="tree-group__count">{children.length}</span>
-                  </button>
+                  {/* 外层用 div：组头里要放删除按钮，button 不能嵌套 button。 */}
+                  <div className="tree-group__header">
+                    <button className="tree-group__toggle" type="button" onClick={() => toggleGroup(group.id)}>
+                      <Folder size={16} strokeWidth={1.5} />
+                      <span className="tree-group__name">{group.name}</span>
+                      <span className="tree-group__count">{children.length}</span>
+                    </button>
+                    <button
+                      className="icon-button tree-group__delete"
+                      type="button"
+                      title={t('tree.deleteGroup')}
+                      aria-label={t('tree.deleteGroupAria', { name: group.name })}
+                      onClick={() => onDeleteGroup(group)}
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
                   {isCollapsed
                     ? null
                     : children.map((connection) => (

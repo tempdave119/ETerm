@@ -570,14 +570,35 @@ button {
   width: 100%;
   height: var(--row-height);
   padding: 0 var(--space-base) 0 var(--space-container);
-  border: 0;
-  background: none;
   color: var(--text-secondary);
-  text-align: left;
 }
 
 .tree-group__header:hover {
   background: var(--hover-subtle);
+}
+
+.tree-group__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.tree-group__delete {
+  opacity: 0;
+}
+
+.tree-group__header:hover .tree-group__delete,
+.tree-group__header:focus-within .tree-group__delete {
+  opacity: 1;
 }
 
 .tree-group__header--static {

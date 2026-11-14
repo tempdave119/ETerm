@@ -848,6 +848,21 @@ export function App() {
     [refresh],
   );
 
+  const deleteGroup = useCallback(
+    async (group: GroupRecord): Promise<void> => {
+      const confirmed = window.confirm(t('tree.deleteGroupConfirm', { name: group.name }));
+      if (!confirmed) return;
+
+      const result = await window.eterm.deleteGroup(group.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await refresh();
+    },
+    [refresh],
+  );
+
   const reorderConnections = useCallback(
     async (orderedIds: string[]): Promise<void> => {
       const result = await window.eterm.reorderConnections(orderedIds);
@@ -1100,6 +1115,7 @@ export function App() {
             onEdit={(connection) => void openEditForm(connection)}
             onDelete={(connection) => void removeConnection(connection)}
             onAddGroup={(name) => void addGroup(name)}
+            onDeleteGroup={(group) => void deleteGroup(group)}
             onReorder={(orderedIds) => void reorderConnections(orderedIds)}
             {...panelChrome('sessions', dock)}
           />
