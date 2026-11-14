@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { isPluginApiCompatible, parsePluginManifest } from '../../src/shared/plugins.ts';
+import { isPluginApiCompatible, parsePluginManifest, parsePluginPanelId, pluginPanelId, resolvePluginAsset } from '../../src/shared/plugins.ts';
 import { PluginStore } from '../../src/services/plugins/store.ts';
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -147,4 +147,34 @@ test('plugins_store_rejects_incompatible_api', async () => {
   const source = await writePlugin(join(base, 'source', 'demo'), { apiVersion: '^9.0.0' });
 
   await assert.rejects(store.install(source), /不兼容/);
+});
+
+test('plugins_panel_ids_roundtrip', () => {
+  assert.equal(pluginPanelId('demo', 's3'), 'plugin:demo:s3');
+  assert.deepEqual(parsePluginPanelId('plugin:demo:s3'), { pluginId: 'demo', panelId: 's3' });
+  assert.equal(parsePluginPanelId('plugin:demo'), null);
+  assert.equal(parsePluginPanelId('plugin:Demo:s3'), null);
+  assert.equal(parsePluginPanelId('sessions'), null);
+});
+
+test('plugins_asset_path_rejects_traversal', () => {
+  const root = '/tmp/plugins/demo';
+
+  assert.equal(resolvePluginAsset(root, '/panel.html'), '/tmp/plugins/demo/panel.html');
+  assert.equal(resolvePluginAsset(root, '/assets/app.js'), '/tmp/plugins/demo/assets/app.js');
+  assert.equal(resolvePluginAsset(root, '/../secret'), null);
+  assert.equal(resolvePluginAsset(root, '/a/../b'), null);
+  assert.equal(resolvePluginAsset(root, '/a//b'), null);
+  assert.equal(resolvePluginAsset(root, '/'), null);
+});
+
+test('plugins_store_panel_root_respects_enabled', async () => {
+  const { base, store } = await createStore();
+  await store.install(await writePlugin(join(base, 'source', 'demo')));
+
+  const root = await store.panelRoot('demo');
+  assert.ok(root?.endsWith(join('data', 'plugins', 'demo')));
+
+  await store.setEnabled('demo', false);
+  assert.equal(await store.panelRoot('demo'), null);
 });

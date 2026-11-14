@@ -4,6 +4,7 @@ import {
   DOCKABLE_PANEL_IDS,
   defaultPanelLayout,
   isPanelOpen,
+  isPluginPanelId,
   movePanel,
   movePanelWithinDock,
   panelDockOf,
@@ -197,4 +198,18 @@ test('panels_move_within_dock_is_noop_at_boundaries', () => {
 test('panels_dockable_ids_cover_four_panels', () => {
   assert.deepEqual([...DOCKABLE_PANEL_IDS], ['sessions', 'files', 'monitor', 'transfers']);
   assert.equal(panelById('monitor')?.defaultDock, 'right');
+});
+
+test('panels_parse_keeps_plugin_panel_ids', () => {
+  const layout = parsePanelLayout({
+    docks: { left: ['sessions'], right: ['files', 'plugin:demo:s3'], bottom: [] },
+    dividers: { left: [], right: [0.5], bottom: [] },
+    sizes: { left: 220, right: 300, bottom: 160 },
+  });
+
+  assert.deepEqual(layout.docks.right, ['files', 'plugin:demo:s3']);
+  assert.deepEqual(layout.dividers.right, [0.5]);
+  assert.equal(isPluginPanelId('plugin:demo:s3'), true);
+  assert.equal(isPluginPanelId('plugin:Demo:s3'), false);
+  assert.equal(isPluginPanelId('files'), false);
 });

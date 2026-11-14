@@ -105,6 +105,19 @@ export class PluginStore {
     });
   }
 
+  /** 插件面板与静态资源通过自定义协议读取；禁用或 manifest 无效时返回 null。 */
+  async panelRoot(id: string): Promise<string | null> {
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return null;
+    const state = await this.#state();
+    if (state.disabled.includes(id)) return null;
+    try {
+      const manifest = await this.#readManifest(join(this.#pluginsDir, id));
+      return manifest.id === id ? join(this.#pluginsDir, id) : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** 读并校验插件 manifest；字段错误带上具体原因，安装时直接展示给用户。 */
   async #readManifest(directory: string): Promise<PluginManifest> {
     const file = join(directory, 'manifest.json');

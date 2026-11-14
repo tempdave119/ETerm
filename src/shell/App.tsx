@@ -11,7 +11,7 @@ import type {
   TransferView,
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
-import type { PluginRecord } from '../shared/plugins.ts';
+import { parsePluginPanelId, pluginPanelId, type PluginRecord } from '../shared/plugins.ts';
 import type { ThemeDefinition } from '../shared/theme.ts';
 import { applyUiTheme, resolveTheme, terminalThemeFor } from './theme.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
@@ -47,6 +47,7 @@ import { HostKeyDialog, type HostKeyPrompt } from './components/HostKeyDialog.ts
 import { LocalShellDialog } from './components/LocalShellDialog.tsx';
 import { MonitorPanel } from './components/MonitorPanel.tsx';
 import { PaneLayout } from './components/PaneLayout.tsx';
+import { PluginPanel } from './components/PluginPanel.tsx';
 import { SessionTree } from './components/SessionTree.tsx';
 import { SettingsPanel } from './components/SettingsPanel.tsx';
 import type { TerminalHandle } from './components/TerminalView.tsx';
@@ -99,6 +100,7 @@ export function App() {
   // state 更新要等下一次渲染，同一帧内连点拦不住，所以用 ref 做互斥锁。
   const connectingRef = useRef<string | null>(null);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>(defaultPanelLayout);
+  const [layoutReady, setLayoutReady] = useState(false);
   // 拖动分隔时用 ref 拿最新布局，避开闭包里的旧值。
   const panelLayoutRef = useRef<PanelLayout>(defaultPanelLayout());
   const [transfers, setTransfers] = useState<TransferView[]>([]);
@@ -178,9 +180,11 @@ export function App() {
 
   useEffect(() => {
     void window.eterm.getPanelLayout().then((result) => {
-      if (!result.ok) return;
-      panelLayoutRef.current = result.value;
-      setPanelLayout(result.value);
+      if (result.ok) {
+        panelLayoutRef.current = result.value;
+        setPanelLayout(result.value);
+      }
+      setLayoutReady(true);
     });
   }, []);
 
@@ -581,6 +585,22 @@ export function App() {
     applyPanelLayout(defaultPanelLayout(), true);
     setNotice(t('settings.resetLayoutDone'));
   }, [applyPanelLayout]);
+
+  // 已启用插件的面板默认进入布局；已存在或插件被禁用时不动。
+  useEffect(() => {
+    if (!layoutReady || plugins.length === 0) return;
+    const current = panelLayoutRef.current;
+    let next = current;
+    for (const plugin of plugins) {
+      if (!plugin.enabled) continue;
+      for (const panel of plugin.panels) {
+        const id = pluginPanelId(plugin.id, panel.id);
+        if (panelDockOf(next, id)) continue;
+        next = movePanel(next, id, panel.defaultDock ?? 'right');
+      }
+    }
+    if (next !== current) applyPanelLayout(next, true);
+  }, [plugins, layoutReady, applyPanelLayout]);
 
   useEffect(() => {
     if (!notice) return;
@@ -1186,6 +1206,14 @@ export function App() {
     };
   };
 
+  const pluginPanelMeta = (id: string): { pluginId: string; title: string } | null => {
+    const parsed = parsePluginPanelId(id);
+    if (!parsed) return null;
+    const plugin = plugins.find((item) => item.id === parsed.pluginId && item.enabled);
+    const panel = plugin?.panels.find((item) => item.id === parsed.panelId);
+    return panel ? { pluginId: parsed.pluginId, title: panel.title } : null;
+  };
+
   const renderPanel = (id: PanelId, dock: DockId): ReactNode => {
     switch (id) {
       case 'sessions':
@@ -1263,13 +1291,27 @@ export function App() {
             {...panelChrome('transfers', dock)}
           />
         );
-      default:
-        return null;
+      default: {
+        const pluginPanel = pluginPanelMeta(id);
+        if (!pluginPanel) return null;
+        return (
+          <PluginPanel
+            pluginId={pluginPanel.pluginId}
+            panelId={id}
+            title={pluginPanel.title}
+            dock={dock}
+            onMove={(target) => movePanelTo(id, target)}
+            {...panelChrome(id, dock)}
+          />
+        );
+      }
     }
   };
 
-  const dockPanels = (dock: DockId): { definition: ReturnType<typeof panelsInDock>[number]; node: ReactNode }[] =>
-    panelsInDock(panelLayout, dock).map((definition) => ({ definition, node: renderPanel(definition.id, dock) }));
+  const dockPanels = (dock: DockId): { id: string; node: ReactNode }[] =>
+    panelLayout.docks[dock]
+      .filter((id) => panelById(id) !== null || pluginPanelMeta(id) !== null)
+      .map((id) => ({ id, node: renderPanel(id, dock) }));
 
   const leftPanels = dockPanels('left');
   const rightPanels = dockPanels('right');

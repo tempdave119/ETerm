@@ -30,6 +30,7 @@ import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
 import { registerPluginsIpc } from './plugins-ipc.ts';
+import { registerPluginProtocol, registerPluginScheme } from './plugin-protocol.ts';
 import { PluginStore } from '../services/plugins/store.ts';
 import { loadComponents } from './components.ts';
 import { registerConnectionOpenIpc } from './connection-open-ipc.ts';
@@ -73,6 +74,9 @@ if (!app.isPackaged && altSshPath) {
   registry.register(sshModule);
 }
 
+// 自定义协议特权必须在 app ready 之前注册；模块加载时立即执行一次。
+registerPluginScheme();
+
 let disposeIpc: (() => void) | null = null;
 let disposeConnectionsIpc: (() => void) | null = null;
 let disposeConfigIpc: (() => void) | null = null;
@@ -84,6 +88,7 @@ let transferQueue: TransferQueue | null = null;
 let disposeKnownHostsIpc: (() => void) | null = null;
 let disposeComponentsIpc: (() => void) | null = null;
 let disposePluginsIpc: (() => void) | null = null;
+let disposePluginProtocol: (() => void) | null = null;
 let componentDescriptors: ComponentDescriptor[] = [];
 let disposeLayoutsIpc: (() => void) | null = null;
 let disposeSystemIpc: (() => void) | null = null;
@@ -344,6 +349,7 @@ void app.whenReady().then(async () => {
     store: pluginStore,
     pluginsDir: path.join(baseDir, 'plugins'),
   });
+  disposePluginProtocol = registerPluginProtocol(pluginStore);
 
   disposeConnectionsIpc = registerConnectionsIpc(services.connections, services.credentials);
   disposeKnownHostsIpc = registerKnownHostsIpc(services.knownHosts);
@@ -382,6 +388,8 @@ app.on('will-quit', () => {
   disposeComponentsIpc = null;
   disposePluginsIpc?.();
   disposePluginsIpc = null;
+  disposePluginProtocol?.();
+  disposePluginProtocol = null;
   disposeConfigIpc?.();
   disposeConfigIpc = null;
   disposeKnownHostsIpc?.();

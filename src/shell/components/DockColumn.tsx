@@ -1,9 +1,8 @@
 import { Fragment, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { DockId } from '../../shared/panels.ts';
-import type { PanelDefinition } from '../panels/registry.ts';
 
 interface DockPanelItem {
-  definition: PanelDefinition;
+  id: string;
   node: ReactNode;
 }
 
@@ -81,10 +80,10 @@ export function DockColumn({ dock, size, panels, dividers, onResize, onResizeEnd
         const end =
           index === panels.length - 1 ? 1 : (dividers[index] ?? (index + 1) / panels.length);
         return (
-          <Fragment key={panel.definition.id}>
+          <Fragment key={panel.id}>
             <div
               className="dock__item"
-              data-panel-id={panel.definition.id}
+              data-panel-id={panel.id}
               style={{ flexGrow: Math.max(end - start, 0.05), flexBasis: 0 }}
             >
               {panel.node}

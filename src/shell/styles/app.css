@@ -1625,6 +1625,14 @@ button {
   overflow: hidden;
 }
 
+.plugin-panel {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--bg-canvas);
+}
+
 /* 齿轮菜单：手写下拉，不引 UI 库 */
 .panel-menu {
   position: absolute;

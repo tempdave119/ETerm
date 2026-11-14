@@ -3,15 +3,22 @@
  * 弹层面板（设置 / 命令面板）不参与停靠，不进这份状态。
  */
 
-export type PanelId = 'sessions' | 'files' | 'monitor' | 'transfers' | 'settings' | 'commands';
+/** 内置面板 id 是固定值；插件面板以 plugin:<pluginId>:<panelId> 追加。 */
+export type PanelId = string;
 
 /** 可停靠的三个区；弹层不在其列。 */
 export type DockId = 'left' | 'right' | 'bottom';
 
 export const DOCK_IDS: readonly DockId[] = ['left', 'right', 'bottom'];
 
-/** 能进停靠区的面板；设置与命令面板是弹层，不参与。 */
-export const DOCKABLE_PANEL_IDS: readonly PanelId[] = ['sessions', 'files', 'monitor', 'transfers'];
+/** 能进停靠区的内置面板；设置与命令面板是弹层，不参与。 */
+export const DOCKABLE_PANEL_IDS: readonly string[] = ['sessions', 'files', 'monitor', 'transfers'];
+
+const PLUGIN_PANEL_PATTERN = /^plugin:[a-z0-9][a-z0-9-]{0,63}:[a-z0-9][a-z0-9-]{0,63}$/;
+
+export function isPluginPanelId(id: string): boolean {
+  return PLUGIN_PANEL_PATTERN.test(id);
+}
 
 export interface PanelLayout {
   /** 每个停靠区内的面板顺序；空数组表示该区不渲染。 */
@@ -84,8 +91,8 @@ function parseDocks(record: Record<string, unknown>, defaults: PanelLayout): Pan
     for (const item of list) {
       if (typeof item !== 'string') continue;
       const id = item as PanelId;
-      // 未知 id、非停靠面板、重复出现（同一面板只能在一个区）一律跳过。
-      if (!DOCKABLE_PANEL_IDS.includes(id) || seen.has(id)) continue;
+      // 未知 id、非停靠面板、重复出现（同一面板只能在一个区）一律跳过；插件面板保留。
+      if ((!DOCKABLE_PANEL_IDS.includes(id) && !isPluginPanelId(id)) || seen.has(id)) continue;
       seen.add(id);
       docks[dock].push(id);
     }

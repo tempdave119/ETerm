@@ -190,6 +190,36 @@ export function pluginRecordOf(manifest: PluginManifest, enabled: boolean): Plug
   };
 }
 
+export const PLUGIN_PANEL_PREFIX = 'plugin:';
+
+/** 插件面板在布局里的 id；与内置面板共用 PanelLayout 的 docks 数组。 */
+export function pluginPanelId(pluginId: string, panelId: string): string {
+  return `${PLUGIN_PANEL_PREFIX}${pluginId}:${panelId}`;
+}
+
+export function parsePluginPanelId(value: string): { pluginId: string; panelId: string } | null {
+  if (!value.startsWith(PLUGIN_PANEL_PREFIX)) return null;
+  const rest = value.slice(PLUGIN_PANEL_PREFIX.length);
+  const index = rest.indexOf(':');
+  if (index <= 0 || index === rest.length - 1) return null;
+  const pluginId = rest.slice(0, index);
+  const panelId = rest.slice(index + 1);
+  if (!ID_PATTERN.test(pluginId) || !ID_PATTERN.test(panelId)) return null;
+  return { pluginId, panelId };
+}
+
+/**
+ * 把协议 URL 的路径解析为插件目录内的文件；拒绝 .. / 空段 / 点段，防目录穿越。
+ * 纯字符串实现，渲染层与主进程都能用（不引入 node:path）。
+ */
+export function resolvePluginAsset(root: string, pathname: string): string | null {
+  const relative = pathname.replace(/^\/+/, '');
+  if (relative.length === 0) return null;
+  const segments = relative.split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return null;
+  return `${root.replace(/\/+$/, '')}/${segments.join('/')}`;
+}
+
 export function emptyPluginsFile(): PluginsFile {
   return { version: PLUGIN_FILE_VERSION, disabled: [] };
 }

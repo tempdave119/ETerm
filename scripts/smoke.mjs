@@ -119,9 +119,14 @@ writeFileSync(
     author: 'smoke',
     entry: 'index.cjs',
     permissions: ['panel'],
+    panels: [{ id: 'smoke', title: 'Smoke Panel', defaultDock: 'right' }],
   }),
 );
 writeFileSync(join(dataDir, 'plugins', 'smoke-plugin', 'index.cjs'), 'module.exports = {};\n');
+writeFileSync(
+  join(dataDir, 'plugins', 'smoke-plugin', 'panel.html'),
+  '<!doctype html><meta charset="utf-8"><body style="font:13px sans-serif;padding:12px">smoke panel</body>',
+);
 
 const appLogs = [];
 const app = spawn(electronPath, ['.', `--remote-debugging-port=${DEBUG_PORT}`], {
@@ -574,6 +579,11 @@ try {
 
   // 插件：预置插件应出现在列表，可禁用（状态落盘）与卸载（目录删除）。
   await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') !== null`),
+    5_000,
+    '插件面板出现',
+  );
+  await waitFor(
     () => evaluate(`document.querySelector('[data-testid="plugin-row-smoke-plugin"]') !== null`),
     5_000,
     '插件列表',
@@ -591,6 +601,11 @@ try {
   );
   const pluginState = JSON.parse(await readFile(join(dataDir, 'plugins.json'), 'utf8'));
   if (!pluginState.disabled.includes('smoke-plugin')) throw new Error('插件禁用状态未落盘');
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-panel-smoke-plugin"]') === null`),
+    5_000,
+    '禁用后插件面板消失',
+  );
 
   await evaluate(`window.confirm = () => true`);
   await evaluate(`document.querySelector('[data-testid="plugin-uninstall-smoke-plugin"]').click()`);
