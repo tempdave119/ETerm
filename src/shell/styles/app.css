@@ -943,7 +943,7 @@ button {
 
 .component-sample {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px auto auto;
+  grid-template-columns: minmax(0, 1fr) 116px auto auto;
   align-items: center;
   gap: var(--space-base);
   padding: var(--space-tight) var(--space-base);
@@ -971,9 +971,12 @@ button {
 }
 
 .component-sample__protocol {
+  overflow: hidden;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: var(--font-aux);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .component-sample__status {
@@ -1389,6 +1392,62 @@ button {
 }
 
 .settings-check input:focus-visible {
+  outline: 1px solid var(--status-info);
+  outline-offset: 2px;
+}
+
+/* 总开关：滑动样式；藏起原生 checkbox，只保留轨道与滑块。 */
+.settings-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-base);
+  width: fit-content;
+  color: var(--text-primary);
+  font-size: var(--font-body);
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.settings-switch__track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+}
+
+.settings-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-canvas);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.settings-switch input:checked + .settings-switch__track {
+  background: var(--status-info);
+}
+
+.settings-switch input:checked + .settings-switch__track .settings-switch__thumb {
+  transform: translateX(16px);
+  background: #ffffff;
+}
+
+.settings-switch input:focus-visible + .settings-switch__track {
   outline: 1px solid var(--status-info);
   outline-offset: 2px;
 }

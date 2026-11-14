@@ -721,8 +721,7 @@ export function SettingsPanel({
             {section === 'plugins' ? (
               <section className="settings-group">
                 <h3 className="settings-group__title">{t('settings.nav.plugins')}</h3>
-                <div className="form-row">
-                  <label htmlFor="settings-plugins-enabled">{t('settings.plugins.enabledSwitch')}</label>
+                <label className="settings-switch">
                   <input
                     id="settings-plugins-enabled"
                     data-testid="settings-plugins-enabled"
@@ -730,13 +729,16 @@ export function SettingsPanel({
                     checked={pluginsEnabled}
                     onChange={(event) => onSetPluginsEnabled(event.target.checked)}
                   />
-                </div>
+                  <span className="settings-switch__track" aria-hidden="true">
+                    <span className="settings-switch__thumb" />
+                  </span>
+                  <span>{t('settings.plugins.enabledSwitch')}</span>
+                </label>
                 <p className="form-hint">
                   {pluginsEnabled ? t('settings.plugins.enabledHint') : t('settings.plugins.disabledHint')}
                 </p>
                 {pluginsEnabled ? (
                   <>
-                    <p className="form-hint">{t('settings.plugins.intro')}</p>
                     {plugins.length === 0 ? (
                       <p className="form-hint" data-testid="plugins-empty">
                         {t('settings.plugins.empty')}
@@ -810,7 +812,6 @@ export function SettingsPanel({
                         {t('settings.plugins.openDir')}
                       </button>
                     </div>
-                    <p className="form-hint">{t('settings.plugins.restartHint')}</p>
                     {pluginsNotice ? <p className="form-hint">{pluginsNotice}</p> : null}
                   </>
                 ) : (

@@ -734,6 +734,11 @@ try {
     10_000,
     '插件列表',
   );
+  const pluginSettingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(
+    'tmp/plugin-settings-smoke.png',
+    Buffer.from(pluginSettingsShot.data, 'base64'),
+  );
 
   // 插件命令：总开关打开后命令才进入 ⌘K。
   await evaluate(`document.querySelector('[data-testid="settings-cancel"]').click()`);
