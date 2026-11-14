@@ -230,6 +230,7 @@ export const enUS: Record<MessageKey, string> = {
   'tree.editAria': 'Edit {name}',
   'tree.deleteAria': 'Delete {name}',
   'tree.deleteGroupAria': 'Delete group {name}',
+  'tree.renameGroupAria': 'Rename group {name}',
 
   // 文件面板
   'files.title': 'Files',
@@ -251,6 +252,13 @@ export const enUS: Record<MessageKey, string> = {
   'files.noSftp': 'This session has no file capability',
   'files.noSftpHint': 'Open an SSH connection to browse remote files',
   'files.download': 'Download {name}',
+  'files.newFolder': 'New Folder',
+  'files.folderPlaceholder': 'Folder name',
+  'files.renameAria': 'Rename {name}',
+  'files.deleteAria': 'Delete {name}',
+  'files.deleteConfirm': 'This cannot be undone. Delete "{name}"?',
+  'files.nameInvalid.message': 'Name cannot be empty or contain "/"',
+  'files.nameInvalid.next': 'Use a name without path separators',
   'files.previewTitle': 'Cannot preview',
   'files.previewTruncated': 'Showing the first 256 KB only',
   'files.binaryHint': 'Binary file, preview is not available.',

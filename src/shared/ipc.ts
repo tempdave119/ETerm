@@ -58,6 +58,9 @@ export const CONNECTIONS_IPC = {
 export const FILES_IPC = {
   list: 'files:list',
   read: 'files:read',
+  mkdir: 'files:mkdir',
+  rename: 'files:rename',
+  remove: 'files:remove',
 } as const;
 
 export const TRANSFERS_IPC = {
@@ -225,6 +228,9 @@ export interface EtermApi {
   reorderConnections(orderedIds: string[]): Promise<IpcResult<null>>;
   listFiles(sessionId: string, path: string): Promise<IpcResult<FileEntry[]>>;
   readFilePreview(sessionId: string, path: string): Promise<IpcResult<FilePreview>>;
+  createDirectory(sessionId: string, path: string): Promise<IpcResult<null>>;
+  renameEntry(sessionId: string, path: string, nextPath: string): Promise<IpcResult<null>>;
+  deleteFile(sessionId: string, path: string): Promise<IpcResult<null>>;
 
   listTransfers(): Promise<IpcResult<TransferView[]>>;
   cancelTransfer(id: string): Promise<IpcResult<null>>;

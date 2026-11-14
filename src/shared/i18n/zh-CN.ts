@@ -229,6 +229,7 @@ export const zhCN = {
   'tree.editAria': '编辑 {name}',
   'tree.deleteAria': '删除 {name}',
   'tree.deleteGroupAria': '删除分组 {name}',
+  'tree.renameGroupAria': '重命名分组 {name}',
 
   // 文件面板
   'files.title': '文件',
@@ -250,6 +251,13 @@ export const zhCN = {
   'files.noSftp': '当前会话没有文件能力',
   'files.noSftpHint': '打开一个 SSH 连接后可以浏览远端文件',
   'files.download': '下载 {name}',
+  'files.newFolder': '新建文件夹',
+  'files.folderPlaceholder': '文件夹名称',
+  'files.renameAria': '重命名 {name}',
+  'files.deleteAria': '删除 {name}',
+  'files.deleteConfirm': '删除后不可恢复，确定删除「{name}」？',
+  'files.nameInvalid.message': '名称不能为空，也不能包含「/」',
+  'files.nameInvalid.next': '换一个不含路径分隔符的名称',
   'files.previewTitle': '无法预览',
   'files.previewTruncated': '仅显示前 256 KB',
   'files.binaryHint': '二进制文件，暂不预览。',

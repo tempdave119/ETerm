@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   ArrowUp,
   ChevronDown,
@@ -8,8 +8,11 @@ import {
   EyeOff,
   FileText,
   Folder,
+  FolderPlus,
   Link2,
+  Pencil,
   RefreshCw,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
@@ -53,6 +56,20 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
   const [sort, setSort] = useState<FileSort>({ key: 'name', direction: 'asc' });
   // 默认显示隐藏文件：运维场景常要改 .bashrc 这类点文件。
   const [showHidden, setShowHidden] = useState(true);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null);
+  // Enter 交给 blur 统一提交，避免 Enter 与 blur 各触发一次重复创建 / 改名。
+  const skipNewBlur = useRef(false);
+  const skipRenameBlur = useRef(false);
+
+  const showNameError = (): void => {
+    setError({
+      code: 'UNSUPPORTED',
+      message: t('files.nameInvalid.message'),
+      next: t('files.nameInvalid.next'),
+    });
+  };
 
   const load = useCallback(
     async (target: string): Promise<void> => {
@@ -154,6 +171,67 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
     [sessionId],
   );
 
+  const submitFolder = useCallback(async (): Promise<void> => {
+    if (!creatingFolder) return;
+    const name = folderName.trim();
+    if (!name) {
+      setCreatingFolder(false);
+      return;
+    }
+    if (name.includes('/')) {
+      showNameError();
+      return;
+    }
+
+    setError(null);
+    const result = await window.eterm.createDirectory(sessionId, joinPath(path, name));
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setFolderName('');
+    setCreatingFolder(false);
+    await load(path);
+  }, [creatingFolder, folderName, load, path, sessionId]);
+
+  const submitRename = useCallback(async (): Promise<void> => {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    if (!name || name === baseName(renaming.path)) {
+      setRenaming(null);
+      return;
+    }
+    if (name.includes('/')) {
+      showNameError();
+      return;
+    }
+
+    setError(null);
+    const result = await window.eterm.renameEntry(sessionId, renaming.path, joinPath(parentOf(renaming.path), name));
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setRenaming(null);
+    await load(path);
+  }, [load, path, renaming, sessionId]);
+
+  const removeEntry = useCallback(
+    async (entry: FileEntry): Promise<void> => {
+      const confirmed = window.confirm(t('files.deleteConfirm', { name: entry.name }));
+      if (!confirmed) return;
+
+      setError(null);
+      const result = await window.eterm.deleteFile(sessionId, entry.path);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await load(path);
+    },
+    [load, path, sessionId],
+  );
+
   return (
     <PanelFrame
       panelId="files"
@@ -184,6 +262,19 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
             onClick={() => void upload()}
           >
             <Upload size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            title={t('files.newFolder')}
+            aria-label={t('files.newFolder')}
+            data-testid="file-new-folder"
+            onClick={() => {
+              setCreatingFolder(true);
+              setFolderName('');
+            }}
+          >
+            <FolderPlus size={14} strokeWidth={1.5} />
           </button>
           <button
             className="icon-button"
@@ -254,6 +345,31 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
         onDrop={(event) => void dropFiles(event)}
       >
         {dragOver ? <div className="file-panel__drop-hint">{t('files.dropHint', { path })}</div> : null}
+        {creatingFolder ? (
+          <div className="file-panel__new-row">
+            <input
+              className="search-input file-panel__name-input"
+              autoFocus
+              placeholder={t('files.folderPlaceholder')}
+              value={folderName}
+              onChange={(event) => setFolderName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  skipNewBlur.current = true;
+                  setCreatingFolder(false);
+                }
+              }}
+              onBlur={() => {
+                if (skipNewBlur.current) {
+                  skipNewBlur.current = false;
+                  return;
+                }
+                void submitFolder();
+              }}
+            />
+          </div>
+        ) : null}
         {loading ? (
           <div className="file-panel__hint">{t('common.loading')}</div>
         ) : error ? (
@@ -265,36 +381,83 @@ export function FilePanel({ sessionId, dock, onMove, canPanelMoveUp, canPanelMov
         ) : (
           visibleEntries.map((entry) => (
             <div className="file-row" key={entry.path} title={entry.path}>
-              <button
-                className="file-row__main"
-                type="button"
-                data-testid={`file-row-${entry.name}`}
-                onClick={() => void openEntry(entry)}
-              >
-                {entry.type === 'directory' ? (
-                  <Folder size={15} strokeWidth={1.5} className="file-row__icon" />
-                ) : entry.type === 'symlink' ? (
-                  <Link2 size={15} strokeWidth={1.5} className="file-row__icon" />
-                ) : (
-                  <FileText size={15} strokeWidth={1.5} className="file-row__icon" />
-                )}
-                <span className="file-row__name">{entry.name}</span>
-              </button>
+              {renaming?.path === entry.path ? (
+                <input
+                  className="search-input file-row__rename"
+                  autoFocus
+                  value={renaming.name}
+                  onChange={(event) => setRenaming({ path: entry.path, name: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                    if (event.key === 'Escape') {
+                      skipRenameBlur.current = true;
+                      setRenaming(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (skipRenameBlur.current) {
+                      skipRenameBlur.current = false;
+                      return;
+                    }
+                    void submitRename();
+                  }}
+                />
+              ) : (
+                <button
+                  className="file-row__main"
+                  type="button"
+                  data-testid={`file-row-${entry.name}`}
+                  onClick={() => void openEntry(entry)}
+                >
+                  {entry.type === 'directory' ? (
+                    <Folder size={15} strokeWidth={1.5} className="file-row__icon" />
+                  ) : entry.type === 'symlink' ? (
+                    <Link2 size={15} strokeWidth={1.5} className="file-row__icon" />
+                  ) : (
+                    <FileText size={15} strokeWidth={1.5} className="file-row__icon" />
+                  )}
+                  <span className="file-row__name">{entry.name}</span>
+                </button>
+              )}
               <span className="file-row__cell file-row__size">{formatEntrySize(entry)}</span>
               <span className="file-row__cell file-row__date">{formatDate(entry.mtimeMs)}</span>
               <span className="file-row__cell file-row__perm">{formatPermission(entry.mode)}</span>
-              <button
-                className="icon-button file-row__action"
-                type="button"
-                title={t('files.download', { name: entry.name })}
-                aria-label={t('files.download', { name: entry.name })}
-                data-testid={`file-download-${entry.name}`}
-                onClick={() =>
-                  void (entry.type === 'directory' ? downloadDirectory(entry.path) : download(entry.path))
-                }
-              >
-                <Download size={13} strokeWidth={1.5} />
-              </button>
+              <span className="file-row__actions">
+                <button
+                  className="icon-button file-row__action"
+                  type="button"
+                  title={t('files.renameAria', { name: entry.name })}
+                  aria-label={t('files.renameAria', { name: entry.name })}
+                  data-testid={`file-rename-${entry.name}`}
+                  onClick={() => setRenaming({ path: entry.path, name: entry.name })}
+                >
+                  <Pencil size={13} strokeWidth={1.5} />
+                </button>
+                {entry.type === 'directory' ? null : (
+                  <button
+                    className="icon-button file-row__action"
+                    type="button"
+                    title={t('files.deleteAria', { name: entry.name })}
+                    aria-label={t('files.deleteAria', { name: entry.name })}
+                    data-testid={`file-delete-${entry.name}`}
+                    onClick={() => void removeEntry(entry)}
+                  >
+                    <Trash2 size={13} strokeWidth={1.5} />
+                  </button>
+                )}
+                <button
+                  className="icon-button file-row__action"
+                  type="button"
+                  title={t('files.download', { name: entry.name })}
+                  aria-label={t('files.download', { name: entry.name })}
+                  data-testid={`file-download-${entry.name}`}
+                  onClick={() =>
+                    void (entry.type === 'directory' ? downloadDirectory(entry.path) : download(entry.path))
+                  }
+                >
+                  <Download size={13} strokeWidth={1.5} />
+                </button>
+              </span>
             </div>
           ))
         )}
@@ -341,6 +504,10 @@ function parentOf(value: string): string {
   if (value === '/' || !value) return '/';
   const index = value.lastIndexOf('/');
   return index <= 0 ? '/' : value.slice(0, index);
+}
+
+function joinPath(directory: string, name: string): string {
+  return directory === '/' || !directory ? `/${name}` : `${directory}/${name}`;
 }
 
 function baseName(value: string): string {

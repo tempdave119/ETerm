@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Folder, FolderPlus, Pencil, Plus, Search, Server, Trash2 } from 'lucide-react';
 import type { DockId } from '../../shared/panels.ts';
 import type { ConnectionRecord, GroupRecord } from '../../shared/ipc.ts';
@@ -21,6 +21,7 @@ interface SessionTreeProps {
   onDelete(connection: ConnectionRecord): void;
   onAddGroup(name: string): void;
   onDeleteGroup(group: GroupRecord): void;
+  onRenameGroup(group: GroupRecord, name: string): void;
   onReorder(orderedIds: string[]): void;
   canPanelMoveUp?: boolean;
   canPanelMoveDown?: boolean;
@@ -42,6 +43,7 @@ export function SessionTree({
   onDelete,
   onAddGroup,
   onDeleteGroup,
+  onRenameGroup,
   onReorder,
   canPanelMoveUp,
   canPanelMoveDown,
@@ -50,6 +52,9 @@ export function SessionTree({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [addingGroup, setAddingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string } | null>(null);
+  // Enter 交给 blur 统一提交，避免 Enter 与 blur 各触发一次重复改名。
+  const skipGroupBlur = useRef(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -85,6 +90,14 @@ export function SessionTree({
     onAddGroup(name);
     setGroupName('');
     setAddingGroup(false);
+  };
+
+  const submitRenameGroup = (group: GroupRecord): void => {
+    if (!editingGroup || editingGroup.id !== group.id) return;
+    const name = editingGroup.name.trim();
+    setEditingGroup(null);
+    if (!name || name === group.name) return;
+    onRenameGroup(group, name);
   };
 
   const resetDrag = (): void => {
@@ -181,10 +194,42 @@ export function SessionTree({
                 <div key={group.id} className="tree-group">
                   {/* 外层用 div：组头里要放删除按钮，button 不能嵌套 button。 */}
                   <div className="tree-group__header">
-                    <button className="tree-group__toggle" type="button" onClick={() => toggleGroup(group.id)}>
-                      <Folder size={16} strokeWidth={1.5} />
-                      <span className="tree-group__name">{group.name}</span>
-                      <span className="tree-group__count">{children.length}</span>
+                    {editingGroup?.id === group.id ? (
+                      <input
+                        className="search-input tree-group__rename-input"
+                        autoFocus
+                        value={editingGroup.name}
+                        onChange={(event) => setEditingGroup({ id: group.id, name: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur();
+                          if (event.key === 'Escape') {
+                            skipGroupBlur.current = true;
+                            setEditingGroup(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (skipGroupBlur.current) {
+                            skipGroupBlur.current = false;
+                            return;
+                          }
+                          submitRenameGroup(group);
+                        }}
+                      />
+                    ) : (
+                      <button className="tree-group__toggle" type="button" onClick={() => toggleGroup(group.id)}>
+                        <Folder size={16} strokeWidth={1.5} />
+                        <span className="tree-group__name">{group.name}</span>
+                        <span className="tree-group__count">{children.length}</span>
+                      </button>
+                    )}
+                    <button
+                      className="icon-button tree-group__rename"
+                      type="button"
+                      title={t('tree.renameGroup')}
+                      aria-label={t('tree.renameGroupAria', { name: group.name })}
+                      onClick={() => setEditingGroup({ id: group.id, name: group.name })}
+                    >
+                      <Pencil size={14} strokeWidth={1.5} />
                     </button>
                     <button
                       className="icon-button tree-group__delete"

@@ -95,6 +95,12 @@ const api: EtermApi = {
     ipcRenderer.invoke(FILES_IPC.list, { sessionId, path }) as Promise<IpcResult<FileEntry[]>>,
   readFilePreview: (sessionId: string, path: string) =>
     ipcRenderer.invoke(FILES_IPC.read, { sessionId, path }) as Promise<IpcResult<FilePreview>>,
+  createDirectory: (sessionId: string, path: string) =>
+    ipcRenderer.invoke(FILES_IPC.mkdir, { sessionId, path }) as Promise<IpcResult<null>>,
+  renameEntry: (sessionId: string, path: string, nextPath: string) =>
+    ipcRenderer.invoke(FILES_IPC.rename, { sessionId, path, nextPath }) as Promise<IpcResult<null>>,
+  deleteFile: (sessionId: string, path: string) =>
+    ipcRenderer.invoke(FILES_IPC.remove, { sessionId, path }) as Promise<IpcResult<null>>,
 
   listTransfers: () => ipcRenderer.invoke(TRANSFERS_IPC.list) as Promise<IpcResult<TransferView[]>>,
   cancelTransfer: (id: string) =>

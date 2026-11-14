@@ -1018,6 +1018,67 @@ try {
     '第二个上传文件出现在列表',
   );
 
+  // ---- F-57 文件面板目录操作：新建 / 重命名 / 删除 ----
+  const remoteExists = async (name) => {
+    try {
+      await stat(join(remoteRoot, name));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  await evaluate(`document.querySelector('[data-testid="file-new-folder"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.file-panel__name-input') !== null`),
+    5_000,
+    '新建文件夹输入框',
+  );
+  await evaluate(setInputScript('.file-panel__name-input', 'smoke-dir'));
+  await evaluate(`document.querySelector('.file-panel__name-input').blur()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-smoke-dir"]') !== null`),
+    5_000,
+    '新建目录出现',
+  );
+  if (!(await remoteExists('smoke-dir'))) throw new Error('远端目录未创建');
+
+  await writeFile(join(remoteRoot, 'smoke-rename.txt'), 'rename-me');
+  await writeFile(join(remoteRoot, 'smoke-delete.txt'), 'delete-me');
+  await evaluate(`document.querySelector('button[title="刷新"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-smoke-rename.txt"]') !== null`),
+    5_000,
+    '临时文件出现在列表',
+  );
+
+  await evaluate(`document.querySelector('[data-testid="file-rename-smoke-rename.txt"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.file-row__rename') !== null`),
+    5_000,
+    '重命名输入框',
+  );
+  await evaluate(setInputScript('.file-row__rename', 'smoke-renamed.txt'));
+  await evaluate(`document.querySelector('.file-row__rename').blur()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-smoke-renamed.txt"]') !== null`),
+    5_000,
+    '重命名完成',
+  );
+  if (!(await remoteExists('smoke-renamed.txt')) || (await remoteExists('smoke-rename.txt'))) {
+    throw new Error('远端文件重命名结果不正确');
+  }
+
+  await evaluate(`window.confirm = () => true`);
+  await evaluate(`document.querySelector('[data-testid="file-delete-smoke-delete.txt"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="file-row-smoke-delete.txt"]') === null`),
+    5_000,
+    '删除文件完成',
+  );
+  if (await remoteExists('smoke-delete.txt')) throw new Error('远端文件未删除');
+  await evaluate(`delete window.confirm`);
+
   // 拖拽上传：CDP 用真实本地文件路径模拟 drop，preload 用 webUtils 换一次性 token。
   const dropPoint = await evaluate(`(() => {
     const element = document.querySelector('.file-panel__list');
@@ -1088,6 +1149,53 @@ try {
 
   const transferShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('tmp/ssh-smoke-transfer.png', Buffer.from(transferShot.data, 'base64'));
+
+  // ---- F-58 分组新建 / 重命名 / 删除 ----
+  await evaluate(`document.querySelector('[data-testid="panel-frame-sessions"] button[title="新建分组"]').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.session-tree__group-input') !== null`),
+    5_000,
+    '新建分组输入框',
+  );
+  await evaluate(setInputScript('.session-tree__group-input', 'smoke-group'));
+  await evaluate(`document.querySelector('.session-tree__group-input').blur()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.tree-group__name')].some((node) => node.textContent === 'smoke-group')`,
+      ),
+    5_000,
+    '分组出现',
+  );
+
+  await evaluate(`document.querySelector('.tree-group__rename').click()`);
+  await waitFor(
+    () => evaluate(`document.querySelector('.tree-group__rename-input') !== null`),
+    5_000,
+    '分组重命名输入框',
+  );
+  await evaluate(setInputScript('.tree-group__rename-input', 'smoke-group-renamed'));
+  await evaluate(`document.querySelector('.tree-group__rename-input').blur()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.tree-group__name')].some((node) => node.textContent === 'smoke-group-renamed')`,
+      ),
+    5_000,
+    '分组重命名完成',
+  );
+
+  await evaluate(`window.confirm = () => true`);
+  await evaluate(`document.querySelector('.tree-group__delete').click()`);
+  await waitFor(
+    () =>
+      evaluate(
+        `[...document.querySelectorAll('.tree-group__name')].every((node) => node.textContent !== 'smoke-group-renamed')`,
+      ),
+    5_000,
+    '分组删除完成',
+  );
+  await evaluate(`delete window.confirm`);
 
   // 第二个连接只保存不连接，用来验证排序；避开 Keychain 授权。
   await evaluate(`document.querySelector('[data-testid="panel-frame-sessions"] button[title="新建连接"]').click()`);

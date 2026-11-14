@@ -22,6 +22,15 @@ function readRequest(raw: unknown): { sessionId: string; path: string } {
   };
 }
 
+function readRenameRequest(raw: unknown): { sessionId: string; path: string; nextPath: string } {
+  const value = readRecord(raw, '重命名参数');
+  return {
+    sessionId: readString(value.sessionId, 'sessionId', SESSION_ID_MAX),
+    path: readString(value.path, 'path', PATH_MAX),
+    nextPath: readString(value.nextPath, 'nextPath', PATH_MAX),
+  };
+}
+
 function requireFilePort(sessions: SessionService, sessionId: string) {
   return requireSessionPort(sessions.filePort(sessionId), {
     sessionId,
@@ -30,12 +39,42 @@ function requireFilePort(sessions: SessionService, sessionId: string) {
   });
 }
 
-/** 文件面板只做浏览与只读预览；上传下载属于 F-11 传输队列。 */
+/** 文件面板做浏览、只读预览与目录操作；上传下载属于 F-11 传输队列。 */
 export function registerFilesIpc(sessions: SessionService): () => void {
   ipcMain.handle(FILES_IPC.list, async (_event, raw): Promise<IpcResult<FileEntry[]>> => {
     try {
       const { sessionId, path } = readRequest(raw);
       return { ok: true, value: await requireFilePort(sessions, sessionId).list(path) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(FILES_IPC.mkdir, async (_event, raw): Promise<IpcResult<null>> => {
+    try {
+      const { sessionId, path } = readRequest(raw);
+      await requireFilePort(sessions, sessionId).mkdir(path);
+      return { ok: true, value: null };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(FILES_IPC.rename, async (_event, raw): Promise<IpcResult<null>> => {
+    try {
+      const { sessionId, path, nextPath } = readRenameRequest(raw);
+      await requireFilePort(sessions, sessionId).rename(path, nextPath);
+      return { ok: true, value: null };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(FILES_IPC.remove, async (_event, raw): Promise<IpcResult<null>> => {
+    try {
+      const { sessionId, path } = readRequest(raw);
+      await requireFilePort(sessions, sessionId).remove(path);
+      return { ok: true, value: null };
     } catch (error) {
       return failure(error);
     }
@@ -64,5 +103,8 @@ export function registerFilesIpc(sessions: SessionService): () => void {
   return () => {
     ipcMain.removeHandler(FILES_IPC.list);
     ipcMain.removeHandler(FILES_IPC.read);
+    ipcMain.removeHandler(FILES_IPC.mkdir);
+    ipcMain.removeHandler(FILES_IPC.rename);
+    ipcMain.removeHandler(FILES_IPC.remove);
   };
 }
