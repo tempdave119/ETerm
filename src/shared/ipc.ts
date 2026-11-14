@@ -13,7 +13,7 @@ import type { TransferDirection, TransferView } from '../services/transfers/queu
 import type { LayoutTemplate } from './layout-template.ts';
 import type { PanelLayout } from './panels.ts';
 import type { ComponentDescriptor, ComponentSample } from './components.ts';
-import type { PluginCommandInfo, PluginRecord } from './plugins.ts';
+import type { PluginCommandInfo, PluginRecord, PluginSample } from './plugins.ts';
 import type { ThemeDefinition } from './theme.ts';
 import type {
   ConnectionInput,
@@ -66,7 +66,9 @@ export const FILES_IPC = {
 
 export const PLUGINS_IPC = {
   list: 'plugins:list',
+  samples: 'plugins:samples',
   install: 'plugins:install',
+  installSample: 'plugins:install-sample',
   setEnabled: 'plugins:set-enabled',
   uninstall: 'plugins:uninstall',
   openDir: 'plugins:open-dir',
@@ -245,8 +247,12 @@ export interface EtermApi {
   deleteFile(sessionId: string, path: string): Promise<IpcResult<null>>;
 
   listPlugins(): Promise<IpcResult<PluginRecord[]>>;
+  /** 随包示例插件列表（含是否已安装）。 */
+  listPluginSamples(): Promise<IpcResult<PluginSample[]>>;
   /** 弹目录选择框；取消时返回 null。 */
   installPlugin(): Promise<IpcResult<PluginRecord | null>>;
+  /** 按 id 安装随包示例插件；重启后生效。 */
+  installPluginSample(id: string): Promise<IpcResult<PluginRecord | null>>;
   setPluginEnabled(id: string, enabled: boolean): Promise<IpcResult<null>>;
   uninstallPlugin(id: string): Promise<IpcResult<null>>;
   openPluginsDir(): Promise<IpcResult<null>>;

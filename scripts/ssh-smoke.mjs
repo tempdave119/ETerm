@@ -1174,6 +1174,15 @@ try {
     5_000,
     '分组重命名输入框',
   );
+  // 输入框与组头等高，聚焦描边必须向内收，否则上边会被列表滚动容器裁掉。
+  const renameOutlineOffset = await evaluate(
+    `getComputedStyle(document.querySelector('.tree-group__rename-input')).outlineOffset`,
+  );
+  if (renameOutlineOffset !== '-1px') {
+    throw new Error(`分组重命名输入框描边未内收：${renameOutlineOffset}`);
+  }
+  const renameShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync('tmp/group-rename-fix.png', Buffer.from(renameShot.data, 'base64'));
   await evaluate(setInputScript('.tree-group__rename-input', 'smoke-group-renamed'));
   await evaluate(`document.querySelector('.tree-group__rename-input').blur()`);
   await waitFor(
@@ -1663,6 +1672,17 @@ try {
     15_000,
     '指纹变化弹窗',
   );
+  // 变更场景要能对比旧 / 新指纹，且按钮语义明确是替换。
+  const changedPrint = await evaluate(
+    `({
+      previous: document.querySelector('[data-testid="hostkey-previous"]')?.textContent ?? '',
+      current: document.querySelector('[data-testid="hostkey-current"]')?.textContent ?? '',
+      button: document.querySelector('[data-testid="hostkey-trust"]')?.textContent ?? '',
+    })`,
+  );
+  if (!changedPrint.previous.startsWith('SHA256:')) throw new Error('指纹变化弹窗未展示旧指纹');
+  if (!changedPrint.current.startsWith('SHA256:')) throw new Error('指纹变化弹窗未展示新指纹');
+  if (!changedPrint.button.includes('替换')) throw new Error(`指纹变化按钮文案不对：${changedPrint.button}`);
   await shotOf('tmp/error-hostkey.png');
   await clickOn('.modal .modal__actions .button:not(.button--primary)');
   await waitFor(() => evaluate(`document.querySelector('.modal__title') === null`), 5_000, '关闭指纹弹窗');

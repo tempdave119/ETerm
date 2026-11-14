@@ -16,8 +16,8 @@ test('system_cpu_percent_handles_stalled_counters', () => {
   assert.equal(cpuPercentBetween({ idle: 300, total: 400 }, { idle: 100, total: 400 }), 0);
 });
 
-test('system_stats_reads_memory_and_load_from_host', () => {
-  const { stats } = readSystemStats(null);
+test('system_stats_reads_memory_and_load_from_host', async () => {
+  const { stats } = await readSystemStats(null);
 
   assert.ok(stats.memTotal > 0);
   assert.ok(stats.memUsed >= 0 && stats.memUsed <= stats.memTotal);

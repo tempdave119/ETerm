@@ -7,8 +7,11 @@ import { readRecord, readString } from './validate.ts';
 const ID_MAX = 64;
 const SECRET_MAX = 4096;
 
+const KINDS: readonly SecretKind[] = ['password', 'passphrase', 'proxy-password'];
+
 function readKind(raw: unknown): SecretKind {
-  if (raw === 'password' || raw === 'passphrase') return raw;
+  const kind = KINDS.find((item) => item === raw);
+  if (kind) return kind;
   throw new Error('凭据类型无效');
 }
 

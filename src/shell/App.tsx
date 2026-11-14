@@ -11,7 +11,13 @@ import type {
   TransferView,
 } from '../shared/ipc.ts';
 import { extractFingerprint } from '../shared/fingerprints.ts';
-import { parsePluginPanelId, pluginPanelId, type PluginCommandInfo, type PluginRecord } from '../shared/plugins.ts';
+import {
+  parsePluginPanelId,
+  pluginPanelId,
+  type PluginCommandInfo,
+  type PluginRecord,
+  type PluginSample,
+} from '../shared/plugins.ts';
 import type { ThemeDefinition } from '../shared/theme.ts';
 import { applyUiTheme, resolveTheme, terminalThemeFor } from './theme.ts';
 import { countTemplateLeaves } from '../shared/layout-template.ts';
@@ -141,6 +147,7 @@ export function App() {
   const [componentsBusy, setComponentsBusy] = useState(false);
   const [componentsNotice, setComponentsNotice] = useState<string | null>(null);
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [pluginSamples, setPluginSamples] = useState<PluginSample[]>([]);
   const [pluginCommands, setPluginCommands] = useState<PluginCommandInfo[]>([]);
   const [pluginsBusy, setPluginsBusy] = useState(false);
   const [pluginsNotice, setPluginsNotice] = useState<string | null>(null);
@@ -239,9 +246,15 @@ export function App() {
     if (pluginCommandResult.ok) setPluginCommands(pluginCommandResult.value);
   }, []);
 
+  const loadPluginSamples = useCallback(async (): Promise<void> => {
+    const result = await window.eterm.listPluginSamples();
+    if (result.ok) setPluginSamples(result.value);
+  }, []);
+
   useEffect(() => {
     void loadPlugins();
-  }, [loadPlugins]);
+    void loadPluginSamples();
+  }, [loadPlugins, loadPluginSamples]);
 
   useEffect(() => {
     void loadComponentSamples();
@@ -479,6 +492,29 @@ export function App() {
       setPluginsBusy(false);
     }
   }, [loadPlugins]);
+
+  const installPluginSample = useCallback(
+    async (id: string): Promise<void> => {
+      setPluginsBusy(true);
+      setPluginsNotice(null);
+      try {
+        const result = await window.eterm.installPluginSample(id);
+        if (!result.ok) {
+          setSettingsError(result.error.message);
+          return;
+        }
+        await loadPlugins();
+        await loadPluginSamples();
+        const message = t(result.value ? 'settings.plugins.installDone' : 'settings.plugins.sampleExists', {
+          name: id,
+        });
+        setPluginsNotice(message);
+      } finally {
+        setPluginsBusy(false);
+      }
+    },
+    [loadPluginSamples, loadPlugins],
+  );
 
   const setPluginEnabled = useCallback(
     async (id: string, enabled: boolean): Promise<void> => {
@@ -856,11 +892,19 @@ export function App() {
           });
           if (!result.ok) {
             for (const leaf of leaves) void window.eterm.closeSession(leaf.sessionId);
-            const fingerprint = extractFingerprint(result.error.detail ?? '');
+            // 优先用结构化指纹；老适配器（如 ssh-alt）只在 detail 里带文本，保留正则兜底。
+            const fingerprint = result.error.fingerprint ?? extractFingerprint(result.error.detail ?? '');
             const host = result.error.host ?? connection.host;
             const port = result.error.port ?? connection.port ?? 22;
             if (leaves.length === 0 && result.error.code === 'HOST_KEY_CHANGED' && fingerprint && host) {
-              setHostKey({ connection, fingerprint, first: result.error.reason === 'first', host, port });
+              setHostKey({
+                connection,
+                fingerprint,
+                previousFingerprint: result.error.previousFingerprint,
+                first: result.error.reason === 'first',
+                host,
+                port,
+              });
               return;
             }
             setError(result.error);
@@ -1596,9 +1640,11 @@ export function App() {
           onUninstallComponentSample={(id) => void uninstallComponentSample(id)}
           onOpenComponentsDir={() => void openComponentsDir()}
           plugins={plugins}
+          pluginSamples={pluginSamples}
           pluginsBusy={pluginsBusy}
           pluginsNotice={pluginsNotice}
           onInstallPlugin={() => void installPlugin()}
+          onInstallPluginSample={(id) => void installPluginSample(id)}
           onSetPluginEnabled={(id, enabled) => void setPluginEnabled(id, enabled)}
           onUninstallPlugin={(id) => void uninstallPlugin(id)}
           onOpenPluginsDir={() => void openPluginsDir()}

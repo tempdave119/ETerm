@@ -38,6 +38,10 @@
       {
         "from": "examples/components",
         "to": "components"
+      },
+      {
+        "from": "examples/plugins",
+        "to": "plugins"
       }
     ],
     "asarUnpack": [

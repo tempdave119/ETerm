@@ -62,18 +62,28 @@ export class ModuleRegistry {
         },
       });
 
-      const setup = slot.manifest.setup(ctx);
-      if (typeof setup?.dispose !== 'function') {
-        throw new Error(`模块 ${slot.manifest.id} 的 setup() 必须返回 dispose()`);
-      }
+      try {
+        const setup = slot.manifest.setup(ctx);
+        if (typeof setup?.dispose !== 'function') {
+          throw new Error(`模块 ${slot.manifest.id} 的 setup() 必须返回 dispose()`);
+        }
 
-      slot.exports = setup.exports ?? {};
-      slot.dispose = setup.dispose;
-      this.#setup.add(slot.manifest.id);
+        slot.exports = setup.exports ?? {};
+        slot.dispose = setup.dispose;
+        this.#setup.add(slot.manifest.id);
 
-      for (const [name, service] of Object.entries(slot.exports.services ?? {})) {
-        if (this.#services.has(name)) throw new Error(`服务名重复：${name}`);
-        this.#services.set(name, service);
+        for (const [name, service] of Object.entries(setup.exports?.services ?? {})) {
+          if (this.#services.has(name)) throw new Error(`服务名重复：${name}`);
+          this.#services.set(name, service);
+        }
+      } catch (error) {
+        // 内置模块照旧向上抛，保证自身缺陷不被掩盖；外挂组件失败只跳过，
+        // 否则一个坏组件会让主进程在 createWindow 前中断，整个应用黑屏。
+        if (slot.manifest.builtin) throw error;
+        console.error(`[registry] 组件 ${slot.manifest.id} 初始化失败，已跳过`, error);
+        for (const [protocol, owner] of this.#protocols) {
+          if (owner === slot.manifest.id) this.#protocols.delete(protocol);
+        }
       }
     }
   }

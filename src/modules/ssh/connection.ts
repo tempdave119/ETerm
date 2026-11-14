@@ -98,6 +98,7 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
         detail: `观察到的主机指纹 ${observedFingerprint}`,
         host: target.host,
         port: target.port,
+        fingerprint: observedFingerprint,
       });
     }
     if (observedFingerprint && fingerprintMismatch) {
@@ -105,6 +106,8 @@ async function openClient(target: SshTarget, sock?: Duplex): Promise<Client> {
         detail: `主机指纹已变化：${observedFingerprint}`,
         host: target.host,
         port: target.port,
+        fingerprint: observedFingerprint,
+        previousFingerprint: expected,
       });
     }
     throw normalizeError(error);

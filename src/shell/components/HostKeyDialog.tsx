@@ -4,6 +4,8 @@ import { t } from '../../shared/i18n/index.ts';
 export interface HostKeyPrompt {
   connection: ConnectionRecord;
   fingerprint: string;
+  /** 指纹变更时的旧值；首次确认没有。 */
+  previousFingerprint?: string;
   first: boolean;
   /** 失败的那一跳，可能是跳板机而不是目标主机。 */
   host: string;
@@ -29,7 +31,18 @@ export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDial
         <p className="form-hint">
           {prompt.connection.name} · {prompt.host}:{prompt.port}
         </p>
-        <code className="fingerprint">{prompt.fingerprint}</code>
+        {prompt.previousFingerprint ? (
+          <>
+            <p className="form-hint">{t('hostKey.previousFingerprint')}</p>
+            <code className="fingerprint fingerprint--old" data-testid="hostkey-previous">
+              {prompt.previousFingerprint}
+            </code>
+            <p className="form-hint">{t('hostKey.currentFingerprint')}</p>
+          </>
+        ) : null}
+        <code className="fingerprint" data-testid="hostkey-current">
+          {prompt.fingerprint}
+        </code>
         <p className="form-hint">
           {prompt.first ? t('hostKey.firstHint') : t('hostKey.changedHint')}
         </p>
@@ -45,7 +58,7 @@ export function HostKeyDialog({ prompt, busy, onCancel, onConfirm }: HostKeyDial
             onClick={onConfirm}
             disabled={busy}
           >
-            {t('hostKey.trust')}
+            {prompt.first ? t('hostKey.trust') : t('hostKey.trustChanged')}
           </button>
         </div>
       </div>

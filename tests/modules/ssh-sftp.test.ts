@@ -68,6 +68,19 @@ function createFakeSftp() {
       calls.push(`write:${path}:${data.toString('utf8')}`);
       callback();
     },
+    open(path, _flags, callback) {
+      calls.push(`open:${path}`);
+      callback(null, Buffer.from('handle'));
+    },
+    read(_handle, buffer, _offset, length, _position, callback) {
+      const data = Buffer.from('remote-data');
+      const bytesRead = Math.min(length, data.length);
+      data.copy(buffer, 0, 0, bytesRead);
+      callback(null, bytesRead);
+    },
+    close(_handle, callback) {
+      callback();
+    },
   };
 
   return { sftp, calls };
@@ -131,6 +144,16 @@ test('sftp_read_and_write_delegate_to_sftp', async () => {
   assert.equal(Buffer.from(data).toString('utf8'), 'remote-data');
   assert.ok(calls.includes('read:/srv/a.txt'));
   assert.ok(calls.includes('write:/srv/b.txt:hello'));
+});
+
+test('sftp_read_head_reads_only_requested_bytes', async () => {
+  const { sftp, calls } = createFakeSftp();
+  const port = createFilePort(sftp);
+
+  const head = await port.readHead('/srv/a.txt', 4);
+
+  assert.equal(Buffer.from(head).toString('utf8'), 'remo');
+  assert.ok(calls.includes('open:/srv/a.txt'));
 });
 
 test('sftp_missing_file_maps_to_file_not_found', async () => {

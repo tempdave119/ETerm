@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { FilePort } from '../../core/ports.ts';
 
 export const MAX_DIRECTORY_FILES = 1000;
@@ -54,6 +54,22 @@ export async function scanLocalDirectory(root: string): Promise<LocalDirectorySc
   return { directories, files };
 }
 
+/** 远端返回的文件名不可信：空、. / ..、含分隔符一律拒绝，避免拼出目标目录之外的本地路径。 */
+export function assertSafeName(name: string): void {
+  if (!name || name === '.' || name === '..' || /[/\\\0]/.test(name)) {
+    throw new Error(`远端返回了非法文件名（${name || '空'}），已中止目录下载`);
+  }
+}
+
+/** 落盘前最后一道防线：扫描器已拦过非法名字，这里保证拼出的路径不会越出目标目录。 */
+export function resolveLocalTarget(root: string, relative: string): string {
+  const target = resolve(root, ...relative.split('/'));
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new Error(`远端返回了非法路径（${relative}），已中止目录下载`);
+  }
+  return target;
+}
+
 /** 递归扫描远端目录；只走 list，文件路径用 FileEntry.path。 */
 export async function scanRemoteDirectory(file: FilePort, root: string): Promise<RemoteDirectoryScan> {
   const directories: string[] = [];
@@ -62,6 +78,7 @@ export async function scanRemoteDirectory(file: FilePort, root: string): Promise
   const visit = async (dir: string, relative: string): Promise<void> => {
     const entries = (await file.list(dir)).sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
+      assertSafeName(entry.name);
       const path = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.type === 'directory') {
         directories.push(path);

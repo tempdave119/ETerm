@@ -318,10 +318,12 @@ function normalizeProxy(value: ConnectionProxy): ConnectionProxy {
   if (value.type !== 'http' && value.type !== 'socks5') {
     throw new Error('代理类型必须是 http 或 socks5');
   }
+  const username = optionalString(value.username, '代理用户名', 255);
   return {
     type: value.type,
     host: requireString(value.host, '代理主机', 255),
     port: requireInteger(value.port, '代理端口', 1, 65535),
+    ...(username ? { username } : {}),
   };
 }
 
@@ -425,10 +427,12 @@ function parseProxy(value: unknown): ConnectionProxy | undefined {
   const record = asRecord(value, '代理');
   const type = record.type === 'http' || record.type === 'socks5' ? record.type : null;
   if (!type) throw new Error('代理类型无效');
+  const username = optionalString(record.username, '代理用户名', 255);
   return {
     type,
     host: requireString(record.host, '代理主机', 255),
     port: requireInteger(record.port, '代理端口', 1, 65535),
+    ...(username ? { username } : {}),
   };
 }
 

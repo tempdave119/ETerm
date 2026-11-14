@@ -52,6 +52,41 @@ test('registry_setup_requires_dispose', () => {
   assert.throws(() => registry.setupAll(), /必须返回 dispose/);
 });
 
+test('registry_failing_component_is_skipped_without_blocking_startup', () => {
+  const calls: string[] = [];
+  const registry = new ModuleRegistry();
+  registry.register({
+    ...makeModule({
+      id: 'ext-bad',
+      protocol: 'bad',
+      setup: () => {
+        throw new Error('boom');
+      },
+    }),
+    builtin: false,
+  });
+  registry.register(
+    makeModule({
+      id: 'core-ok',
+      protocol: 'ok',
+      setup: () => {
+        calls.push('ok');
+        return { dispose: () => {} };
+      },
+    }),
+  );
+
+  registry.setupAll();
+
+  assert.deepEqual(calls, ['ok']);
+  // 失败组件声明的协议要释放，否则连接会路由到空实现。
+  assert.throws(
+    () => registry.moduleForProtocol('bad'),
+    (error: unknown) => error instanceof ProductError && error.code === 'UNSUPPORTED',
+  );
+  assert.equal(registry.moduleForProtocol('ok').manifest.id, 'core-ok');
+});
+
 test('registry_setup_is_idempotent_for_late_modules', () => {
   const calls: string[] = [];
   const registry = new ModuleRegistry();

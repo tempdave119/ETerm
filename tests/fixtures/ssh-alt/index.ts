@@ -266,6 +266,24 @@ function createFilePort(sftp: SFTPWrapper): FilePort {
           resolve(new Uint8Array(data));
         });
       }),
+    readHead: (path, maxBytes) =>
+      new Promise<Uint8Array>((resolve, reject) => {
+        sftp.open(path, 'r', (openError, handle) => {
+          if (openError) {
+            reject(mapSftpError(openError, path));
+            return;
+          }
+          const buffer = Buffer.alloc(maxBytes);
+          sftp.read(handle, buffer, 0, maxBytes, 0, (readError, bytesRead) => {
+            sftp.close(handle, () => undefined);
+            if (readError) {
+              reject(mapSftpError(readError, path));
+              return;
+            }
+            resolve(new Uint8Array(buffer.subarray(0, bytesRead ?? 0)));
+          });
+        });
+      }),
     stat: async () => unsupported(),
     mkdir: async () => unsupported(),
     rename: async () => unsupported(),

@@ -80,7 +80,7 @@ export function PluginPanel({
         ref={frameRef}
         className="plugin-panel"
         src={`eterm-plugin://${pluginId}/panel.html`}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-downloads"
         title={title}
         data-testid={`plugin-panel-${pluginId}`}
       />

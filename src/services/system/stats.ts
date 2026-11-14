@@ -1,8 +1,11 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { statfsSync } from 'node:fs';
 import os from 'node:os';
+import { promisify } from 'node:util';
 import type { FileSystemUsage, ProcessUsage, SystemStats } from '../../shared/ipc.ts';
 import { parseProcessList } from './processes.ts';
+
+const run = promisify(execFile);
 
 export interface CpuSnapshot {
   idle: number;
@@ -28,10 +31,10 @@ export function cpuPercentBetween(previous: CpuSnapshot | null, current: CpuSnap
   return Math.min(100, Math.max(0, Math.round((1 - idleDelta / totalDelta) * 100)));
 }
 
-export function readSystemStats(previous: CpuSnapshot | null): {
+export async function readSystemStats(previous: CpuSnapshot | null): Promise<{
   stats: SystemStats;
   snapshot: CpuSnapshot;
-} {
+}> {
   const snapshot = cpuSnapshot();
   const memTotal = os.totalmem();
   const load = os.loadavg();
@@ -47,12 +50,14 @@ export function readSystemStats(previous: CpuSnapshot | null): {
   let processes: ProcessUsage[] = [];
   let processesByCpu: ProcessUsage[] = [];
   try {
-    const output = execFileSync('ps', ['-A', '-o', 'pid=,rss=,%cpu=,%mem=,comm='], {
+    // 必须异步：macOS 的 ps 本身要 60–100ms，同步执行会把主进程事件循环卡住，
+    // 每秒一次的采样会拖慢终端数据与其它 IPC。
+    const { stdout } = await run('ps', ['-A', '-o', 'pid=,rss=,%cpu=,%mem=,comm='], {
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
     });
-    processes = parseProcessList(output);
-    processesByCpu = parseProcessList(output, { sortBy: 'cpu' });
+    processes = parseProcessList(stdout);
+    processesByCpu = parseProcessList(stdout, { sortBy: 'cpu' });
   } catch {
     processes = [];
     processesByCpu = [];

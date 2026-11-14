@@ -2,9 +2,14 @@ import { ipcMain, dialog, shell } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import { normalizeError } from '../core/errors.ts';
 import type { PluginStore } from '../services/plugins/store.ts';
+import {
+  installPluginSamples,
+  listPluginSamples,
+  type PluginSampleDirs,
+} from '../services/plugins/samples.ts';
 import type { PluginRuntime } from './plugin-runtime.ts';
 import { PLUGINS_IPC, type IpcResult } from '../shared/ipc.ts';
-import type { PluginCommandInfo, PluginRecord } from '../shared/plugins.ts';
+import type { PluginCommandInfo, PluginRecord, PluginSample } from '../shared/plugins.ts';
 import { t } from '../shared/i18n/index.ts';
 import { readRecord, readString } from './validate.ts';
 
@@ -12,6 +17,8 @@ interface PluginsIpcOptions {
   store: PluginStore;
   runtime: PluginRuntime;
   pluginsDir: string;
+  /** 随包示例插件目录与 userData 目标目录。 */
+  sampleDirs: PluginSampleDirs;
   /** 插件总开关；关闭时拒绝安装 / 启停 / 卸载，只允许查看列表。 */
   isEnabled: () => Promise<boolean>;
 }
@@ -42,6 +49,14 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
     }
   });
 
+  ipcMain.handle(PLUGINS_IPC.samples, async (): Promise<IpcResult<PluginSample[]>> => {
+    try {
+      return { ok: true, value: await listPluginSamples(options.sampleDirs) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   ipcMain.handle(PLUGINS_IPC.install, async (): Promise<IpcResult<PluginRecord | null>> => {
     try {
       await requireEnabled(options);
@@ -52,6 +67,20 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
       });
       if (picked.canceled || picked.filePaths.length === 0) return { ok: true, value: null };
       return { ok: true, value: await options.store.install(picked.filePaths[0]!) };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  ipcMain.handle(PLUGINS_IPC.installSample, async (_event, raw): Promise<IpcResult<PluginRecord | null>> => {
+    try {
+      await requireEnabled(options);
+      const id = readId(raw);
+      const result = await installPluginSamples(options.sampleDirs, [id]);
+      if (result.installed.length === 0) return { ok: true, value: null };
+      // 复制完成后直接从 store 读回记录；运行时装载需要重启，与目录安装一致。
+      const records = await options.store.list();
+      return { ok: true, value: records.find((item) => item.id === id) ?? null };
     } catch (error) {
       return failure(error);
     }
@@ -131,7 +160,9 @@ export function registerPluginsIpc(options: PluginsIpcOptions): () => void {
   return () => {
     for (const channel of [
       PLUGINS_IPC.list,
+      PLUGINS_IPC.samples,
       PLUGINS_IPC.install,
+      PLUGINS_IPC.installSample,
       PLUGINS_IPC.setEnabled,
       PLUGINS_IPC.uninstall,
       PLUGINS_IPC.openDir,

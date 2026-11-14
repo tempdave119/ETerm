@@ -200,6 +200,14 @@ async function createWindow(): Promise<void> {
   mainWindow = window;
   if (maximized) window.maximize();
 
+  // 终端里的 OSC 8 链接、拖进窗口的文件都会让窗口导航到外部页面，而新窗口会继承 preload；
+  // 统一在主进程拒绝：外链只交给系统浏览器，页内导航一律阻断。
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event) => event.preventDefault());
+
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   const saveWindowState = (): void => {
     if (!appServices || window.isDestroyed()) return;
@@ -367,6 +375,13 @@ void app.whenReady().then(async () => {
     store: pluginStore,
     runtime,
     pluginsDir: path.join(baseDir, 'plugins'),
+    // 示例插件随包放在 Resources/plugins；开发模式直接读仓库 examples/plugins。
+    sampleDirs: {
+      bundledDir: app.isPackaged
+        ? path.join(process.resourcesPath, 'plugins')
+        : path.join(__dirname, '..', '..', 'examples', 'plugins'),
+      userDir: path.join(baseDir, 'plugins'),
+    },
     isEnabled: async () => (await configStore.get()).plugins.enabled,
   });
   disposePluginProtocol = registerPluginProtocol(pluginStore, async () => {

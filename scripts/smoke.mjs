@@ -757,6 +757,16 @@ try {
     10_000,
     '插件列表',
   );
+  // 示例插件随包提供：冒烟环境已预装 S3 样例，列表应显示「已安装」。
+  await waitFor(
+    () => evaluate(`document.querySelector('[data-testid="plugin-sample-s3-browser"]') !== null`),
+    5_000,
+    '示例插件列表',
+  );
+  const sampleInstalled = await evaluate(
+    `document.querySelector('[data-testid="plugin-sample-s3-browser"]')?.dataset.installed`,
+  );
+  if (sampleInstalled !== 'true') throw new Error('S3 示例插件应显示已安装');
   const pluginSettingsShot = await client.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(
     'tmp/plugin-settings-smoke.png',

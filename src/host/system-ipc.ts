@@ -18,7 +18,7 @@ export function registerSystemIpc(sessions: Pick<SessionService, 'execPort' | 'h
         previous = cpuSnapshot();
         await delay(120);
       }
-      const { stats, snapshot } = readSystemStats(previous);
+      const { stats, snapshot } = await readSystemStats(previous);
       previous = snapshot;
       return { ok: true, value: stats };
     } catch (error) {

@@ -609,6 +609,11 @@ button {
   min-width: 0;
 }
 
+/* 组头行高与输入框等高，外扩的 outline 会被列表滚动容器裁掉，改为向内收 1px。 */
+.tree-group__rename-input:focus {
+  outline-offset: -1px;
+}
+
 .tree-group__header--static {
   color: var(--text-tertiary);
   font-size: var(--font-aux);
@@ -1494,6 +1499,10 @@ button {
   font-family: var(--font-mono);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.fingerprint--old {
+  color: var(--text-tertiary);
 }
 
 .fingerprint {

@@ -29,6 +29,11 @@ interface Task {
   close(): Promise<void>;
 }
 
+interface RemoteRoute {
+  host: string;
+  open(channel: Duplex): void;
+}
+
 /**
  * 本地转发（-L）：本机监听，每个连接从 SSH 通道 forwardOut 到目标。
  * 远程转发（-R）：让服务器在远端监听，收到 tcp connection 时回连本地目标。
@@ -36,7 +41,28 @@ interface Task {
  */
 export function createForwardPort(client: ForwardClientLike): ForwardPort {
   const tasks = new Map<string, Task>();
+  /** 远程转发按远端端口登记路由：同一 client 只挂一个 tcp connection 监听，避免多个转发互相 reject。 */
+  const remoteRoutes = new Map<number, RemoteRoute[]>();
   let sequence = 0;
+  let listenerAttached = false;
+
+  const remoteListener = (
+    info: { destIP: string; destPort: number },
+    accept: () => Duplex,
+    reject: () => void,
+  ): void => {
+    const candidates = remoteRoutes.get(info.destPort) ?? [];
+    const isWildcard = (host: string): boolean => host === '0.0.0.0' || host === '::' || host === '';
+    const route =
+      candidates.find((item) => item.host === info.destIP) ??
+      candidates.find((item) => isWildcard(item.host)) ??
+      (candidates.length === 1 ? candidates[0] : undefined);
+    if (!route) {
+      reject();
+      return;
+    }
+    route.open(accept());
+  };
 
   return {
     async open(request) {
@@ -48,7 +74,10 @@ export function createForwardPort(client: ForwardClientLike): ForwardPort {
       };
 
       if (normalized.direction === 'local') {
+        const sockets = new Set<net.Socket>();
         const server = net.createServer((socket) => {
+          sockets.add(socket);
+          socket.on('close', () => sockets.delete(socket));
           client.forwardOut('127.0.0.1', 0, normalized.targetHost, normalized.targetPort, (error, channel) => {
             if (error) {
               socket.destroy();
@@ -65,37 +94,46 @@ export function createForwardPort(client: ForwardClientLike): ForwardPort {
         tasks.set(view.id, {
           view,
           close: async () => {
-            // 停止接受新连接；已建立的隧道随会话结束一起释放。
-            server.close();
+            // 停止监听并断开已建立的隧道，否则旧连接不断，端口会一直处于占用状态。
+            for (const socket of sockets) socket.destroy();
+            sockets.clear();
+            await new Promise<void>((resolve) => server.close(() => resolve()));
           },
         });
         return { ...view };
       }
 
       await forwardIn(client, normalized.bindHost, normalized.bindPort);
-      const listener = (
-        info: { destIP: string; destPort: number },
-        accept: () => Duplex,
-        reject: () => void,
-      ): void => {
-        if (info.destPort !== normalized.bindPort) {
-          reject();
-          return;
-        }
-        const channel = accept();
-        const socket = net.connect(normalized.targetPort, normalized.targetHost, () => {
-          socket.pipe(channel).pipe(socket);
-        });
-        socket.on('error', () => channel.destroy());
-        channel.on('error', () => socket.destroy());
-        socket.on('close', () => channel.destroy());
-        channel.on('close', () => socket.destroy());
+      const route: RemoteRoute = {
+        host: normalized.bindHost,
+        open: (channel) => {
+          const socket = net.connect(normalized.targetPort, normalized.targetHost, () => {
+            socket.pipe(channel).pipe(socket);
+          });
+          socket.on('error', () => channel.destroy());
+          channel.on('error', () => socket.destroy());
+          socket.on('close', () => channel.destroy());
+          channel.on('close', () => socket.destroy());
+        },
       };
-      client.on('tcp connection', listener);
+      const routes = remoteRoutes.get(normalized.bindPort) ?? [];
+      routes.push(route);
+      remoteRoutes.set(normalized.bindPort, routes);
+      if (!listenerAttached) {
+        client.on('tcp connection', remoteListener);
+        listenerAttached = true;
+      }
       tasks.set(view.id, {
         view,
         close: async () => {
-          client.removeListener('tcp connection', listener);
+          const current = remoteRoutes.get(normalized.bindPort) ?? [];
+          const remaining = current.filter((item) => item !== route);
+          if (remaining.length) remoteRoutes.set(normalized.bindPort, remaining);
+          else remoteRoutes.delete(normalized.bindPort);
+          if (listenerAttached && remoteRoutes.size === 0) {
+            client.removeListener('tcp connection', remoteListener);
+            listenerAttached = false;
+          }
           await unforwardIn(client, normalized.bindHost, normalized.bindPort);
         },
       });

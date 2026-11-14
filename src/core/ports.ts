@@ -58,6 +58,8 @@ export interface FilePort {
   rename(from: string, to: string): Promise<void>;
   remove(path: string): Promise<void>;
   read(path: string): Promise<Uint8Array>;
+  /** 只读文件头 maxBytes 字节；预览类场景用它，避免把大文件整个读进内存。 */
+  readHead(path: string, maxBytes: number): Promise<Uint8Array>;
   write(path: string, data: Uint8Array): Promise<void>;
 }
 

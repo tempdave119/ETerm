@@ -4,7 +4,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { ProductError, normalizeError } from '../core/errors.ts';
 import type { FilePort } from '../core/ports.ts';
 import type { SessionService } from '../core/session-service.ts';
-import { scanLocalDirectory, scanRemoteDirectory } from '../services/transfers/directory.ts';
+import { resolveLocalTarget, scanLocalDirectory, scanRemoteDirectory } from '../services/transfers/directory.ts';
 import { DropTokenStore } from '../services/transfers/drop-tokens.ts';
 import type { TransferQueue, TransferView } from '../services/transfers/queue.ts';
 import { DROP_IPC, TRANSFERS_IPC, type IpcResult } from '../shared/ipc.ts';
@@ -150,17 +150,18 @@ async function downloadDirectory(
   remotePath: string,
   localDir: string,
 ): Promise<TransferView[]> {
-  const targetRoot = join(localDir, posix.basename(remotePath) || 'download');
+  const folderName = posix.basename(remotePath);
+  const targetRoot = join(localDir, folderName && folderName !== '.' && folderName !== '..' ? folderName : 'download');
   const scan = await scanRemoteDirectory(file, remotePath);
   await mkdir(targetRoot, { recursive: true });
   for (const directory of scan.directories) {
-    await mkdir(join(targetRoot, ...directory.split('/')), { recursive: true });
+    await mkdir(resolveLocalTarget(targetRoot, directory), { recursive: true });
   }
   return scan.files.map((entry) =>
     queue.enqueue({
       sessionId,
       direction: 'download',
-      localPath: join(targetRoot, ...entry.relativePath.split('/')),
+      localPath: resolveLocalTarget(targetRoot, entry.relativePath),
       remotePath: entry.remotePath,
       name: entry.name,
     }),

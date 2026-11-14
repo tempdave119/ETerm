@@ -17,6 +17,8 @@ const OPTION = { ECHO: 1, SGA: 3, TTYPE: 24, NAWS: 31 };
 const TTYPE_IS = 0;
 const TTYPE_SEND = 1;
 const TERMINAL_TYPE = 'xterm-256color';
+/** 子协商内容只需要几个字节；封顶避免服务端一直发 SB 把主进程内存吃满。 */
+const MAX_SUBNEGOTIATION_BYTES = 4096;
 
 function command(verb, option) {
   return Buffer.from([IAC, verb, option]);
@@ -132,8 +134,9 @@ function createTelnetProtocol(options = {}) {
             break;
 
           case 'sb':
+            // 超出上限的字节直接丢弃，但保持状态直到 IAC SE，避免把协商内容当成用户数据。
             if (byte === IAC) state = 'sb-iac';
-            else subnegotiationBytes.push(byte);
+            else if (subnegotiationBytes.length < MAX_SUBNEGOTIATION_BYTES) subnegotiationBytes.push(byte);
             break;
 
           case 'sb-iac':

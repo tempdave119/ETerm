@@ -55,7 +55,7 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 ## 面板约定
 
 - 插件目录下放 `panel.html`，宿主以 `eterm-plugin://<id>/panel.html` 加载；`panel.html` 可引用同目录的 CSS / JS / 图片（路径穿越被拒绝）。
-- iframe 只开 `sandbox="allow-scripts"`，不给 same-origin：插件脚本拿不到宿主 DOM、preload 与 IPC。
+- iframe 用 `sandbox="allow-scripts allow-downloads"`，不给 same-origin：插件脚本拿不到宿主 DOM、preload 与 IPC；不放同源也意味着面板里不能用 `localStorage` / `sessionStorage`（会抛 SecurityError），需要持久化的状态由面板通过消息桥交给插件主进程；`allow-downloads` 供面板触发 Blob 下载。
 - 插件自行负责面板内样式与滚动；宿主只提供面板头、停靠、尺寸与分隔。
 - 已启用插件的面板按 manifest `panels[].defaultDock`（默认 `right`）自动并入布局；禁用后从界面移除，布局位置保留，重新启用后回到原位。
 
@@ -89,7 +89,7 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 
 | 动作 | 行为 |
 | --- | --- |
-| 安装 | 选择本地目录 → 校验 manifest 与 `kind` → 复制到 `plugins/<id>/` → 写入启用状态；冲突时不覆盖 |
+| 安装 | 选择本地目录 → 校验 manifest 与 `kind` → 复制到 `plugins/<id>/` → 写入启用状态；冲突时不覆盖；也可在设置 → 插件 的示例列表里一键安装随包样例 |
 | 启用 | 从 `plugins.json` 的禁用列表移除；宿主启动时装载 |
 | 禁用 | 加入禁用列表；宿主下次启动不装载，已开面板关闭 |
 | 卸载 | 二次确认后删除 `plugins/<id>/` 并从状态文件清理 |
@@ -106,17 +106,17 @@ description: "插件（Plugin）的定位、目录、manifest 草案、生命周
 
 ## 首版限制
 
-- 只支持本地目录安装，不支持 zip / 在线市场。
+- 支持本地目录安装与随包示例一键安装，不支持 zip / 在线市场。
 - 面板不允许多实例。
 - 插件自带实现，不支持「插件依赖某个扩展」的组合声明。
 - 插件面板的运行状态不进入 `layout.json` 之外的存储；禁用后布局里的面板位置保留，重新启用后回到原位置。
 
 ## S3 样例
 
-`examples/plugins/s3-browser/` 是首个真实插件样例：
+`examples/plugins/s3-browser/` 是首个真实插件样例（随包发布，设置 → 插件 可直接安装）：
 
 - 无第三方依赖，手写 SigV4（`UNSIGNED-PAYLOAD`），支持 ListObjectsV2 与 GetObject（单对象上限 5 MB）。
-- 面板（`panel.html`）提供 Endpoint / Bucket / Region / Prefix / AK / SK 表单，配置只存在插件自己的源（localStorage），不写 ETerm 配置。
+- 面板（`panel.html`）提供 Endpoint / Bucket / Region / Prefix / AK / SK 表单，配置通过消息桥存在插件进程内存（重开 ETerm 需重填），不写 ETerm 配置；下载经 `allow-downloads` 在面板内触发。
 - 签名与请求在主进程插件入口执行，面板通过消息桥取数据；不引入 AWS SDK，也就没有额外依赖面。
 - 验证：`tests/modules/s3-browser-plugin.test.ts` 覆盖签名稳定性、路径编码、列表解析与下载；`npm run smoke` 用 mock S3 验证自检命令与面板消息。真实 S3 / MinIO 待手动验证。
 

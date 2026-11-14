@@ -53,6 +53,10 @@ export interface ProductErrorInfo {
   /** 指纹确认等场景需要知道是哪一跳主机失败；其余错误不带。 */
   host?: string;
   port?: number;
+  /** 本次握手观察到的主机指纹；结构化携带，避免界面从 detail 文本里正则抠取。 */
+  fingerprint?: string;
+  /** 指纹变更场景下的旧指纹，供弹窗对比展示。 */
+  previousFingerprint?: string;
 }
 
 export class ProductError extends Error {
@@ -61,12 +65,23 @@ export class ProductError extends Error {
   readonly reason?: string;
   readonly host?: string;
   readonly port?: number;
+  readonly fingerprint?: string;
+  readonly previousFingerprint?: string;
   readonly #customMessage?: string;
   readonly #customNext?: string;
 
   constructor(
     code: ProductErrorCode,
-    options: { message?: string; next?: string; detail?: string; reason?: string; host?: string; port?: number } = {},
+    options: {
+      message?: string;
+      next?: string;
+      detail?: string;
+      reason?: string;
+      host?: string;
+      port?: number;
+      fingerprint?: string;
+      previousFingerprint?: string;
+    } = {},
   ) {
     super(options.message ?? t(PRODUCT_ERRORS[code].message));
     this.name = 'ProductError';
@@ -78,6 +93,8 @@ export class ProductError extends Error {
     this.reason = options.reason;
     this.host = options.host;
     this.port = options.port;
+    this.fingerprint = options.fingerprint;
+    this.previousFingerprint = options.previousFingerprint;
   }
 
   /** 按当前语言取下一步；没有逐条覆盖时读字典。 */
@@ -95,6 +112,8 @@ export class ProductError extends Error {
     if (this.reason !== undefined) info.reason = this.reason;
     if (this.host !== undefined) info.host = this.host;
     if (this.port !== undefined) info.port = this.port;
+    if (this.fingerprint !== undefined) info.fingerprint = this.fingerprint;
+    if (this.previousFingerprint !== undefined) info.previousFingerprint = this.previousFingerprint;
     return info;
   }
 }

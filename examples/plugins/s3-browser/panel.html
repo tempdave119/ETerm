@@ -103,9 +103,8 @@
     </div>
     <div class="status" id="status"></div>
     <div class="objects" id="objects"></div>
-    <p class="hint">配置只保存在本面板（插件自己的源），不会写入 ETerm 配置；SigV4 签名在主进程完成。</p>
+    <p class="hint">配置保存在插件进程内存（重开 ETerm 需重填）；SigV4 签名在主进程完成。</p>
     <script>
-      const STORAGE_KEY = 'eterm.s3.config';
       const pending = new Map();
       let requestSeq = 0;
 
@@ -153,17 +152,19 @@
       }
 
       function saveConfig() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(readConfig()));
+        // 面板是不透明源，localStorage 会抛 SecurityError，改交插件主进程保存。
+        void request({ action: 'save-config', config: readConfig() }).catch(() => {});
       }
 
-      function restoreConfig() {
+      async function restoreConfig() {
         try {
-          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+          const result = await request({ action: 'load-config' });
+          const saved = result?.config ?? {};
           for (const field of fields) {
             if (typeof saved[field] === 'string') document.getElementById(field).value = saved[field];
           }
         } catch {
-          // 坏配置忽略，保持空表单。
+          // 插件未就绪或读取失败时保持空表单。
         }
       }
 
@@ -234,11 +235,11 @@
       document.getElementById('list').addEventListener('click', browse);
       document.getElementById('clear').addEventListener('click', () => {
         for (const field of fields) document.getElementById(field).value = '';
-        localStorage.removeItem(STORAGE_KEY);
+        void request({ action: 'save-config', config: {} }).catch(() => {});
         renderObjects([]);
         setStatus('已清空', false);
       });
-      restoreConfig();
+      void restoreConfig();
     </script>
   </body>
 </html>

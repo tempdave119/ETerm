@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { DOCK_SIZE_LIMITS, DOCKABLE_PANEL_IDS, panelDockOf, type DockId, type PanelId, type PanelLayout } from '../../shared/panels.ts';
 import { defaultConfig, type AppConfig, type LanguagePreference, type ThemePreference, type UiDensity } from '../../shared/ipc.ts';
 import type { ComponentDescriptor, ComponentSample } from '../../shared/components.ts';
-import type { PluginPermission, PluginRecord } from '../../shared/plugins.ts';
+import type { PluginPermission, PluginRecord, PluginSample } from '../../shared/plugins.ts';
 import { commandForShellPreset, detectShellPreset, type LocalShellPreset } from '../../shared/local-shell.ts';
 import {
   TERMINAL_FONT_FAMILIES,
@@ -42,9 +42,12 @@ interface SettingsPanelProps {
   onUninstallComponentSample(id: string): void;
   onOpenComponentsDir(): void;
   plugins: PluginRecord[];
+  /** 随包示例插件（含是否已安装）。 */
+  pluginSamples: PluginSample[];
   pluginsBusy: boolean;
   pluginsNotice: string | null;
   onInstallPlugin(): void;
+  onInstallPluginSample(id: string): void;
   onSetPluginEnabled(id: string, enabled: boolean): void;
   onUninstallPlugin(id: string): void;
   onOpenPluginsDir(): void;
@@ -111,9 +114,11 @@ export function SettingsPanel({
   onUninstallComponentSample,
   onOpenComponentsDir,
   plugins,
+  pluginSamples,
   pluginsBusy,
   pluginsNotice,
   onInstallPlugin,
+  onInstallPluginSample,
   onSetPluginEnabled,
   onUninstallPlugin,
   onOpenPluginsDir,
@@ -816,6 +821,37 @@ export function SettingsPanel({
                       {t('settings.plugins.openDir')}
                     </button>
                   </div>
+                  {pluginSamples.length > 0 ? (
+                    <div className="component-sample-list" data-testid="plugins-samples">
+                      {pluginSamples.map((sample) => (
+                        <div
+                          className="component-sample"
+                          key={sample.id}
+                          data-testid={`plugin-sample-${sample.id}`}
+                          data-installed={sample.installed}
+                        >
+                          <span className="component-sample__name" title={sample.description}>
+                            {sample.id}
+                          </span>
+                          <span className="component-sample__protocol">v{sample.version}</span>
+                          {sample.installed ? (
+                            <span className="form-hint">{t('settings.plugins.sampleInstalled')}</span>
+                          ) : (
+                            <button
+                              className="button"
+                              type="button"
+                              data-testid={`plugin-sample-install-${sample.id}`}
+                              disabled={!pluginsEnabled || pluginsBusy}
+                              onClick={() => onInstallPluginSample(sample.id)}
+                            >
+                              {t('settings.plugins.sampleInstall')}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="form-hint">{t('settings.plugins.samplesHint')}</p>
                   {!pluginsEnabled ? (
                     <p className="form-hint" data-testid="plugins-disabled">
                       {t('settings.plugins.enableFirst')}

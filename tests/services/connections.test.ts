@@ -316,6 +316,26 @@ test('connections_proxy_persists_and_is_validated', async () => {
   );
 });
 
+test('connections_proxy_username_persists', async () => {
+  const { dir, store } = await createStore();
+  const connection = await store.saveConnection({
+    name: 'web-auth',
+    protocol: 'ssh',
+    host: '10.0.0.1',
+    username: 'root',
+    proxy: { type: 'http', host: '127.0.0.1', port: 8080, username: 'proxy-user' },
+  });
+
+  const reloaded = new ConnectionStore({ baseDir: dir, logger: () => {} });
+  const snapshot = await reloaded.list();
+  assert.deepEqual(snapshot.connections.find((item) => item.id === connection.id)?.proxy, {
+    type: 'http',
+    host: '127.0.0.1',
+    port: 8080,
+    username: 'proxy-user',
+  });
+});
+
 test('connections_note_persists_and_is_optional', async () => {
   const { dir, store } = await createStore();
 

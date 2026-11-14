@@ -29,6 +29,16 @@ export interface SftpLike {
   rmdir(path: string, callback: VoidCallback): void;
   readFile(path: string, callback: NodeCallback<Buffer>): void;
   writeFile(path: string, data: Buffer, callback: VoidCallback): void;
+  open(path: string, flags: string, callback: NodeCallback<Buffer>): void;
+  read(
+    handle: Buffer,
+    buffer: Buffer,
+    offset: number,
+    length: number,
+    position: number,
+    callback: NodeCallback<number>,
+  ): void;
+  close(handle: Buffer, callback: VoidCallback): void;
 }
 
 function call<T>(path: string, run: (callback: NodeCallback<T>) => void): Promise<T> {
@@ -94,6 +104,20 @@ export function createFilePort(sftp: SftpLike): FilePort {
     },
 
     read: (path) => call<Buffer>(path, (callback) => sftp.readFile(path, callback)),
+
+    // 预览只开一次句柄读固定长度，避免大文件被 readFile 整个拉进主进程内存。
+    async readHead(path, maxBytes) {
+      const handle = await call<Buffer>(path, (callback) => sftp.open(path, 'r', callback));
+      try {
+        const buffer = Buffer.alloc(maxBytes);
+        const bytesRead = await call<number>(path, (callback) =>
+          sftp.read(handle, buffer, 0, maxBytes, 0, (error, read) => callback(error, read)),
+        );
+        return buffer.subarray(0, bytesRead);
+      } finally {
+        await call<void>(path, (callback) => sftp.close(handle, callback));
+      }
+    },
 
     write: (path, data) => call<void>(path, (callback) => sftp.writeFile(path, Buffer.from(data), callback)),
   };

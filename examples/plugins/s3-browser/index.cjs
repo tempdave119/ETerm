@@ -164,8 +164,18 @@ module.exports = {
   // 供单测直接调用；宿主只依赖 activate。
   __test: { signRequest, listObjects, downloadObject, objectPath },
   activate(api) {
+    // 面板在 sandbox iframe 里运行（不透明源），localStorage 会直接抛 SecurityError，
+    // 配置改由插件主进程保存；存内存即可，重开 ETerm 后重新填。
+    let savedConfig = null;
+
     api.registerPanelHandler('browser', async (payload) => {
       const action = payload && typeof payload === 'object' ? payload.action : '';
+      if (action === 'load-config') return { config: savedConfig ?? {} };
+      if (action === 'save-config') {
+        const raw = payload.config;
+        savedConfig = raw && typeof raw === 'object' ? { ...raw } : null;
+        return {};
+      }
       const config = normalizeConfig(payload && typeof payload === 'object' ? payload.config : null);
       if (action === 'list') return { objects: await listObjects(config) };
       if (action === 'download') {

@@ -74,8 +74,8 @@ function createFakeClient() {
     removeListener(event: 'tcp connection', listener: TcpListener): void {
       if (event === 'tcp connection') listeners.delete(listener);
     },
-    emitTcp(info: { destIP: string; destPort: number }, accept: () => NodeJS.ReadWriteStream): void {
-      for (const listener of listeners) listener(info, accept, () => {});
+    emitTcp(info: { destIP: string; destPort: number }, accept: () => NodeJS.ReadWriteStream, reject: () => void = () => {}): void {
+      for (const listener of listeners) listener(info, accept, reject);
     },
   };
 
@@ -151,6 +151,90 @@ test('forward_remote_registers_and_pipes_connections', async () => {
   channel.destroy();
   assert.deepEqual(client.state.unforwarded, [{ host: '127.0.0.1', port: 9000 }]);
   assert.equal(client.state.listeners.size, 0);
+});
+
+test('forward_remote_multiple_ports_do_not_reject_each_other', async () => {
+  const targetPort = await startEcho();
+  const client = createFakeClient();
+  const port = createForwardPort(client);
+
+  const first = await port.open({
+    direction: 'remote',
+    bindHost: '127.0.0.1',
+    bindPort: 9101,
+    targetHost: '127.0.0.1',
+    targetPort,
+  });
+  const second = await port.open({
+    direction: 'remote',
+    bindHost: '127.0.0.1',
+    bindPort: 9102,
+    targetHost: '127.0.0.1',
+    targetPort,
+  });
+
+  let rejected = false;
+  const channel = new PassThrough();
+  client.emitTcp(
+    { destIP: '127.0.0.1', destPort: 9102 },
+    () => channel,
+    () => {
+      rejected = true;
+    },
+  );
+  assert.equal(rejected, false);
+  channel.write('pong');
+  assert.equal((await readOnce(channel)).toString(), 'pong');
+
+  // 关掉第一个转发不应影响第二个。
+  await port.close(first.id);
+  const channel2 = new PassThrough();
+  client.emitTcp(
+    { destIP: '127.0.0.1', destPort: 9102 },
+    () => channel2,
+    () => {
+      rejected = true;
+    },
+  );
+  assert.equal(rejected, false);
+  channel2.write('again');
+  assert.equal((await readOnce(channel2)).toString(), 'again');
+
+  channel.destroy();
+  channel2.destroy();
+  await port.close(second.id);
+});
+
+test('forward_local_close_destroys_tunnels_and_releases_port', async () => {
+  const targetPort = await startEcho();
+  const client = createFakeClient();
+  const port = createForwardPort(client);
+
+  const view = await port.open({
+    direction: 'local',
+    bindHost: '127.0.0.1',
+    bindPort: 0,
+    targetHost: '127.0.0.1',
+    targetPort,
+  });
+
+  const socket = net.connect(view.bindPort, '127.0.0.1');
+  socket.write('ping');
+  assert.equal((await readOnce(socket)).toString(), 'ping');
+
+  await port.close(view.id);
+  await new Promise<void>((resolve) => socket.once('close', resolve));
+  assert.equal(socket.destroyed, true);
+
+  // 隧道断开后同一端口应能立即重新监听。
+  const again = await port.open({
+    direction: 'local',
+    bindHost: '127.0.0.1',
+    bindPort: view.bindPort,
+    targetHost: '127.0.0.1',
+    targetPort,
+  });
+  await port.close(again.id);
 });
 
 test('forward_rejects_invalid_ports', async () => {

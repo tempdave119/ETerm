@@ -44,6 +44,17 @@ test('telnet_protocol_strips_iac_and_keeps_escaped_data', () => {
   assert.deepEqual([...Buffer.concat(data)], [0x61, telnet.IAC, 0x62]);
 });
 
+test('telnet_protocol_survives_oversized_subnegotiation', () => {
+  const { protocol, data } = createProbe();
+  protocol.push(Buffer.from([telnet.IAC, telnet.SB]));
+  protocol.push(Buffer.alloc(10_000, 0x41));
+  protocol.push(Buffer.from([telnet.IAC, telnet.SE]));
+  protocol.push(Buffer.from('ok'));
+
+  // 超长子协商被丢弃，且状态机能回到数据态继续透传。
+  assert.equal(Buffer.concat(data).toString(), 'ok');
+});
+
 test('telnet_protocol_answers_naws_and_resizes', () => {
   const { protocol, replies } = createProbe();
   protocol.push(Buffer.from([telnet.IAC, telnet.DO, telnet.OPTION.NAWS]));

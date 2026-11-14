@@ -83,7 +83,8 @@ export function registerFilesIpc(sessions: SessionService): () => void {
   ipcMain.handle(FILES_IPC.read, async (_event, raw): Promise<IpcResult<FilePreview>> => {
     try {
       const { sessionId, path } = readRequest(raw);
-      const data = await requireFilePort(sessions, sessionId).read(path);
+      // 多读 1 字节用来判断是否被截断，但绝不整文件读入。
+      const data = await requireFilePort(sessions, sessionId).readHead(path, PREVIEW_LIMIT + 1);
       const binary = data.subarray(0, BINARY_SNIFF).includes(0);
       const limited = data.subarray(0, PREVIEW_LIMIT);
       return {

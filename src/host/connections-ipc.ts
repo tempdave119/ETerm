@@ -50,6 +50,7 @@ function readProxy(raw: unknown): ConnectionInput['proxy'] {
     type: value.type,
     host: readString(value.host, '代理主机', HOST_MAX),
     port: readInteger(value.port, '代理端口', 1, 65535),
+    username: readOptionalString(value.username, '代理用户名', USER_MAX),
   };
 }
 

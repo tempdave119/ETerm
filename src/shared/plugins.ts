@@ -17,6 +17,14 @@ export interface PluginPanelDeclaration {
   defaultDock?: PluginDock;
 }
 
+/** 随包示例插件：设置页可一键安装到 userData/plugins。 */
+export interface PluginSample {
+  id: string;
+  version: string;
+  description: string;
+  installed: boolean;
+}
+
 export interface PluginCommandDeclaration {
   id: string;
   title: string;

@@ -4,12 +4,23 @@ type DataHandler = (data: string) => void;
 type ExitHandler = (info: ExitInfo) => void;
 
 const MAX_BUFFERED_CHARS = 64 * 1024;
+const MAX_TRACKED_SESSIONS = 64;
 
 const buffers = new Map<string, string>();
 const pendingExits = new Map<string, ExitInfo>();
 const dataHandlers = new Map<string, Set<DataHandler>>();
 const exitHandlers = new Map<string, Set<ExitHandler>>();
 let started = false;
+
+/** 会话关掉后没人来取缓冲与退出信息，这里按先进先出封顶，避免长跑进程无限增长。 */
+function remember<V>(map: Map<string, V>, sessionId: string, value: V): void {
+  map.delete(sessionId);
+  map.set(sessionId, value);
+  if (map.size > MAX_TRACKED_SESSIONS) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+}
 
 /**
  * 单一数据泵：先订阅、后挂载。标签从 open 到 TerminalView 挂上之间会有一小段空窗，
@@ -27,7 +38,7 @@ function ensureStarted(): void {
       for (const handler of handlers) handler(data);
       return;
     }
-    buffers.set(sessionId, ((buffers.get(sessionId) ?? '') + data).slice(-MAX_BUFFERED_CHARS));
+    remember(buffers, sessionId, ((buffers.get(sessionId) ?? '') + data).slice(-MAX_BUFFERED_CHARS));
   });
 
   api.onSessionExit((sessionId, info) => {
@@ -36,7 +47,7 @@ function ensureStarted(): void {
       for (const handler of handlers) handler(info);
       return;
     }
-    pendingExits.set(sessionId, info);
+    remember(pendingExits, sessionId, info);
   });
 }
 
