@@ -53,6 +53,7 @@ export interface MenuActions {
   /** 帮助菜单：在 Finder 中打开用户数据目录。 */
   openDataDir(): void;
   showAbout(): void;
+  resetWindowSize(): void;
 }
 
 export function buildMenuTemplate(
@@ -117,6 +118,8 @@ export function buildMenuTemplate(
       submenu: [
         { role: 'minimize', label: t('menu.minimize') },
         { role: 'zoom', label: t('menu.zoom') },
+        { type: 'separator' },
+        { label: t('menu.resetWindowSize'), click: () => actions.resetWindowSize() },
         { type: 'separator' },
         { role: 'front', label: t('menu.front') },
       ],

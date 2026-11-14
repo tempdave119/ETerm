@@ -8,16 +8,21 @@ import type { MenuCommand } from '../../src/shared/ipc.ts';
 function createActions(run: (command: MenuCommand) => void = () => {}): MenuActions & {
   opened: number;
   about: number;
+  reset: number;
 } {
   const state = {
     run,
     opened: 0,
     about: 0,
+    reset: 0,
     openDataDir: () => {
       state.opened += 1;
     },
     showAbout: () => {
       state.about += 1;
+    },
+    resetWindowSize: () => {
+      state.reset += 1;
     },
   };
   return state;
@@ -89,6 +94,14 @@ test('menu_items_dispatch_commands', () => {
   const edit = submenuOf(template, '编辑');
   (itemByLabel(edit, '复制').click as (() => void) | undefined)?.();
   assert.deepEqual(run, ['terminal.new', 'edit.copy']);
+});
+
+test('menu_window_reset_action_is_wired', () => {
+  const actions = createActions();
+  const template = buildMenuTemplate(resolveShortcuts({}), actions, 'ETerm');
+  const windowMenu = submenuOf(template, '窗口');
+  (itemByLabel(windowMenu, '重置窗口大小').click as (() => void) | undefined)?.();
+  assert.equal(actions.reset, 1);
 });
 
 test('menu_help_items_open_data_dir_and_about', () => {

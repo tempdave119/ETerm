@@ -69,6 +69,7 @@ export const zhCN = {
   'menu.window': '窗口',
   'menu.minimize': '最小化',
   'menu.zoom': '缩放',
+  'menu.resetWindowSize': '重置窗口大小',
   'menu.front': '前置全部窗口',
   'menu.help': '帮助',
   'menu.openDataDir': '打开配置目录',

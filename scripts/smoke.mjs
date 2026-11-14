@@ -190,7 +190,8 @@ try {
     async () => {
       const text = String(await evaluate(`window.__etermDebug.read(${JSON.stringify(sessionId)})`));
       const occurrences = (text.match(new RegExp(MARKER, 'g')) ?? []).length;
-      return occurrences === 2 && text.includes('package.json') ? text : '';
+      // 默认窗口变窄后命令回显可能跨行，marker 只保证输出里出现一次即可。
+      return occurrences >= 1 && text.includes('package.json') ? text : '';
     },
     10_000,
     '命令输出回显',

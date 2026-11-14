@@ -70,6 +70,7 @@ export const enUS: Record<MessageKey, string> = {
   'menu.window': 'Window',
   'menu.minimize': 'Minimize',
   'menu.zoom': 'Zoom',
+  'menu.resetWindowSize': 'Reset Window Size',
   'menu.front': 'Bring All to Front',
   'menu.help': 'Help',
   'menu.openDataDir': 'Open Config Folder',

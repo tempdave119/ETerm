@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, shell, type Tray } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Tray } from 'electron';
 import Module from 'node:module';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -15,10 +15,17 @@ import { KnownHostsStore } from '../services/known-hosts/store.ts';
 import { LayoutStore } from '../services/layouts/store.ts';
 import { ThemeStore } from '../services/themes/store.ts';
 import { TransferQueue } from '../services/transfers/queue.ts';
+import { WindowStateStore } from '../services/window-state/store.ts';
 import { IPC, MENU_IPC, TRANSFERS_IPC } from '../shared/ipc.ts';
 import type { MenuCommand } from '../shared/ipc.ts';
 import { normalizeLocale, setLocale } from '../shared/i18n/index.ts';
 import { resolveShortcuts } from '../shared/shortcut.ts';
+import {
+  MIN_WINDOW_SIZE,
+  defaultWindowBounds,
+  fitWindowBounds,
+  type WindowRect,
+} from '../shared/window-bounds.ts';
 import type { ComponentDescriptor } from '../shared/components.ts';
 import { registerClipboardIpc } from './clipboard-ipc.ts';
 import { registerComponentsIpc } from './components-ipc.ts';
@@ -47,6 +54,7 @@ interface AppServices {
   knownHosts: KnownHostsStore;
   layouts: LayoutStore;
   themes: ThemeStore;
+  windowState: WindowStateStore;
 }
 
 app.setName('ETerm');
@@ -91,6 +99,18 @@ function sendMenuCommand(command: MenuCommand): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(MENU_IPC.command, command);
 }
 
+/** 把窗口恢复到默认尺寸，并居中到当前鼠标所在屏幕。 */
+function resetWindowSize(): void {
+  const window = mainWindow;
+  if (!window || window.isDestroyed()) return;
+  const workArea = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const bounds = defaultWindowBounds(workArea);
+  if (window.isFullScreen()) window.setFullScreen(false);
+  if (window.isMaximized()) window.unmaximize();
+  window.setBounds(bounds);
+  void appServices?.windowState.save({ bounds, maximized: false });
+}
+
 /** 托盘菜单与主菜单共用同一个命令入口。 */
 function trayActions(): TrayActions {
   return {
@@ -101,7 +121,7 @@ function trayActions(): TrayActions {
         mainWindow.focus();
         return;
       }
-      createWindow();
+      void createWindow();
     },
     run: sendMenuCommand,
   };
@@ -121,6 +141,7 @@ function applyMenu(config: AppConfig): void {
           void shell.openPath(baseDir);
         },
         showAbout: () => app.showAboutPanel(),
+        resetWindowSize,
       }),
     ),
   );
@@ -133,12 +154,27 @@ function applyMenu(config: AppConfig): void {
   }
 }
 
-function createWindow(): void {
+async function createWindow(): Promise<void> {
+  if (mainWindow && !mainWindow.isDestroyed()) return;
+
+  let bounds: WindowRect = defaultWindowBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+  let maximized = false;
+  if (appServices) {
+    try {
+      const state = await appServices.windowState.load();
+      const displays = screen.getAllDisplays().map((display) => display.workArea);
+      const fallback = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+      bounds = fitWindowBounds(state.bounds, displays, fallback);
+      maximized = state.maximized;
+    } catch (error) {
+      console.warn('[window] 读取窗口状态失败，使用默认尺寸', error);
+    }
+  }
+
   const window = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 720,
-    minHeight: 480,
+    ...bounds,
+    minWidth: MIN_WINDOW_SIZE.width,
+    minHeight: MIN_WINDOW_SIZE.height,
     show: false,
     title: 'ETerm',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181c' : '#f5f6f8',
@@ -152,6 +188,32 @@ function createWindow(): void {
     },
   });
   mainWindow = window;
+  if (maximized) window.maximize();
+
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const saveWindowState = (): void => {
+    if (!appServices || window.isDestroyed()) return;
+    void appServices.windowState.save({
+      bounds: window.getNormalBounds(),
+      maximized: window.isMaximized(),
+    });
+  };
+  const scheduleSave = (): void => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      saveWindowState();
+    }, 300);
+  };
+  window.on('resize', scheduleSave);
+  window.on('move', scheduleSave);
+  window.on('close', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    saveWindowState();
+  });
 
   const service = new SessionService(registry, {
     onData: (sessionId, data) => {
@@ -241,6 +303,7 @@ void app.whenReady().then(async () => {
     knownHosts: new KnownHostsStore({ baseDir }),
     layouts: new LayoutStore({ baseDir }),
     themes: new ThemeStore({ baseDir }),
+    windowState: new WindowStateStore({ baseDir }),
   };
   appServices = services;
   registry.provide('connections', services.connections);
@@ -288,9 +351,9 @@ void app.whenReady().then(async () => {
     console.log(`[tray] ${tray ? '已创建（模板图）' : '未创建（缺图标或图片为空）'}`);
   }
 
-  createWindow();
+  void createWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
 });
 
